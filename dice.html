@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>フリーサイコロ v0.2 ― 骨だけ</title>
+<title>フリーサイコロ v0.2.1 ― 自伝を読める画面</title>
 <style>
 :root{--bg:#12141a;--bg2:#1a1e26;--bg3:#232832;--line:#39404f;--ink:#eef1f7;--muted:#949cad;
  --gold:#e0b352;--gold2:#f5d99a;--good:#7fd6a0;--bad:#e88b8b;--blank:#5a6070;
@@ -43,8 +43,30 @@ button.danger{border-color:var(--bad)}
 @keyframes carve{0%{transform:scale(1);box-shadow:0 0 0 rgba(224,179,82,0)}
  30%{transform:scale(1.35);box-shadow:0 0 20px rgba(224,179,82,.9);color:var(--gold2)}
  100%{transform:scale(1);box-shadow:0 0 0 rgba(224,179,82,0)}}
-.face.carved{animation:carve .9s ease-out}
+.carved{animation:carve .9s ease-out}
 .blankcount{font-size:11px;color:var(--muted);margin-top:5px}
+
+/* ---- ダイス・グリッド（4人 × 位置1-6・列を縦読み） ---- */
+.grid{display:grid;grid-template-columns:minmax(78px,1.1fr) repeat(6,1fr) auto;gap:4px;align-items:stretch}
+.gcorner{}
+.ghead{font-size:11px;color:var(--muted);text-align:center;padding:4px 0;align-self:end}
+.ghead.rollcol{color:var(--gold2);background:#2a2415;border:1px solid #4a3d1c;border-radius:6px}
+.grow-name{display:flex;flex-direction:column;justify-content:center;font-size:12px;font-weight:700;padding:2px 6px;border-radius:7px}
+.grow-name.me{background:#20242e;border:1px solid var(--gold)}
+.grow-name .sc{font-family:var(--ttl);font-size:15px;color:var(--gold2);font-weight:400}
+.gcell{aspect-ratio:1;border:1px solid var(--line);border-radius:7px;display:grid;place-items:center;
+ font-family:var(--ttl);font-size:20px;background:var(--bg2);position:relative;color:var(--ink)}
+.gcell.blank{color:var(--blank);background:repeating-linear-gradient(45deg,#191d25,#191d25 4px,#1d222b 4px,#1d222b 8px)}
+.gcell.rollcol{border-color:var(--gold);box-shadow:0 0 0 2px rgba(224,179,82,.35) inset;background:#241f12}
+.gcell.rollcol.blank{color:var(--gold2);font-size:18px}
+.gcell .pos{font-size:9px;color:var(--muted);position:absolute;top:1px;left:3px}
+.blankcell{display:grid;place-items:center;font-family:var(--ttl);font-size:16px;color:var(--muted)}
+.colfacts{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.colfact{flex:1 1 150px;border:1px solid var(--line);border-radius:8px;padding:8px 11px;background:var(--bg)}
+.colfact .h{font-size:11px;color:var(--gold2);margin-bottom:5px}
+.colfact .r{display:flex;justify-content:space-between;font-size:12px;padding:1px 0}
+.tgl{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);margin-bottom:12px;cursor:pointer}
+.tgl input{width:16px;height:16px}
 
 /* ---- 注文 ---- */
 .orders{display:flex;gap:10px;flex-wrap:wrap}
@@ -94,12 +116,12 @@ th{color:var(--muted);font-weight:400;font-size:11px}
 </head>
 <body>
 
-<h1>フリーサイコロ <span style="font-size:13px;color:var(--muted)">v0.2 ― 骨だけ</span></h1>
+<h1>フリーサイコロ <span style="font-size:13px;color:var(--muted)">v0.2.1 ― 自伝を読める画面</span></h1>
 <div class="sub">6面すべて白紙のダイス。刻んだ数字は、その面に永遠に残る。 ／ ソロ専用・オフライン・NPC3体</div>
 
 <div id="app"></div>
 
-<div class="badge">dice v0.2 (bones)</div>
+<div class="badge">dice v0.2.1</div>
 
 <!-- ============================================================= -->
 <!-- ブロック0: ゲームエンジン（純ロジック・DOM非依存）             -->
@@ -133,12 +155,42 @@ function instantiate(def){
   return {id:uid(), type:def.type, v:def.v, k:def.k, score:def.score, progress:{}};
 }
 
+// ---- トグル「初手多様化」用: 注文が要求する数字の集合 ----
+// REP … {v} の1数字。VAR … 相異なる3種で特定数字を固定しないため、全域 {1..6} を占める。
+function demandedSet(def){ return def.type==='REP' ? [def.v] : [1,2,3,4,5,6]; }
+// 初期3枚が要求数字を1つも共有しないか（1枚でも重複したら false）
+function openingDistinct(defs){
+  var seen={};
+  for(var i=0;i<defs.length;i++){
+    var set = demandedSet(defs[i]);
+    for(var j=0;j<set.length;j++){
+      if(seen[set[j]]) return false;
+      seen[set[j]] = true;
+    }
+  }
+  return true;
+}
+
 // ---- 新規ゲーム ----
 // kinds: 長さ4の配列。人間UIでは players[0].isHuman=true（headlessでは全員NPC）
-function newGame(kinds, rnd){
+// opts.diversifyOpening: true で初期3枚の要求数字が重複しないよう引き直す（上限50回で妥協採用）
+function newGame(kinds, rnd, opts){
+  opts = opts || {};
   rnd = rnd || Math.random;
   _uid = 0;
-  var deck = buildDeck(rnd);
+  var deck, attempts=0, capHit=false;
+  if(opts.diversifyOpening){
+    var ok=false;
+    for(attempts=1; attempts<=50; attempts++){
+      deck = buildDeck(rnd);
+      // 場に出るのは末尾から pop する3枚
+      var top3 = [deck[deck.length-1], deck[deck.length-2], deck[deck.length-3]];
+      if(openingDistinct(top3)){ ok=true; break; }
+    }
+    if(!ok){ capHit=true; attempts=50; } // 50回で成立せず → 最後のデッキを妥協採用
+  } else {
+    deck = buildDeck(rnd);
+  }
   var players = [];
   for(var i=0;i<4;i++){
     players.push({
@@ -151,7 +203,8 @@ function newGame(kinds, rnd){
     round:1, rnd:rnd, players:players,
     table:[instantiate(deck.pop()), instantiate(deck.pop()), instantiate(deck.pop())],
     preview:[instantiate(deck.pop()), instantiate(deck.pop())],
-    deck:deck, log:[], tieRounds:[], deckDry:false
+    deck:deck, log:[], tieRounds:[], deckDry:false,
+    opts:opts, capHit:capHit, drawAttempts:attempts
   };
   return S;
 }
@@ -174,18 +227,22 @@ function isComplete(o,pid){
 function blanks(p){ var n=0; for(var i=0;i<6;i++) if(p.die[i]===null) n++; return n; }
 
 // ---- 場の「最も需要が多い数字」（専門家の specialty / 需要バイアス） ----
+// 穴4裁定（指示書#6 付録A-4）: 需要は「全注文」から集計する。
+//   REP … 要求数字 v に k 個分。
+//   VAR … 相異なる3種＝特定数字を固定しないため、各数字1〜6に1個分（VARのみの盤面でも動く）。
 function demandMap(S){
   var d = {1:0,2:0,3:0,4:0,5:0,6:0};
   for(var i=0;i<S.table.length;i++){
     var o = S.table[i];
-    if(o.type==='REP') d[o.v] += o.k; // REP のみが特定数字を要求する
+    if(o.type==='REP'){ d[o.v] += o.k; }
+    else { for(var v=1;v<=6;v++) d[v] += 1; }
   }
   return d;
 }
 function specialty(S){
   var d = demandMap(S), best=1, bv=-1;
   for(var v=1;v<=6;v++){ if(d[v]>bv){ bv=d[v]; best=v; } }
-  return best; // 需要ゼロなら 1（暫定・報告参照）
+  return best; // 需要が完全に均一なら 1（最小の数字）
 }
 
 // ---- 合法手の列挙 ----
@@ -340,34 +397,59 @@ function playAuto(S){
   }
   return S;
 }
-function headless(n){
-  var complete=0, negScore=0, scoreSum=0, tieTotal=0, deckDry=0, roundsOk=0;
+// n戦を自動対戦。opts.diversifyOpening で初手多様化トグルを切り替える。
+// 返り: 完走率・得点分布・同着総数・ラウンド別同着分布・NPC勝ち分けshare・平均残白紙・cap到達率
+function headless(n, opts){
+  opts = opts || {};
   var kinds=[KINDS.GREEDY, KINDS.PRESERVE, KINDS.SPECIAL, KINDS.BAL];
+  var complete=0, negScore=0, scoreSum=0, tieTotal=0, deckDry=0, capHits=0;
+  var tieByRound={}; for(var r=1;r<=12;r++) tieByRound[r]=0;
+  var winShare={}, avgScore={}, blankLeft={};
+  kinds.forEach(function(k){ winShare[k]=0; avgScore[k]=0; blankLeft[k]=0; });
   for(var g=0; g<n; g++){
-    var S = newGame(kinds, Math.random);
+    var S = newGame(kinds, Math.random, opts);
     playAuto(S);
     if(S.round===12 && S.log.length===12) complete++;
-    var okAll=true;
-    for(var i=0;i<4;i++){
-      scoreSum += S.players[i].score;
-      if(S.players[i].score < 0){ negScore++; okAll=false; }
-    }
+    if(S.capHit) capHits++;
+    S.tieRounds.forEach(function(rr){ tieByRound[rr]++; });
     tieTotal += S.tieRounds.length;
     if(S.deckDry) deckDry++;
+    var top=-1, topIds=[];
+    for(var i=0;i<4;i++){
+      var p=S.players[i];
+      scoreSum += p.score; avgScore[p.kind]+=p.score; blankLeft[p.kind]+=blanks(p);
+      if(p.score<0) negScore++;
+      if(p.score>top){ top=p.score; topIds=[i]; } else if(p.score===top){ topIds.push(i); }
+    }
+    topIds.forEach(function(i){ winShare[S.players[i].kind] += 1/topIds.length; });
   }
-  var out = {
+  var share={}, ascore={}, bleft={};
+  kinds.forEach(function(k){
+    share[k]=(winShare[k]/n*100).toFixed(1)+'%';
+    ascore[k]=(avgScore[k]/n).toFixed(2);
+    bleft[k]=(blankLeft[k]/n).toFixed(2);
+  });
+  return {
+    diversifyOpening: !!opts.diversifyOpening,
     games:n, completed:complete, completeRate:(complete/n*100).toFixed(1)+'%',
+    negativeScores:negScore, deckDryGames:deckDry,
     avgScorePerPlayer:(scoreSum/(n*4)).toFixed(2),
-    avgTiesPerGame:(tieTotal/n).toFixed(2),
-    negativeScores:negScore, deckDryGames:deckDry
+    tiesTotal:tieTotal, avgTiesPerGame:(tieTotal/n).toFixed(2),
+    tieByRound:tieByRound,
+    winShare:share, avgScore:ascore, avgBlankLeft:bleft,
+    capHitGames:capHits, capHitRate:(capHits/n*100).toFixed(1)+'%'
   };
-  return out;
+}
+// OFF/ON を並べて返す（A/B測定・指示書#6 やること5）
+function abTest(n){
+  n = n || 1000;
+  return { OFF: headless(n, {diversifyOpening:false}),
+           ON:  headless(n, {diversifyOpening:true}) };
 }
 
 if(typeof window==='undefined'){
-  // node --check / node dice_block0.js 実行時
-  var res = headless(100);
-  console.log(JSON.stringify(res,null,2));
+  // node で本ブロックを単体実行したとき: A/B測定を自動実行
+  console.log(JSON.stringify(abTest(1000),null,2));
 }
 </script>
 
@@ -381,7 +463,9 @@ var app = document.getElementById('app');
 
 function startGame(){
   // 席0=人間、席1-3=NPC（強欲/温存/専門家）
-  S = newGame([KINDS.GREEDY, KINDS.GREEDY, KINDS.PRESERVE, KINDS.SPECIAL], Math.random);
+  var el = document.getElementById('tgl-div');
+  var diversify = el ? el.checked : false;
+  S = newGame([KINDS.GREEDY, KINDS.GREEDY, KINDS.PRESERVE, KINDS.SPECIAL], Math.random, {diversifyOpening:diversify});
   S.players[0].isHuman = true;
   S.players[0].name = 'あなた';
   S.players[0].kind = '―';
@@ -392,9 +476,16 @@ function startGame(){
   render();
 }
 
+function newRun(){ S=null; UI=null; render(); } // スタート画面へ戻す（トグル再選択）
+
 // ================= 描画 =================
 function render(){
-  if(!S){ app.innerHTML = '<div class="card" style="text-align:center"><button class="pri" onclick="startGame()">ゲーム開始（12ラウンド）</button></div>'; return; }
+  if(!S){
+    app.innerHTML = '<div class="card" style="text-align:center">'+
+      '<label class="tgl"><input type="checkbox" id="tgl-div"> 初手多様化（初期3枚の要求数字を重複させない／A・B測定用・既定OFF）</label><br>'+
+      '<button class="pri" onclick="startGame()">ゲーム開始（12ラウンド）</button></div>';
+    return;
+  }
   var h = '';
   h += renderStatus();
   h += renderDice();
@@ -413,28 +504,56 @@ function render(){
 }
 
 function renderStatus(){
+  var tgl = (S.opts&&S.opts.diversifyOpening) ? '<span class="tag" style="color:var(--gold2);border-color:#4a3d1c">初手多様化 ON</span>' : '';
   return '<div class="card" style="display:flex;justify-content:space-between;align-items:center">'+
-    '<div style="font-family:var(--ttl);font-size:18px">ラウンド <b style="color:var(--gold2)">'+S.round+'</b> / 12</div>'+
+    '<div style="font-family:var(--ttl);font-size:18px">ラウンド <b style="color:var(--gold2)">'+S.round+'</b> / 12'+tgl+'</div>'+
     '<div class="fact">残デッキ '+S.deck.length+'枚</div></div>';
 }
 
+// ★グリッド表示（4人 × 位置1-6）。呼ばれた2列を縦にハイライト＝列を跨いで読み比べられる
 function renderDice(){
-  var h = '<div class="card"><h2>公開された自伝 ― 全員のサイコロ</h2><div class="dice">';
+  var rollActive = UI.idxs && (UI.phase==='rolled'||UI.phase==='engrave'||UI.phase==='assign');
+  var h='<div class="card"><h2>公開された自伝 ― 位置1〜6 × 4人（呼ばれた列を縦に読む）</h2>';
+  h+='<div class="grid">';
+  // ヘッダ行（位置ラベル・呼ばれた列を強調）
+  h+='<div class="gcorner"></div>';
+  for(var f=0;f<6;f++){
+    var rc = rollActive && UI.idxs.indexOf(f)>=0;
+    h+='<div class="ghead'+(rc?' rollcol':'')+'">位置'+(f+1)+'</div>';
+  }
+  h+='<div class="ghead">白紙</div>';
+  // プレイヤー行
   for(var i=0;i<4;i++){
     var p=S.players[i];
-    var turn = (UI.phase!=='idle' && UI.phase!=='resolved' && UI.phase!=='end' && p.isHuman) ? ' turn':'';
-    h += '<div class="player'+turn+'">';
-    h += '<div class="pname" style="color:'+PCOLOR[i]+'"><span>'+p.name+'</span><span class="sc">'+p.score+'点</span></div>';
-    h += '<div class="die">';
-    for(var f=0;f<6;f++){
-      var rolled = UI.idxs && UI.idxs.indexOf(f)>=0 && (UI.phase==='rolled'||UI.phase==='engrave'||UI.phase==='assign');
-      var cls = 'face '+(p.die[f]===null?'blank':'eng')+(rolled?' roll':'');
-      var content = p.die[f]===null ? '' : p.die[f];
-      h += '<div class="'+cls+'" id="face-'+i+'-'+f+'"><span class="pos">'+(f+1)+'</span>'+content+'</div>';
+    h+='<div class="grow-name'+(p.isHuman?' me':'')+'" style="color:'+PCOLOR[i]+'"><span>'+p.name+'</span><span class="sc">'+p.score+'点</span></div>';
+    for(var f2=0;f2<6;f2++){
+      var rc2 = rollActive && UI.idxs.indexOf(f2)>=0;
+      var isBlank = p.die[f2]===null;
+      var cls = 'gcell '+(isBlank?'blank':'eng')+(rc2?' rollcol':'');
+      // 事実のみ: 刻み済み＝数字／白紙＝呼ばれた列では「？」（任意を刻む）、それ以外は空
+      var content = !isBlank ? p.die[f2] : (rc2 ? '？' : '');
+      h+='<div class="'+cls+'" id="face-'+i+'-'+f2+'"><span class="pos">'+(f2+1)+'</span>'+content+'</div>';
     }
-    h += '</div><div class="blankcount">白紙 '+blanks(p)+' / 6</div></div>';
+    h+='<div class="blankcell">'+blanks(p)+'</div>';
   }
-  h += '</div></div>';
+  h+='</div>';
+  if(rollActive) h+=renderColumnFacts();
+  h+='</div>';
+  return h;
+}
+// 呼ばれた列の「事実」表示（各プレイヤーの生産物のみ。得点・優劣・同着リスクは出さない）
+function renderColumnFacts(){
+  var h='<div class="colfacts">';
+  UI.idxs.forEach(function(f){
+    h+='<div class="colfact"><div class="h">位置'+(f+1)+' を使うと</div>';
+    for(var i=0;i<4;i++){
+      var p=S.players[i];
+      var prod = p.die[f]===null ? '？（白紙＝任意を刻む）' : p.die[f];
+      h+='<div class="r"><span style="color:'+PCOLOR[i]+'">'+shortName(p)+'</span><b>'+prod+'</b></div>';
+    }
+    h+='</div>';
+  });
+  h+='</div>';
   return h;
 }
 
@@ -678,7 +797,7 @@ function renderEnd(){
   h += '<div class="fact">発生回数: <b>'+S.tieRounds.length+'</b> 回'+
        (S.tieRounds.length?('（R '+S.tieRounds.join(', R ')+'）'):'')+'</div>';
 
-  h += '<div class="row" style="justify-content:center;margin-top:16px"><button class="pri" onclick="startGame()">もう一度</button></div>';
+  h += '<div class="row" style="justify-content:center;margin-top:16px"><button class="pri" onclick="newRun()">もう一度（トグルを選び直す）</button></div>';
   return h;
 }
 
