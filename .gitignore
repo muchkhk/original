@@ -1,0 +1,9 @@
+# ── OS ──
+.DS_Store
+
+# ── Claude Code ──
+# .claude 配下のローカル設定・セッションログ・履歴・todo 等は追跡しない
+# （公開リポジトリなので、機微を含みうる作業ログを誤ってコミットしないため）。
+# 共有すべき許可リスト settings.json だけは追跡対象に残す。
+.claude/*
+!.claude/settings.json

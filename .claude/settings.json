@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(gh auth status)",
+      "PowerShell(git status *)",
+      "PowerShell(git diff *)",
+      "PowerShell(git log *)",
+      "PowerShell(git show *)",
+      "PowerShell(git rev-parse *)",
+      "PowerShell(git ls-files *)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "PowerShell(git push*)"
+    ]
+  }
+}

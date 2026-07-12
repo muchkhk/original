@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ボードゲーム設計論 — 資料</title>
+<meta name="theme-color" content="#12141a">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2312141a'/><path d='M8 7h16M8 13h16M8 19h11M8 25h11' stroke='%23e0b352' stroke-width='2.4' stroke-linecap='round'/></svg>">
+<style>
+:root{
+ --bg:#12141a; --bg2:#181c23; --bg3:#222732; --bg4:#2b3140;
+ --line:#333a49; --line2:#454e60;
+ --ink:#e9edf4; --ink2:#c3cbd8; --muted:#8d95a5;
+ --gold:#e0b352; --gold2:#f5d99a; --good:#7fd6a0; --bad:#e88b8b; --blue:#6cb6e8;
+ --ui:"Yu Gothic","Hiragino Kaku Gothic ProN",-apple-system,system-ui,sans-serif;
+ --ttl:"Yu Mincho","Hiragino Mincho ProN",serif;
+ --mono:"SF Mono",Consolas,"Courier New",monospace;
+ --side:290px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ui);line-height:1.85;font-size:15px}
+a{color:var(--gold2)}
+
+/* 進捗バー */
+#prog{position:fixed;top:0;left:0;height:2px;background:linear-gradient(90deg,var(--gold),var(--gold2));z-index:100;width:0;transition:width .1s}
+
+/* サイドバー */
+#side{position:fixed;left:0;top:0;bottom:0;width:var(--side);background:var(--bg2);
+ border-right:1px solid var(--line);overflow-y:auto;z-index:50;transition:transform .25s}
+#side::-webkit-scrollbar{width:8px}
+#side::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px}
+.brand{padding:18px 16px 12px;border-bottom:1px solid var(--line)}
+.brand h1{font-family:var(--ttl);font-size:16px;letter-spacing:.14em;margin:0;color:var(--gold2)}
+.brand .b2{font-size:11px;color:var(--muted);margin-top:2px}
+#q{width:100%;margin-top:12px;background:var(--bg3);border:1px solid var(--line);color:var(--ink);
+ border-radius:8px;padding:8px 11px;font:inherit;font-size:13px}
+#q:focus{outline:none;border-color:var(--gold)}
+.docs{padding:8px 0 60px}
+.doc{border-bottom:1px solid var(--line)}
+.dh{display:flex;gap:9px;align-items:flex-start;padding:11px 14px;cursor:pointer;transition:.12s}
+.dh:hover{background:var(--bg3)}
+.dh.on{background:var(--bg3);border-left:3px solid var(--gold);padding-left:11px}
+.dh .ic{font-size:15px;line-height:1.5}
+.dh .t{font-weight:700;font-size:13.5px;color:var(--ink)}
+.dh.on .t{color:var(--gold2)}
+.dh .s{font-size:10.5px;color:var(--muted);line-height:1.5;margin-top:1px}
+.toc{display:none;padding:2px 0 10px}
+.toc.open{display:block}
+.toc a{display:block;text-decoration:none;color:var(--ink2);font-size:12px;line-height:1.55;
+ padding:4px 14px 4px 0;transition:.1s;border-left:2px solid transparent}
+.toc a:hover{color:var(--gold2);background:var(--bg3)}
+.toc a.h1{padding-left:20px;font-weight:700;color:var(--ink);margin-top:6px;font-size:12.5px}
+.toc a.h2{padding-left:30px}
+.toc a.h3{padding-left:42px;color:var(--muted);font-size:11.5px}
+.toc a.act{color:var(--gold2);border-left-color:var(--gold);background:rgba(224,179,82,.07)}
+
+/* 本文 */
+main{margin-left:var(--side);padding:34px 40px 120px;max-width:900px}
+h1,h2,h3,h4{font-family:var(--ttl);letter-spacing:.04em;scroll-margin-top:20px}
+main>h1{font-size:27px;color:var(--gold2);border-bottom:2px solid var(--line2);padding-bottom:12px;margin:34px 0 18px}
+main>h2{font-size:21px;color:var(--gold2);margin:38px 0 12px;padding-left:11px;border-left:4px solid var(--gold)}
+main>h3{font-size:17px;color:var(--ink);margin:28px 0 8px}
+main>h4{font-size:15px;color:var(--ink2);margin:20px 0 6px}
+main p{margin:12px 0}
+main ul,main ol{padding-left:24px}
+main li{margin:5px 0}
+main strong{color:var(--gold2)}
+main em{color:var(--blue);font-style:normal}
+blockquote{margin:16px 0;padding:12px 16px;background:var(--bg2);border-left:4px solid var(--gold);
+ border-radius:0 9px 9px 0}
+blockquote p{margin:6px 0}
+blockquote strong{color:var(--gold2)}
+code{background:var(--bg3);padding:2px 6px;border-radius:5px;font-family:var(--mono);font-size:.88em;color:var(--gold2)}
+pre{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;margin:16px 0}
+pre code{background:none;padding:0;color:var(--ink2);font-size:12.5px;line-height:1.65}
+table{border-collapse:collapse;width:100%;margin:18px 0;font-size:13.5px;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--bg3);color:var(--muted);font-weight:400;font-size:12.5px;white-space:nowrap}
+tr:nth-child(even) td{background:rgba(255,255,255,.014)}
+hr{border:none;height:1px;background:linear-gradient(90deg,transparent,var(--line2),transparent);margin:36px 0}
+main a{text-decoration:none;border-bottom:1px dotted var(--gold)}
+main a:hover{border-bottom-style:solid}
+mark{background:rgba(224,179,82,.3);color:var(--gold2);padding:1px 2px;border-radius:3px}
+
+/* 検索結果 */
+#res{padding:6px 0}
+.hit{padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--line);transition:.1s}
+.hit:hover{background:var(--bg3)}
+.hit .hd{font-size:10.5px;color:var(--gold);margin-bottom:2px}
+.hit .hx{font-size:12px;color:var(--ink2);line-height:1.55}
+.hit mark{font-weight:700}
+.nores{padding:16px 14px;font-size:12px;color:var(--muted)}
+
+/* モバイル */
+#burger{display:none;position:fixed;left:10px;top:10px;z-index:60;background:var(--bg3);
+ border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:8px 12px;cursor:pointer;font-size:15px}
+#veil{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:45}
+#top{position:fixed;right:16px;bottom:16px;z-index:40;background:var(--bg3);border:1px solid var(--line);
+ color:var(--muted);border-radius:50%;width:42px;height:42px;cursor:pointer;font-size:15px;
+ opacity:0;transition:.2s;pointer-events:none}
+#top.show{opacity:.85;pointer-events:auto}
+#top:hover{color:var(--gold2);border-color:var(--gold)}
+@media(max-width:900px){
+ #side{transform:translateX(-100%)}
+ #side.open{transform:none;box-shadow:0 0 50px rgba(0,0,0,.7)}
+ main{margin-left:0;padding:60px 18px 100px}
+ #burger{display:block}
+ #veil.show{display:block}
+ main>h1{font-size:22px}main>h2{font-size:18px}
+}
+@media print{#side,#burger,#top,#prog{display:none}main{margin:0;max-width:none}}
+</style>
+</head>
+<body>
+<div id="prog"></div>
+<button id="burger">☰</button>
+<div id="veil"></div>
+
+<nav id="side">
+  <div class="brand">
+    <h1>ボードゲーム設計論</h1>
+    <div class="b2">設計・検証・実装の記録</div>
+    <input id="q" placeholder="🔍 全文検索（すべての資料）">
+  </div>
+  <div id="res"></div>
+  <div class="docs" id="docs"></div>
+</nav>
+
+<main id="main"></main>
+<button id="top">↑</button>
+
+<script id="DATA" type="application/json">__DOCS_DATA__</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script>
+const DOCS = JSON.parse(document.getElementById("DATA").textContent);
+const $ = id => document.getElementById(id);
+let cur = 0;
+
+/* GitHub互換のアンカー生成（MD内のリンクと一致させる） */
+const STRIP = /[\u0000-\u001F!-,.\/:-@\[-\^`{-~\u00A0-\u00BF\u00D7\u00F7\u2000-\u206F\u2E00-\u2E7F\u3000-\u303F\uFE10-\uFE1F\uFE30-\uFE6F\uFF00-\uFFEF]/gu;
+function slug(t, seen){
+  let s = t.trim().toLowerCase().replace(STRIP,"").replace(/\s+/g,"-");
+  if(seen[s]!==undefined){ seen[s]++; s = s+"-"+seen[s]; } else seen[s]=0;
+  return s;
+}
+const stripMd = t => t.replace(/\*\*(.+?)\*\*/g,"$1").replace(/`(.+?)`/g,"$1").replace(/\[(.+?)\]\(.+?\)/g,"$1").trim();
+
+marked.setOptions({ gfm:true, breaks:true, headerIds:false, mangle:false });
+
+/* 各文書をレンダリングし、見出しにidを振り、TOCを作る */
+DOCS.forEach(d=>{
+  const seen = {};
+  const heads = [];
+  const renderer = new marked.Renderer();
+  renderer.heading = (text, lvl)=>{
+    const plain = stripMd(String(text).replace(/<[^>]+>/g,""));
+    const id = slug(plain, seen);
+    if(lvl<=3) heads.push({lvl, text:plain, id});
+    return `<h${lvl} id="${id}">${text}</h${lvl}>`;
+  };
+  d.html = marked.parse(d.md, {renderer});
+  d.heads = heads;
+  d.plain = d.md.replace(/```[\s\S]*?```/g,"").replace(/[#*`>|\-]/g," ");
+});
+
+/* サイドバー */
+function buildSide(){
+  $("docs").innerHTML = DOCS.map((d,i)=>`
+    <div class="doc">
+      <div class="dh ${i===cur?'on':''}" onclick="open_(${i})">
+        <span class="ic">${d.icon}</span>
+        <span><span class="t">${d.title}</span><div class="s">${d.sub}</div></span>
+      </div>
+      <div class="toc ${i===cur?'open':''}" id="toc${i}">
+        ${d.heads.map(h=>`<a class="h${h.lvl}" href="#${h.id}" onclick="jump(${i},'${h.id}',event)">${h.text}</a>`).join("")}
+      </div>
+    </div>`).join("");
+}
+function open_(i, anchor){
+  cur = i;
+  $("main").innerHTML = DOCS[i].html;
+  document.querySelectorAll(".dh").forEach((e,k)=>e.classList.toggle("on",k===i));
+  document.querySelectorAll(".toc").forEach((e,k)=>e.classList.toggle("open",k===i));
+  localStorage.setItem("doc_cur", i);
+  if(anchor){ const el=document.getElementById(anchor); if(el){ el.scrollIntoView(); return; } }
+  window.scrollTo(0,0);
+  closeSide();
+}
+function jump(i, id, e){
+  if(e) e.preventDefault();
+  if(cur!==i){ open_(i, id); } else { const el=document.getElementById(id); if(el) el.scrollIntoView(); closeSide(); }
+  history.replaceState(null,"","#"+id);
+}
+
+/* 文書内リンク（#xxx）を、現在の文書内で解決する */
+document.addEventListener("click", e=>{
+  const a = e.target.closest("main a[href^='#']");
+  if(!a) return;
+  e.preventDefault();
+  const id = decodeURIComponent(a.getAttribute("href").slice(1));
+  let el = document.getElementById(id);
+  if(el){ el.scrollIntoView(); history.replaceState(null,"","#"+id); return; }
+  // 他の文書にあるかも
+  for(let i=0;i<DOCS.length;i++){
+    if(DOCS[i].heads.some(h=>h.id===id)){ open_(i, id); return; }
+  }
+});
+
+/* 全文検索 */
+let qT=null;
+$("q").addEventListener("input", ()=>{ clearTimeout(qT); qT=setTimeout(search,180); });
+function esc(s){ return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function search(){
+  const q = $("q").value.trim();
+  const res = $("res"), docs = $("docs");
+  if(q.length<2){ res.innerHTML=""; docs.style.display=""; return; }
+  docs.style.display="none";
+  const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"), "gi");
+  const hits = [];
+  DOCS.forEach((d,i)=>{
+    let m, n=0;
+    const txt = d.plain;
+    rx.lastIndex = 0;
+    while((m = rx.exec(txt)) && n < 6){
+      const s = Math.max(0, m.index-42), e = Math.min(txt.length, m.index+q.length+56);
+      let x = esc(txt.slice(s,e)).replace(/\s+/g," ");
+      x = x.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"gi"), mm=>`<mark>${esc(mm)}</mark>`);
+      // 直前の見出しを探す
+      const before = txt.slice(0, m.index);
+      let head = d.title;
+      for(const h of d.heads){ if(before.indexOf(h.text)>=0) head = h.text; }
+      hits.push({i, head, x, id:(d.heads.find(h=>h.text===head)||{}).id});
+      n++;
+    }
+  });
+  res.innerHTML = hits.length
+    ? hits.map(h=>`<div class="hit" onclick="jump(${h.i},'${h.id||''}')">
+        <div class="hd">${DOCS[h.i].icon} ${DOCS[h.i].title} ・ ${esc(h.head)}</div>
+        <div class="hx">…${h.x}…</div></div>`).join("")
+    : `<div class="nores">見つかりませんでした</div>`;
+}
+
+/* 現在位置に応じてTOCをハイライト */
+let ticking=false;
+window.addEventListener("scroll", ()=>{
+  if(ticking) return; ticking=true;
+  requestAnimationFrame(()=>{
+    const h = document.documentElement.scrollHeight - innerHeight;
+    $("prog").style.width = (h>0 ? (scrollY/h*100) : 0) + "%";
+    $("top").classList.toggle("show", scrollY>400);
+    const hs = [...document.querySelectorAll("main h1,main h2,main h3")];
+    let act=null;
+    for(const el of hs){ if(el.getBoundingClientRect().top < 120) act = el.id; else break; }
+    document.querySelectorAll("#toc"+cur+" a").forEach(a=>
+      a.classList.toggle("act", a.getAttribute("href")==="#"+act));
+    ticking=false;
+  });
+});
+$("top").onclick = ()=> scrollTo({top:0,behavior:"smooth"});
+
+/* モバイル */
+const openSide  = ()=>{ $("side").classList.add("open"); $("veil").classList.add("show"); };
+const closeSide = ()=>{ $("side").classList.remove("open"); $("veil").classList.remove("show"); };
+$("burger").onclick = ()=> $("side").classList.contains("open") ? closeSide() : openSide();
+$("veil").onclick = closeSide;
+
+/* 起動 */
+const saved = parseInt(localStorage.getItem("doc_cur")||"0");
+cur = (saved>=0 && saved<DOCS.length) ? saved : 0;
+buildSide();
+const hash = decodeURIComponent(location.hash.slice(1));
+if(hash){
+  const i = DOCS.findIndex(d=>d.heads.some(h=>h.id===hash));
+  if(i>=0){ open_(i, hash); } else open_(cur);
+} else open_(cur);
+</script>
+</body>
+</html>
