@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>フリーサイコロ v0.2.1 ― 自伝を読める画面</title>
+<title>フリーサイコロ v0.3 ― 季節</title>
 <style>
 :root{--bg:#12141a;--bg2:#1a1e26;--bg3:#232832;--line:#39404f;--ink:#eef1f7;--muted:#949cad;
  --gold:#e0b352;--gold2:#f5d99a;--good:#7fd6a0;--bad:#e88b8b;--blank:#5a6070;
@@ -65,8 +65,17 @@ button.danger{border-color:var(--bad)}
 .colfact{flex:1 1 150px;border:1px solid var(--line);border-radius:8px;padding:8px 11px;background:var(--bg)}
 .colfact .h{font-size:11px;color:var(--gold2);margin-bottom:5px}
 .colfact .r{display:flex;justify-content:space-between;font-size:12px;padding:1px 0}
-.tgl{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);margin-bottom:12px;cursor:pointer}
-.tgl input{width:16px;height:16px}
+/* ---- 季節バナー（drift） ---- */
+.seasons{display:flex;gap:10px;flex-wrap:wrap}
+.season{flex:1 1 150px;border:1px solid var(--line);border-radius:9px;padding:9px 11px;background:var(--bg)}
+.season.now{border-color:var(--gold);background:#241f12}
+.season.past{opacity:.45}
+.sname{font-size:12px;color:var(--muted)}
+.srng{font-size:10px}
+.spal{font-family:var(--ttl);font-size:22px;letter-spacing:.2em;margin-top:4px;color:var(--ink)}
+.season.now .spal{color:var(--gold2)}
+@keyframes seasonflash{0%{box-shadow:0 0 0 rgba(224,179,82,0)}30%{box-shadow:0 0 26px rgba(224,179,82,.55)}100%{box-shadow:0 0 0 rgba(224,179,82,0)}}
+.seasonbanner.flash{animation:seasonflash 1.1s ease-out}
 
 /* ---- 注文 ---- */
 .orders{display:flex;gap:10px;flex-wrap:wrap}
@@ -116,16 +125,16 @@ th{color:var(--muted);font-weight:400;font-size:11px}
 </head>
 <body>
 
-<h1>フリーサイコロ <span style="font-size:13px;color:var(--muted)">v0.2.1 ― 自伝を読める画面</span></h1>
-<div class="sub">6面すべて白紙のダイス。刻んだ数字は、その面に永遠に残る。 ／ ソロ専用・オフライン・NPC3体</div>
+<h1>フリーサイコロ <span style="font-size:13px;color:var(--muted)">v0.3 ― 季節</span></h1>
+<div class="sub">6面すべて白紙のダイス。刻んだ数字は永遠に残る。だが需要は季節で移り変わる。 ／ ソロ専用・オフライン・NPC3体</div>
 
 <div id="app"></div>
 
-<div class="badge">dice v0.2.1</div>
+<div class="badge">dice v0.3</div>
 
 <!-- ============================================================= -->
 <!-- ブロック0: ゲームエンジン（純ロジック・DOM非依存）             -->
-<!-- node で単体抽出すると末尾ガードでヘッドレス100戦を自動実行する -->
+<!-- node で単体抽出すると末尾ガードでヘッドレス1000戦を自動実行する -->
 <!-- ============================================================= -->
 <script>
 // ---- 定数 ----
@@ -133,88 +142,82 @@ var KINDS = {GREEDY:'強欲', PRESERVE:'温存', SPECIAL:'専門家', BAL:'均�
 var _uid = 0;
 function uid(){ return ++_uid; }
 
-// ---- デッキ生成: 24枚 REP:VAR = 1:1 ----
-function buildDeck(rnd){
-  var defs = [];
-  for(var i=0;i<12;i++){
-    var v = 1 + Math.floor(rnd()*6);
-    var k = (rnd()<0.5) ? 3 : 4;
-    defs.push({type:'REP', v:v, k:k, score:k});
+// ---- 季節（drift）: 12R を3季に等分。R1-4 / R5-8 / R9-12（付録A） ----
+var SEASON_RANGES = [[1,4],[5,8],[9,12]];
+function seasonOfRound(r){ return r<=4 ? 0 : (r<=8 ? 1 : 2); }
+// 1..6 をシャッフルし (a,b,c,d,e,f) → 3季のパレット
+//   第1季{a,b,c,d} 第2季{c,d,e,f} 第3季{e,f,a,b}（隣接季は2数字共有・全数字が2季に属す）
+function makePalettes(rnd){
+  var n=[1,2,3,4,5,6];
+  for(var i=5;i>0;i--){ var j=Math.floor(rnd()*(i+1)); var t=n[i]; n[i]=n[j]; n[j]=t; }
+  var a=n[0],b=n[1],c=n[2],d=n[3],e=n[4],f=n[5];
+  return [[a,b,c,d],[c,d,e,f],[e,f,a,b]];
+}
+function inPalette(pal,v){ return pal.indexOf(v)>=0; }
+// パレット4数字から相異なる3種を選ぶ（VAR用・昇順で返す）
+function pick3(pal, rnd){
+  var p = pal.slice();
+  for(var i=p.length-1;i>0;i--){ var j=Math.floor(rnd()*(i+1)); var t=p[i]; p[i]=p[j]; p[j]=t; }
+  return p.slice(0,3).sort(function(x,y){ return x-y; });
+}
+// ---- デッキ生成: 24枚 = 各季8枚（REP4＋VAR4＝1:1を維持）。季内のみシャッフル、季はまたがない ----
+// 到着順は 第1季→第2季→第3季。deck は末尾から pop するので reverse して末尾に第1季を置く。
+function buildDeck(rnd, palettes){
+  var drawOrder = []; // 引かれてほしい順（先頭＝最初に場へ）
+  for(var s=0;s<3;s++){
+    var pal = palettes[s], cards=[];
+    for(var i=0;i<4;i++){
+      var v = pal[Math.floor(rnd()*4)];        // REP の v はパレットから一様
+      var k = (rnd()<0.5) ? 3 : 4;
+      cards.push({type:'REP', v:v, k:k, score:k, season:s});
+    }
+    for(var j=0;j<4;j++){
+      cards.push({type:'VAR', req:pick3(pal,rnd), score:3, season:s}); // VAR はパレットから相異3種
+    }
+    for(var a=cards.length-1;a>0;a--){ var b=Math.floor(rnd()*(a+1)); var t=cards[a]; cards[a]=cards[b]; cards[b]=t; }
+    drawOrder = drawOrder.concat(cards);
   }
-  for(var j=0;j<12;j++){
-    defs.push({type:'VAR', v:null, k:3, score:3});
-  }
-  // Fisher-Yates
-  for(var a=defs.length-1;a>0;a--){
-    var b = Math.floor(rnd()*(a+1));
-    var t=defs[a]; defs[a]=defs[b]; defs[b]=t;
-  }
-  return defs;
+  return drawOrder.reverse();
 }
 function instantiate(def){
-  return {id:uid(), type:def.type, v:def.v, k:def.k, score:def.score, progress:{}};
-}
-
-// ---- トグル「初手多様化」用: 注文が要求する数字の集合 ----
-// REP … {v} の1数字。VAR … 相異なる3種で特定数字を固定しないため、全域 {1..6} を占める。
-function demandedSet(def){ return def.type==='REP' ? [def.v] : [1,2,3,4,5,6]; }
-// 初期3枚が要求数字を1つも共有しないか（1枚でも重複したら false）
-function openingDistinct(defs){
-  var seen={};
-  for(var i=0;i<defs.length;i++){
-    var set = demandedSet(defs[i]);
-    for(var j=0;j<set.length;j++){
-      if(seen[set[j]]) return false;
-      seen[set[j]] = true;
-    }
-  }
-  return true;
+  return {id:uid(), type:def.type, v:def.v, k:def.k, req:def.req?def.req.slice():null,
+          score:def.score, season:def.season, progress:{}};
 }
 
 // ---- 新規ゲーム ----
 // kinds: 長さ4の配列。人間UIでは players[0].isHuman=true（headlessでは全員NPC）
-// opts.diversifyOpening: true で初期3枚の要求数字が重複しないよう引き直す（上限50回で妥協採用）
-function newGame(kinds, rnd, opts){
-  opts = opts || {};
+function newGame(kinds, rnd){
   rnd = rnd || Math.random;
   _uid = 0;
-  var deck, attempts=0, capHit=false;
-  if(opts.diversifyOpening){
-    var ok=false;
-    for(attempts=1; attempts<=50; attempts++){
-      deck = buildDeck(rnd);
-      // 場に出るのは末尾から pop する3枚
-      var top3 = [deck[deck.length-1], deck[deck.length-2], deck[deck.length-3]];
-      if(openingDistinct(top3)){ ok=true; break; }
-    }
-    if(!ok){ capHit=true; attempts=50; } // 50回で成立せず → 最後のデッキを妥協採用
-  } else {
-    deck = buildDeck(rnd);
-  }
+  var palettes = makePalettes(rnd);
+  var deck = buildDeck(rnd, palettes);
   var players = [];
   for(var i=0;i<4;i++){
     players.push({
       id:i, name:'', kind:kinds[i], isHuman:false,
       die:[null,null,null,null,null,null], // 面0-5、null=白紙
-      score:0, won:[], engravedRounds:[]
+      score:0, won:[], engravedRounds:[],
+      carveLog:[],    // {round,value,season,cross} 刻みの時系列
+      stuckRounds:[]  // 詰み手番が起きたラウンド
     });
   }
   var S = {
-    round:1, rnd:rnd, players:players,
+    round:1, rnd:rnd, players:players, palettes:palettes,
     table:[instantiate(deck.pop()), instantiate(deck.pop()), instantiate(deck.pop())],
     preview:[instantiate(deck.pop()), instantiate(deck.pop())],
-    deck:deck, log:[], tieRounds:[], deckDry:false,
-    opts:opts, capHit:capHit, drawAttempts:attempts
+    deck:deck, log:[], tieRounds:[], deckDry:false
   };
   return S;
 }
+function currentPalette(S){ return S.palettes[seasonOfRound(S.round)]; }
 
 // ---- 進捗ヘルパ ----
+// VAR は「相異なる3種」＝季節パレットから選ばれた req（3数字）を1つずつ生産する（付録A）
 function progOf(o,pid){ return o.type==='REP' ? (o.progress[pid]||0) : (o.progress[pid]||[]); }
 function advances(o,val,pid){
   if(o.type==='REP') return (val===o.v) && ((o.progress[pid]||0) < o.k);
   var arr = o.progress[pid]||[];
-  return (arr.indexOf(val)<0) && (arr.length < 3);
+  return (o.req.indexOf(val)>=0) && (arr.indexOf(val)<0); // req内かつ未生産
 }
 function applyProgress(o,val,pid){
   if(o.type==='REP'){ o.progress[pid]=(o.progress[pid]||0)+1; }
@@ -226,16 +229,31 @@ function isComplete(o,pid){
 }
 function blanks(p){ var n=0; for(var i=0;i<6;i++) if(p.die[i]===null) n++; return n; }
 
+// ---- 詰み手番: 呼ばれた位置がすべて既刻で、どの数字も公開中のどの注文も進めない手番 ----
+// （＝過去に刻んだ面が、季節の drift で全部死んだ瞬間。白紙が1つでもあれば詰みではない）
+function isStuckTurn(S,p,idxs){
+  for(var i=0;i<idxs.length;i++){ if(p.die[idxs[i]]===null) return false; }
+  for(var j=0;j<idxs.length;j++){
+    var v=p.die[idxs[j]];
+    for(var t=0;t<S.table.length;t++){ if(advances(S.table[t],v,p.id)) return false; }
+  }
+  return true;
+}
+function recordStuck(S,idxs){
+  for(var i=0;i<S.players.length;i++){
+    if(isStuckTurn(S,S.players[i],idxs)) S.players[i].stuckRounds.push(S.round);
+  }
+}
+
 // ---- 場の「最も需要が多い数字」（専門家の specialty / 需要バイアス） ----
-// 穴4裁定（指示書#6 付録A-4）: 需要は「全注文」から集計する。
-//   REP … 要求数字 v に k 個分。
-//   VAR … 相異なる3種＝特定数字を固定しないため、各数字1〜6に1個分（VARのみの盤面でも動く）。
+// 需要は「全注文」から集計（穴4裁定）。REP … 要求数字 v に k 個分。VAR … req の各数字に1個分。
+// ※毎手番この場から再計算するため、季節が変われば専門家の得意数字も自動で選び直される（指示書#7-4）。
 function demandMap(S){
   var d = {1:0,2:0,3:0,4:0,5:0,6:0};
   for(var i=0;i<S.table.length;i++){
     var o = S.table[i];
     if(o.type==='REP'){ d[o.v] += o.k; }
-    else { for(var v=1;v<=6;v++) d[v] += 1; }
+    else { for(var j=0;j<o.req.length;j++) d[o.req[j]] += 1; }
   }
   return d;
 }
@@ -319,7 +337,9 @@ function resolveRound(S, decisions){
     if(d.engraves){
       p.die[d.idx]=d.value;
       p.engravedRounds.push(S.round);
-      events.carved.push({pid:p.id, idx:d.idx, value:d.value});
+      var cross = !inPalette(currentPalette(S), d.value); // 現在の季の需要に無い数字＝越季刻み
+      p.carveLog.push({round:S.round, value:d.value, season:seasonOfRound(S.round), cross:cross});
+      events.carved.push({pid:p.id, idx:d.idx, value:d.value, cross:cross});
     }
     events.produced.push({pid:p.id, idx:d.idx, value:d.value, engraved:!!d.engraves, orderId:d.orderId});
   }
@@ -355,7 +375,7 @@ function resolveRound(S, decisions){
     }
     var w = S.players[winner];
     w.score += o.score;
-    w.won.push({type:o.type, v:o.v, k:o.k, score:o.score, wonRound:S.round});
+    w.won.push({type:o.type, v:o.v, k:o.k, req:o.req?o.req.slice():null, score:o.score, wonRound:S.round, season:seasonOfRound(S.round)});
     removed.push(o.id);
   }
   if(anyTie){ S.tieRounds.push(S.round); events.tie=true; }
@@ -365,7 +385,7 @@ function resolveRound(S, decisions){
   return events;
 }
 function tableOrderById(S,id){ for(var i=0;i<S.table.length;i++) if(S.table[i].id===id) return S.table[i]; return null; }
-function snapshotOrder(o){ return {type:o.type, v:o.v, k:o.k, score:o.score}; }
+function snapshotOrder(o){ return {type:o.type, v:o.v, k:o.k, req:o.req?o.req.slice():null, score:o.score}; }
 function removeAndRefill(S, oid){
   S.table = S.table.filter(function(o){ return o.id!==oid; });
   while(S.table.length<3 && S.preview.length>0){ S.table.push(S.preview.shift()); }
@@ -388,6 +408,7 @@ function playAuto(S){
     S.round = r;
     var faces = rollFaces(S);
     var idxs = distinctIdx(faces);
+    recordStuck(S, idxs); // 手を打つ前の状況で「詰み手番」を記録
     var decisions=[];
     for(var i=0;i<S.players.length;i++){
       var mv = npcDecide(S, S.players[i], idxs);
@@ -397,20 +418,18 @@ function playAuto(S){
   }
   return S;
 }
-// n戦を自動対戦。opts.diversifyOpening で初手多様化トグルを切り替える。
-// 返り: 完走率・得点分布・同着総数・ラウンド別同着分布・NPC勝ち分けshare・平均残白紙・cap到達率
-function headless(n, opts){
-  opts = opts || {};
+// n戦を自動対戦（季節あり）。解釈はしない。数字だけ返す（指示書#7 やること5）
+function headless(n){
   var kinds=[KINDS.GREEDY, KINDS.PRESERVE, KINDS.SPECIAL, KINDS.BAL];
-  var complete=0, negScore=0, scoreSum=0, tieTotal=0, deckDry=0, capHits=0;
+  var complete=0, negScore=0, scoreSum=0, tieTotal=0, deckDry=0;
   var tieByRound={}; for(var r=1;r<=12;r++) tieByRound[r]=0;
-  var winShare={}, avgScore={}, blankLeft={};
-  kinds.forEach(function(k){ winShare[k]=0; avgScore[k]=0; blankLeft[k]=0; });
+  var winShare={}, avgScore={}, blankLeft={}, stuckByKind={}, crossByKind={};
+  kinds.forEach(function(k){ winShare[k]=0; avgScore[k]=0; blankLeft[k]=0; stuckByKind[k]=0; crossByKind[k]=0; });
+  var stuckBySeason=[0,0,0], stuckTotal=0, crossTotal=0;
   for(var g=0; g<n; g++){
-    var S = newGame(kinds, Math.random, opts);
+    var S = newGame(kinds, Math.random);
     playAuto(S);
     if(S.round===12 && S.log.length===12) complete++;
-    if(S.capHit) capHits++;
     S.tieRounds.forEach(function(rr){ tieByRound[rr]++; });
     tieTotal += S.tieRounds.length;
     if(S.deckDry) deckDry++;
@@ -419,37 +438,39 @@ function headless(n, opts){
       var p=S.players[i];
       scoreSum += p.score; avgScore[p.kind]+=p.score; blankLeft[p.kind]+=blanks(p);
       if(p.score<0) negScore++;
+      // 詰み手番（プレイヤー別・季節別）
+      stuckByKind[p.kind]+=p.stuckRounds.length; stuckTotal+=p.stuckRounds.length;
+      p.stuckRounds.forEach(function(rr){ stuckBySeason[seasonOfRound(rr)]++; });
+      // 越季刻み
+      var cc=0; for(var c=0;c<p.carveLog.length;c++) if(p.carveLog[c].cross) cc++;
+      crossByKind[p.kind]+=cc; crossTotal+=cc;
       if(p.score>top){ top=p.score; topIds=[i]; } else if(p.score===top){ topIds.push(i); }
     }
     topIds.forEach(function(i){ winShare[S.players[i].kind] += 1/topIds.length; });
   }
-  var share={}, ascore={}, bleft={};
+  var share={}, ascore={}, bleft={}, stk={}, crs={};
   kinds.forEach(function(k){
     share[k]=(winShare[k]/n*100).toFixed(1)+'%';
     ascore[k]=(avgScore[k]/n).toFixed(2);
     bleft[k]=(blankLeft[k]/n).toFixed(2);
+    stk[k]=(stuckByKind[k]/n).toFixed(3);
+    crs[k]=(crossByKind[k]/n).toFixed(3);
   });
   return {
-    diversifyOpening: !!opts.diversifyOpening,
     games:n, completed:complete, completeRate:(complete/n*100).toFixed(1)+'%',
     negativeScores:negScore, deckDryGames:deckDry,
     avgScorePerPlayer:(scoreSum/(n*4)).toFixed(2),
-    tiesTotal:tieTotal, avgTiesPerGame:(tieTotal/n).toFixed(2),
-    tieByRound:tieByRound,
+    tiesTotal:tieTotal, avgTiesPerGame:(tieTotal/n).toFixed(2), tieByRound:tieByRound,
     winShare:share, avgScore:ascore, avgBlankLeft:bleft,
-    capHitGames:capHits, capHitRate:(capHits/n*100).toFixed(1)+'%'
+    stuckTotal:stuckTotal, avgStuckPerGame:(stuckTotal/n).toFixed(3),
+    stuckByKindPerGame:stk, stuckBySeason:{ '第1季':stuckBySeason[0], '第2季':stuckBySeason[1], '第3季':stuckBySeason[2] },
+    crossCarveTotal:crossTotal, avgCrossPerGame:(crossTotal/n).toFixed(3), crossByKindPerGame:crs
   };
-}
-// OFF/ON を並べて返す（A/B測定・指示書#6 やること5）
-function abTest(n){
-  n = n || 1000;
-  return { OFF: headless(n, {diversifyOpening:false}),
-           ON:  headless(n, {diversifyOpening:true}) };
 }
 
 if(typeof window==='undefined'){
-  // node で本ブロックを単体実行したとき: A/B測定を自動実行
-  console.log(JSON.stringify(abTest(1000),null,2));
+  // node で本ブロックを単体実行したとき: ヘッドレス1000戦を自動実行
+  console.log(JSON.stringify(headless(1000),null,2));
 }
 </script>
 
@@ -463,31 +484,30 @@ var app = document.getElementById('app');
 
 function startGame(){
   // 席0=人間、席1-3=NPC（強欲/温存/専門家）
-  var el = document.getElementById('tgl-div');
-  var diversify = el ? el.checked : false;
-  S = newGame([KINDS.GREEDY, KINDS.GREEDY, KINDS.PRESERVE, KINDS.SPECIAL], Math.random, {diversifyOpening:diversify});
+  S = newGame([KINDS.GREEDY, KINDS.GREEDY, KINDS.PRESERVE, KINDS.SPECIAL], Math.random);
   S.players[0].isHuman = true;
   S.players[0].name = 'あなた';
   S.players[0].kind = '―';
   S.players[1].name = 'NPC・強欲';
   S.players[2].name = 'NPC・温存';
   S.players[3].name = 'NPC・専門家';
-  UI = {phase:'idle', faces:null, idxs:null, sel:null, carved:[]};
+  UI = {phase:'idle', faces:null, idxs:null, sel:null, carved:[], seasonFlash:false};
   render();
 }
 
-function newRun(){ S=null; UI=null; render(); } // スタート画面へ戻す（トグル再選択）
+function newRun(){ S=null; UI=null; render(); } // スタート画面へ戻す
 
 // ================= 描画 =================
 function render(){
   if(!S){
     app.innerHTML = '<div class="card" style="text-align:center">'+
-      '<label class="tgl"><input type="checkbox" id="tgl-div"> 初手多様化（初期3枚の要求数字を重複させない／A・B測定用・既定OFF）</label><br>'+
-      '<button class="pri" onclick="startGame()">ゲーム開始（12ラウンド）</button></div>';
+      '<div class="fact" style="margin-bottom:10px">需要は季節で移り変わる。今刻んだ数字が、次の季には死ぬかもしれない。</div>'+
+      '<button class="pri" onclick="startGame()">ゲーム開始（12ラウンド・3季）</button></div>';
     return;
   }
   var h = '';
   h += renderStatus();
+  h += renderSeasons();
   h += renderDice();
   h += renderOrders();
   h += renderControl();
@@ -501,13 +521,32 @@ function render(){
     });
     UI.carved=[];
   }
+  UI.seasonFlash = false; // 季節切替の点滅は1回だけ
 }
 
 function renderStatus(){
-  var tgl = (S.opts&&S.opts.diversifyOpening) ? '<span class="tag" style="color:var(--gold2);border-color:#4a3d1c">初手多様化 ON</span>' : '';
+  var s = seasonOfRound(S.round);
   return '<div class="card" style="display:flex;justify-content:space-between;align-items:center">'+
-    '<div style="font-family:var(--ttl);font-size:18px">ラウンド <b style="color:var(--gold2)">'+S.round+'</b> / 12'+tgl+'</div>'+
+    '<div style="font-family:var(--ttl);font-size:18px">ラウンド <b style="color:var(--gold2)">'+S.round+'</b> / 12'+
+    ' <span class="tag">第'+(s+1)+'季</span></div>'+
     '<div class="fact">残デッキ '+S.deck.length+'枚</div></div>';
+}
+
+// 季節バナー（付録A）: 3季を常時表示。現在の季を強調。第3季は第2季開始(R5)まで伏せる。
+function renderSeasons(){
+  var cur = seasonOfRound(S.round);
+  var h='<div class="card seasonbanner'+(UI.seasonFlash?' flash':'')+'"><h2>季節 ― 需要は移り変わる（drift）</h2><div class="seasons">';
+  for(var s=0;s<3;s++){
+    var masked = (s===2 && cur<1); // 第3季は第2季が始まるまで伏せる
+    var nums = masked ? '？ ？ ？ ？' : S.palettes[s].join('  ');
+    var rng = SEASON_RANGES[s];
+    h+='<div class="season'+(s===cur?' now':'')+(s<cur?' past':'')+'">'+
+       '<div class="sname">第'+(s+1)+'季 <span class="srng">R'+rng[0]+'〜'+rng[1]+'</span>'+
+       (s===cur?' <span class="tag" style="color:var(--gold2);border-color:#4a3d1c">今</span>':'')+'</div>'+
+       '<div class="spal">'+nums+'</div></div>';
+  }
+  h+='</div><div class="fact" style="margin-top:8px">需要にある数字＝今の季のパレット。無い数字を刻むのは「次の季への賭け」。</div></div>';
+  return h;
 }
 
 // ★グリッド表示（4人 × 位置1-6）。呼ばれた2列を縦にハイライト＝列を跨いで読み比べられる
@@ -558,11 +597,13 @@ function renderColumnFacts(){
 }
 
 function orderReq(o){
-  return o.type==='REP' ? ('同じ「'+o.v+'」を '+o.k+'個') : '相異なる 3種';
+  return o.type==='REP' ? ('同じ「'+o.v+'」を '+o.k+'個') : ('相異: '+o.req.join('・'));
 }
 function progText(o,pid){
   if(o.type==='REP'){ var n=o.progress[pid]||0; return n+' / '+o.k; }
-  var arr=o.progress[pid]||[]; return (arr.length?('{'+arr.join(',')+'}'):'{}')+' '+arr.length+'/3';
+  var arr=o.progress[pid]||[];
+  var parts=o.req.map(function(x){ return arr.indexOf(x)>=0 ? (x+'✓') : (''+x); });
+  return parts.join('・')+' ('+arr.length+'/3)';
 }
 function renderOrders(){
   var h='<div class="card"><h2>共有の注文 ― 場に3枚（早取り）／ 予告2枚</h2><div class="orders">';
@@ -697,6 +738,7 @@ function renderAssign(){
 function doRoll(){
   UI.faces = rollFaces(S);
   UI.idxs = distinctIdx(UI.faces);
+  recordStuck(S, UI.idxs); // 手を打つ前の状況で「詰み手番」を記録（全員分）
   UI.phase = 'rolled';
   render();
 }
@@ -733,16 +775,21 @@ function chooseAssign(orderId){
 function renderResolved(){
   var ev=UI.lastEvent, h='';
   h += '<h2 style="color:var(--gold2);font-size:14px">R'+ev.round+' の結果</h2>';
+  var carvedCross={}; ev.carved.forEach(function(c){ carvedCross[c.pid]=c.cross; });
   h += '<table><tr><th>プレイヤー</th><th>生産</th><th>刻み</th><th>割り当て</th></tr>';
   ev.produced.forEach(function(pr){
     var p=S.players[pr.pid];
     var assign = pr.orderId==null ? '―' : '注文へ';
+    var carve = pr.engraved ? ('★刻んだ'+(carvedCross[pr.pid]?' <span class="tag" style="color:var(--gold2);border-color:#4a3d1c">越季</span>':'')) : '―';
     h += '<tr><td style="color:'+PCOLOR[pr.pid]+'">'+shortName(p)+'</td>'+
          '<td><b>'+pr.value+'</b>（面'+(pr.idx+1)+'）</td>'+
-         '<td>'+(pr.engraved?'★刻んだ':'―')+'</td>'+
+         '<td>'+carve+'</td>'+
          '<td>'+assign+'</td></tr>';
   });
   h += '</table>';
+  if(S.players[0].stuckRounds.indexOf(ev.round)>=0){
+    h += '<div class="fact" style="color:var(--bad);margin-top:6px">— この手番、あなたの既刻の面はどれも注文を進められなかった（詰み手番）。</div>';
+  }
   if(ev.completed.length){
     h += '<div class="hint">';
     ev.completed.forEach(function(c){
@@ -760,7 +807,12 @@ function renderResolved(){
   }
   return h;
 }
-function nextRound(){ S.round++; UI.phase='idle'; UI.faces=null; UI.idxs=null; UI.sel=null; render(); }
+function nextRound(){
+  var before=seasonOfRound(S.round);
+  S.round++;
+  if(seasonOfRound(S.round)!==before) UI.seasonFlash=true; // 季の変わり目で点滅
+  UI.phase='idle'; UI.faces=null; UI.idxs=null; UI.sel=null; render();
+}
 function goEnd(){ UI.phase='end'; render(); }
 
 // ================= 計測ログ（§5） =================
@@ -781,12 +833,34 @@ function renderEnd(){
   });
   h += '</table>';
 
+  // 刻みの時系列（季節つき）― 指示書#7-6
+  h += '<h2 style="color:var(--muted);font-size:13px;margin-top:14px">刻みの時系列（季節つき／☆＝越季刻み）</h2>';
+  h += '<table><tr><th>プレイヤー</th><th>刻んだR : 数字〔季〕</th><th>越季</th></tr>';
+  S.players.forEach(function(p){
+    var tl = p.carveLog.length ? p.carveLog.map(function(c){
+      return 'R'+c.round+':<b>'+c.value+'</b>〔第'+(c.season+1)+'季〕'+(c.cross?'☆':'');
+    }).join('　') : 'なし';
+    var cc=0; for(var i=0;i<p.carveLog.length;i++) if(p.carveLog[i].cross) cc++;
+    h += '<tr><td style="color:'+PCOLOR[p.id]+'">'+shortName(p)+'</td><td class="fact">'+tl+'</td><td>'+cc+'</td></tr>';
+  });
+  h += '</table>';
+
+  // 詰み手番（既刻の面がどれも注文を進められなかった手番）― 指示書#7-6
+  h += '<h2 style="color:var(--muted);font-size:13px;margin-top:14px">詰み手番（既刻の面が全部死んだ手番）</h2>';
+  h += '<table><tr><th>プレイヤー</th><th>詰みが起きたR〔季〕</th><th>回数</th></tr>';
+  S.players.forEach(function(p){
+    var sr = p.stuckRounds.length ? p.stuckRounds.map(function(r){ return 'R'+r+'〔第'+(seasonOfRound(r)+1)+'季〕'; }).join('　') : 'なし';
+    h += '<tr><td style="color:'+PCOLOR[p.id]+'">'+shortName(p)+'</td><td class="fact">'+sr+'</td><td>'+p.stuckRounds.length+'</td></tr>';
+  });
+  h += '</table>';
+
   // 獲得注文
   h += '<h2 style="color:var(--muted);font-size:13px;margin-top:14px">獲得注文</h2>';
-  h += '<table><tr><th>プレイヤー</th><th>獲得した注文（R）</th></tr>';
+  h += '<table><tr><th>プレイヤー</th><th>獲得した注文（R／季）</th></tr>';
   S.players.forEach(function(p){
     var w = p.won.length ? p.won.map(function(o){
-      return (o.type==='REP'?('「'+o.v+'」×'+o.k):'相異3種')+'(R'+o.wonRound+'/'+o.score+'点)';
+      var req = o.type==='REP'?('「'+o.v+'」×'+o.k):('相異'+(o.req?(':'+o.req.join('・')):'3種'));
+      return req+'(R'+o.wonRound+'/第'+((o.season||0)+1)+'季/'+o.score+'点)';
     }).join('、 ') : 'なし';
     h += '<tr><td style="color:'+PCOLOR[p.id]+'">'+p.name+'</td><td class="fact">'+w+'</td></tr>';
   });
@@ -797,7 +871,7 @@ function renderEnd(){
   h += '<div class="fact">発生回数: <b>'+S.tieRounds.length+'</b> 回'+
        (S.tieRounds.length?('（R '+S.tieRounds.join(', R ')+'）'):'')+'</div>';
 
-  h += '<div class="row" style="justify-content:center;margin-top:16px"><button class="pri" onclick="newRun()">もう一度（トグルを選び直す）</button></div>';
+  h += '<div class="row" style="justify-content:center;margin-top:16px"><button class="pri" onclick="newRun()">もう一度</button></div>';
   return h;
 }
 
