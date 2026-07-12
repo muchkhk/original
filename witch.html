@@ -15,15 +15,15 @@
   // ▼▼▼ Firebaseコンソール「プロジェクト設定→マイアプリ→Config」の内容をここに貼る ▼▼▼
   // 変数名は必ず FIREBASE_CONFIG のままにする（firebaseConfig に変えない）
   const FIREBASE_CONFIG = {
-    apiKey: "AIzaSyCW6XNMQOu01eT5kTqJ4K85_cpfeNB2LMs",
-    authDomain: "balance-simulator-firebase.firebaseapp.com",
-    databaseURL: "https://balance-simulator-firebase-default-rtdb.firebaseio.com",
-    projectId: "balance-simulator-firebase",
-    storageBucket: "balance-simulator-firebase.firebasestorage.app",
-    messagingSenderId: "1081612524053",
-    appId: "1:1081612524053:web:c2e3e8305e8a2b65778c1c",
-    measurementId: "G-D3W7DJBJYF"
-  };
+  apiKey: "AIzaSyCW6XNMQOu01eT5kTqJ4K85_cpfeNB2LMs",
+  authDomain: "balance-simulator-firebase.firebaseapp.com",
+  databaseURL: "https://balance-simulator-firebase-default-rtdb.firebaseio.com",
+  projectId: "balance-simulator-firebase",
+  storageBucket: "balance-simulator-firebase.firebasestorage.app",
+  messagingSenderId: "1081612524053",
+  appId: "1:1081612524053:web:c2e3e8305e8a2b65778c1c",
+  measurementId: "G-D3W7DJBJYF"
+};
   // ▲▲▲ ここまで ▲▲▲
 
   let _db=null, _fbReady=false, _fbError="";
@@ -266,6 +266,8 @@ const HEARTBEAT_MS=12000, TIMEOUT_MS=30000;
 let myUid = localStorage.getItem("witch_uid");
 if(!myUid){ myUid = "u"+Math.random().toString(36).slice(2,10); localStorage.setItem("witch_uid",myUid); }
 let myName = localStorage.getItem("witch_name") || "";
+/* ★過去のIMEバグで壊れた名前（1文字のひらがな/カタカナだけ）を掃除する */
+if(/^[ぁ-んァ-ンー]$/.test(myName)){ myName=""; localStorage.removeItem("witch_name"); }
 let ST = { view:"home", room:null, mySeat:null, isHost:false,
   meta:null, seats:null, game:null, myRecipes:null, allRecipes:null,
   connected:false, lastUpdate:0, error:"" };
@@ -1035,6 +1037,28 @@ function statusBar(){
   const room=ST.room?`部屋 <b style="color:var(--candle-soft);letter-spacing:.2em">${ST.room}</b>`:"";
   return `<div class="status">${c}<span>${fresh}</span><span>${room}</span>${ST.room?`<button class="ghost" onclick="leaveRoom()">退出</button>`:""}</div>`;
 }
+/* ★IME保護: 入力中(変換中/フォーカス中)の再描画は、入力欄をDOMごと壊し、
+   日本語変換が途中で確定してしまう（例: 「あきら」と打つと「あ」だけ残る）。
+   → 変換中は再描画を保留し、フォーカス中の input は値とカーソルを復元する。 */
+let _ime=false, _pendingRender=false;
+document.addEventListener("compositionstart",()=>{_ime=true;});
+document.addEventListener("compositionend",()=>{_ime=false;if(_pendingRender){_pendingRender=false;render();}});
+function _guardRender(fn){
+  return function(){
+    if(_ime){ _pendingRender=true; return; }                       // 変換中は描画しない
+    const ae=document.activeElement;
+    const keep=(ae&&ae.tagName==="INPUT")?{id:ae.id,v:ae.value,s:ae.selectionStart,e:ae.selectionEnd}:null;
+    const r=fn.apply(this,arguments);
+    if(keep&&keep.id){
+      const el=document.getElementById(keep.id);
+      if(el&&document.activeElement!==el){
+        el.value=keep.v; el.focus();
+        try{ el.setSelectionRange(keep.s,keep.e); }catch(_){}
+      }
+    }
+    return r;
+  };
+}
 function render(){
   renderBanner();
   const app=document.getElementById("app");
@@ -1232,10 +1256,21 @@ function endHTML(){
 
 // 定期再描画（鮮度表示の更新・タイムアウト反映）
 setInterval(()=>{ if(ST.room){ if(ST.game&&ST.game.phase==="await_score"&&amResolver()) resolveScore(); render(); } }, 3000);
+render=_guardRender(render);
 render();
 </script>
+<a id="homelink" href="index.html" title="ゲーム一覧へ戻る">🏠 ゲーム一覧</a>
 <div id="verbadge">魔女の調合 v1.0</div>
-<style>#verbadge{position:fixed;right:7px;bottom:5px;font:10px/1.4 system-ui,sans-serif;
- color:#5f6675;z-index:9999;pointer-events:none;user-select:none;letter-spacing:.04em;opacity:.75}</style>
+<style>
+#homelink{position:fixed;left:8px;bottom:6px;z-index:9999;
+ font:11px/1.5 system-ui,sans-serif;letter-spacing:.04em;text-decoration:none;
+ color:#8e97a8;background:rgba(26,30,38,.9);border:1px solid #39404f;border-radius:9px;
+ padding:5px 11px;backdrop-filter:blur(4px);transition:.15s}
+#homelink:hover{color:#f5d99a;border-color:#e0b352;transform:translateY(-1px);
+ box-shadow:0 4px 14px rgba(0,0,0,.4)}
+#verbadge{position:fixed;right:8px;bottom:7px;font:10px/1.4 system-ui,sans-serif;
+ color:#5f6675;z-index:9999;pointer-events:none;user-select:none;letter-spacing:.04em;opacity:.75}
+@media(max-width:420px){#homelink{font-size:10px;padding:4px 9px}}
+</style>
 </body>
 </html>

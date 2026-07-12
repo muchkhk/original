@@ -77,13 +77,14 @@ th .tm .tip{bottom:auto;top:135%}
 <script>
 /* ▼▼▼ Firebaseコンソールの「Config」の中身をここに貼る（変数名は FIREBASE_CONFIG のまま） ▼▼▼ */
 const FIREBASE_CONFIG = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDygMPoYmkK51c7zJRrZn-NPQDMk7cmNls",
+  authDomain: "boadgame2.firebaseapp.com",
+  databaseURL: "https://boadgame2-default-rtdb.firebaseio.com",
+  projectId: "boadgame2",
+  storageBucket: "boadgame2.firebasestorage.app",
+  messagingSenderId: "325134431436",
+  appId: "1:325134431436:web:96154e7e489845997e7e69",
+  measurementId: "G-55F9PD47KR"
 };
 /* ▲▲▲ ここまで ▲▲▲ */
 let _db=null, FB_OK=false;
@@ -113,7 +114,18 @@ const SFX={bid(){tn(620,.07,"triangle",.09,0);tn(820,.06,"sine",.05,.04);},
  hammer(){tn(220,.16,"square",.11,0);tn(160,.22,"sine",.09,.08);},
  reveal(){[523,659,784].forEach((f,i)=>tn(f,.4,"sine",.06,i*.07));},
  win(){[523,659,784,1047].forEach((f,i)=>tn(f,.55,"triangle",.06,i*.08));},
- click(){tn(480,.04,"triangle",.06,0);}};
+ click(){tn(480,.04,"triangle",.06,0);},
+ turn(){tn(784,.14,"sine",.11,0);tn(1047,.2,"sine",.10,.11);}};
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT")return;
+  if(help){ if(e.key==="Escape"){help=false;render();} return; }
+  const on=ON.room&&DB.game&&DB.game.phase==="auction"&&DB.game.cur===ON.seat&&!ON.spec;
+  const solo=!ON.room&&S&&S.phase==="auction"&&S.cur===0&&S.live.includes(0);
+  if(e.code==="Space"||e.key==="Enter"){ e.preventDefault();
+    if(on){ac();oBid();} else if(solo){ac();bid(0);} }
+  else if(e.key==="Escape"||e.key==="x"||e.key==="X"){ e.preventDefault();
+    if(on){ac();oDrop();} else if(solo){ac();drop(0);} }
+},false);
 document.addEventListener("click",e=>{const b=e.target.closest("button");if(b&&!b.disabled){ac();SFX.click();}
  if(!e.target.closest(".tm"))document.querySelectorAll(".tm.show").forEach(x=>x.classList.remove("show"));},true);
 
@@ -296,7 +308,20 @@ function npcTurn(){
 
 
 /* ============ オンライン基盤 ============ */
-const VER="1.0";   // ★版。卓を作るときDBに記録し、参加者と食い違ったら警告する
+const VER="1.0";
+/* --- 手番通知（音 + タブのタイトル点滅）--- */
+let _wasMyTurn=false, _titleT=null, _baseTitle=document.title;
+function notifyTurn(mine){
+  if(mine && !_wasMyTurn){
+    SFX.turn();
+    let on=false;
+    clearInterval(_titleT);
+    _titleT=setInterval(()=>{on=!on;document.title=on?"▶ あなたの番です":_baseTitle;},900);
+  }
+  if(!mine && _wasMyTurn){ clearInterval(_titleT); document.title=_baseTitle; }
+  _wasMyTurn=mine;
+}
+window.addEventListener("focus",()=>{clearInterval(_titleT);document.title=_baseTitle;});   // ★版。卓を作るときDBに記録し、参加者と食い違ったら警告する
 const ON={room:null,seat:null,uid:null,spec:false,lastSync:0,conn:false,unsub:[],lots:null};
 function uid(){let u=localStorage.getItem("ks_uid");if(!u){u="u"+Math.random().toString(36).slice(2,10);localStorage.setItem("ks_uid",u);}return u;}
 function code4(){const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let c="";for(let i=0;i<4;i++)c+=A[rn(A.length)];return c;}
@@ -542,25 +567,40 @@ function onlineHTML(){
     if(!ON.spec&&lens!=null){const mv=done.total+TASTE*trueV[lens],gn=mv-done.price;
       h+=`<div class="kv">${T("自分の価値","あなたにとって")} ${mv} − 落札額 ${done.price} = <b class="${gn>=0?'pos':'neg'}" style="font-size:16px">${gn>=0?'+':''}${gn}</b> <span class="kv">（あなたが取っていたら）</span></div>`;}}
   h+=`<div class="price">${g.price}</div><div class="kv">現在価格（${T("競り上げ","競り上げ式")}）</div><div class="pl">`;
+  // ★各人の「最後に付けた値」を出す ―― 誰がいくらで降りたかが、読みの生命線
+  const bl=(g.bids||"").split("|").filter(Boolean).map(t=>({p:+t.split(":")[0],price:+t.split(":")[1]}));
+  const tops=[...Array(n)].map((_,p)=>{const b=bl.filter(x=>x.p===p);return b.length?b[b.length-1].price:0;});
   for(let i=0;i<n;i++){const out=!live.includes(i),sv=DB.seats[i];
-    h+=`<span class="chip ${g.cur===i&&!rev?'now':''} ${out?'out':''}" style="color:${CC[i]};border-color:${CC[i]}">${esc(sv?sv.name:"席"+(i+1))} <span class="kv">${DB.money[i]||0}</span></span>`;}
-  h+=`</div></div>`;
+    const mark = out ? (tops[i]>0?` <b class="neg">✕${tops[i]}で降り</b>`:` <b class="neg">✕即降り</b>`)
+                     : (tops[i]>0?` <span class="kv">追${tops[i]}</span>`:"");
+    h+=`<span class="chip ${g.cur===i&&!rev?'now':''} ${out?'out':''}" style="color:${CC[i]};border-color:${CC[i]}">${esc(sv?sv.name:"席"+(i+1))} <span class="kv">💰${DB.money[i]||0}</span>${mark}</span>`;}
+  h+=`</div>`;
+  if(!rev&&g.phase==="auction"){
+    const dropped=[...Array(n).keys()].filter(i=>!live.includes(i)&&tops[i]>=0);
+    if(dropped.length)h+=`<div class="kv" style="margin-top:8px">💡 <b>降りは、嘘をつけない</b> ―― 見た上で降りた者の ${T("目")} は、この石で低い。</div>`;
+  }
+  h+=`</div>`;
 
   // 行動
   if(ON.spec){
-    h+=`<div class="card"><div class="kv">👁 観戦中 ―― <b>全員の目と、すべての面が見えています</b>（下の表）。書き込みはしません。</div></div>`;
+    h+=`<div class="card"><div class="kv">👁 観戦中 ―― <b>全員の目と、すべての面が見えています</b>（下の表）。競りには加わりません。</div>
+      ${rev?`<div class="row" style="justify-content:center;margin-top:8px"><button class="pri" onclick="oNext()">→ 次の原石へ</button></div>`:''}</div>`;
   } else if(rev){
     h+=`<div class="card"><div class="row" style="justify-content:center">
       <button class="pri" onclick="oNext()">→ 次の原石へ</button></div>
       <div class="kv" style="text-align:center;margin-top:6px">★ 誰が押しても進みます</div></div>`;
   } else if(g.phase==="hammer"){
-    h+=`<div class="card"><div class="kv">🔨 槌が落ちる…（解決中）</div></div>`;
+    h+=`<div class="card"><div class="kv">🔨 槌が落ちる…</div>
+     ${!ON.lots?`<div class="hint" style="margin-top:6px">⏳ <b>ホストの応答を待っています。</b>
+      石を割れるのはホストだけです（原石はホストの端末にしか無いため）。<br>
+      <span class="kv">ホストが接続していない場合、ホストがページを開き直すと再開します。</span></div>`:''}</div>`;
   } else if(g.cur===ON.seat && live.includes(ON.seat)){
     const canBid=(g.price+1)<=(DB.money[ON.seat]||0);
     h+=`<div class="bar mine"><b style="color:var(--gold2)">あなたの番 ― 追うか、降りるか</b><span class="kv">資金 ${DB.money[ON.seat]||0}</span></div>
      <div class="card"><div class="row" style="justify-content:center;gap:14px">
       <button class="pri" ${canBid?'':'disabled'} onclick="oBid()">▲ ${g.price+1} で追う</button>
       <button class="pri out" onclick="oDrop()">✕ 降りる</button></div>
+      <div class="kv" style="text-align:center;margin-top:6px">⌨ Space/Enter＝追う ・ Esc＝降りる</div>
       <div class="hint">💡 あなたの ${T("目")} が見抜けるのは <b>${R.COMPS[lens].e} ${R.COMPS[lens].f}</b> だけ（${seeV>=0?'+':''}${seeV}）。
       <b class="neg">⚠️ 高く追う者に釣られるな</b> ―― ${T("勝者の呪い")}。</div></div>`;
   } else {
@@ -568,6 +608,14 @@ function onlineHTML(){
     h+=`<div class="card"><div class="kv">${live.includes(ON.seat)?`<span style="color:${CC[g.cur]}">${esc(who?who.name:"席"+(g.cur+1))}</span> が考えています…`:'あなたは降りました。決着を待っています。'}</div></div>`;
   }
   h+=onlineHist();
+  // ★実況ログ（この石の競りの流れ）
+  if(bl.length){
+    let lg2=`<div class="card"><div class="kv" style="margin-bottom:6px">🔨 この石の競り</div><div class="log">`;
+    const seq=[...bl].reverse();
+    for(const b of seq){const sv=DB.seats[b.p];
+      lg2+=`<div><span style="color:${CC[b.p]}">${esc(sv?sv.name:"席"+(b.p+1))}</span> が ${b.price} で追った</div>`;}
+    h+=lg2+`</div></div>`;
+  }
   return h;
 }
 function onlineHist(){
@@ -616,7 +664,7 @@ function onlineEnd(){
     h+=`<tr><td>${i===0?"🏆1":i+1}</td><td><span class="pill" style="background:${CC[p]}">${esc((DB.seats[p]||{}).name||("席"+(p+1)))}</span></td>
      <td class="big" style="font-size:20px">${sc[p]}</td><td>${DB.money[p]||0}</td>
      <td><b style="color:var(--gold2)">${L!=null?R.COMPS[L].e+R.COMPS[L].f:"?"}</b></td></tr>`;});
-  h+=`</table><div class="row" style="margin-top:12px"><button class="pri" onclick="leaveRoom()">卓を出る</button></div></div>`;
+  h+=`</table><div class="row" style="margin-top:12px"><button class="pri" onclick="leaveRoom()">← 卓を出る</button><button onclick="location.href='index.html'">🏠 ゲーム一覧</button></div></div>`;
   return h+onlineHist();
 }
 function leaveRoom(){detach();ON.room=null;ON.seat=null;ON.spec=false;DB={meta:null,seats:{},game:null,money:{},hist:{},priv:{},reveal:null};S=null;render();}
@@ -664,11 +712,36 @@ function lotHTML(){
     h+=`<div class="big" style="margin-top:10px">${T("真の価値")} ${S.lot.total}</div>
       <div class="kv">${T("自分の価値","あなたにとって")} ${mv} − 落札額 ${S.price} = <b class="${g>=0?'pos':'neg'}" style="font-size:16px">${g>=0?'+':''}${g}</b> <span class="kv">（あなたが取っていたら）</span></div>`;}
   h+=`<div class="price">${S.price}</div><div class="kv">現在価格（${T("競り上げ","競り上げ式")}）</div><div class="pl">`;
+  const tops=[...Array(R.P)].map((_,p)=>{const b=S.bidLog.filter(x=>x.p===p);return b.length?b[b.length-1].price:0;});
   for(let p=0;p<R.P;p++){
     const out=!S.live.includes(p);
-    h+=`<span class="chip ${S.cur===p&&S.phase==="auction"?'now':''} ${out?'out':''}" style="color:${CC[p]};border-color:${CC[p]}">${esc(R.NAMES[p])} <span class="kv">${S.money[p]}</span></span>`;
+    const mark=out?(tops[p]>0?` <b class="neg">✕${tops[p]}で降り</b>`:` <b class="neg">✕即降り</b>`)
+                  :(tops[p]>0?` <span class="kv">追${tops[p]}</span>`:"");
+    h+=`<span class="chip ${S.cur===p&&S.phase==="auction"?'now':''} ${out?'out':''}" style="color:${CC[p]};border-color:${CC[p]}">${esc(R.NAMES[p])} <span class="kv">💰${S.money[p]}</span>${mark}</span>`;
   }
   return h+`</div></div>`;
+}
+/* ★IME保護: 入力中(変換中/フォーカス中)の再描画は、入力欄をDOMごと壊し、
+   日本語変換が途中で確定してしまう（例: 「あきら」と打つと「あ」だけ残る）。
+   → 変換中は再描画を保留し、フォーカス中の input は値とカーソルを復元する。 */
+let _ime=false, _pendingRender=false;
+document.addEventListener("compositionstart",()=>{_ime=true;});
+document.addEventListener("compositionend",()=>{_ime=false;if(_pendingRender){_pendingRender=false;render();}});
+function _guardRender(fn){
+  return function(){
+    if(_ime){ _pendingRender=true; return; }                       // 変換中は描画しない
+    const ae=document.activeElement;
+    const keep=(ae&&ae.tagName==="INPUT")?{id:ae.id,v:ae.value,s:ae.selectionStart,e:ae.selectionEnd}:null;
+    const r=fn.apply(this,arguments);
+    if(keep&&keep.id){
+      const el=document.getElementById(keep.id);
+      if(el&&document.activeElement!==el){
+        el.value=keep.v; el.focus();
+        try{ el.setSelectionRange(keep.s,keep.e); }catch(_){}
+      }
+    }
+    return r;
+  };
 }
 function render(){
   const a=document.getElementById("app");
@@ -678,7 +751,10 @@ function render(){
     h+=`<div class="row" style="margin-bottom:10px">
       <button onclick="help=true;render()">❓ ルール</button>
       <button onclick="muted=!muted;render()">${muted?"🔇":"🔊"}</button>
-      <button onclick="askLeave()" ${_leave?'style="border-color:var(--bad);color:var(--bad)"':''}>${_leave?'← 本当に出る？（もう一度押す）':'← 卓を出る'}</button></div>`;
+      <button onclick="askLeave()" ${_leave?'style="border-color:var(--bad);color:var(--bad)"':''}>${_leave?'← 本当に出る？（もう一度押す）':'← 卓を出る'}</button>
+      <button onclick="location.href='index.html'">🏠 ゲーム一覧</button></div>`;
+    const g=DB.game;
+    notifyTurn(!!(g&&g.phase==="auction"&&g.cur===ON.seat&&!ON.spec&&DB.meta&&DB.meta.phase==="playing"));
     a.innerHTML=h+onlineHTML(); syncModal(); return;
   }
   if(!S){a.innerHTML=home();syncModal();return;}
@@ -688,7 +764,8 @@ function render(){
    <button onclick="help=true;render()">❓ ルール</button>
    <button onclick="muted=!muted;render()">${muted?"🔇":"🔊"}</button>
    <button onclick="restartSolo()">↺ もう一度（${R.P}人）</button>
-   <button onclick="toTop()">← トップへ</button></div>`;
+   <button onclick="toTop()">← タイトルへ</button>
+   <button onclick="location.href='index.html'">🏠 ゲーム一覧</button></div>`;
   if(S.phase==="end"){h+=endHTML();}
   else{
     const mine=S.phase==="auction"&&S.cur===0&&S.live.includes(0);
@@ -702,8 +779,9 @@ function render(){
     if(mine){
       const canBid=S.price+1<=S.money[0];
       h+=`<div class="card"><div class="row" style="justify-content:center;gap:14px">
-        <button class="pri" ${canBid?'':'disabled'} onclick="bid(0)">▲ ${S.price+1} で競る</button>
+        <button class="pri" ${canBid?'':'disabled'} onclick="bid(0)">▲ ${S.price+1} で追う</button>
         <button class="pri out" onclick="drop(0)">✕ 降りる</button></div>
+        <div class="kv" style="text-align:center;margin-top:6px">⌨ Space/Enter＝追う ・ Esc＝降りる</div>
         <div class="hint">💡 あなたの ${T("目")} が見抜けるのは <b>${R.COMPS[S.lens[0]].e} ${R.COMPS[S.lens[0]].f}</b> だけ（${S.lot.v[S.lens[0]]>=0?'+':''}${S.lot.v[S.lens[0]]}）。
         そしてこの面は、<b class="pos">あなたの工房で3倍に化ける</b> ―― <b>素朴な見積もりは ${estimate(0)}</b>。<br>
         だが<b>誰がどの目を持つかは分からない。誰の目にも映らない面が、あるかもしれない。</b><br><b class="neg">⚠️ 高く追う者に釣られるな</b> ―― ${T("勝者の呪い")}。</div></div>`;
@@ -769,7 +847,7 @@ function endHTML(){
    ${[1,2,3].map(p=>`${R.NAMES[p]}=${R.COMPS[S.lens[p]].f}`).join(" / ")}<br>
    ${(()=>{const set=new Set(S.lens);const un=R.COMPS.map((c,i)=>i).filter(i=>!set.has(i));
      return un.length?`<b style="color:var(--bad)">誰の目にも映っていなかった面: ${un.map(i=>R.COMPS[i].f).join("・")}</b> ―― 全員が、濁りの中で競り合っていた。`:`すべての面が、誰かの目には映っていた。`;})()}</div>
-   <div class="row" style="margin-top:12px"><button class="pri" onclick="restartSolo()">↺ もう一度（${R.P}人）</button><button onclick="toTop()">← トップへ</button></div></div>`;
+   <div class="row" style="margin-top:12px"><button class="pri" onclick="restartSolo()">↺ もう一度（${R.P}人）</button><button onclick="toTop()">← タイトルへ</button><button onclick="location.href='index.html'">🏠 ゲーム一覧</button></div></div>`;
   h+=histHTML();
   return h;
 }
@@ -849,7 +927,7 @@ function home(){return `<div class="hero">
  ―― 追うか、降りるか。</b></p>
  <div class="kv" style="margin-top:16px;margin-bottom:6px"><b style="color:var(--gold2)">🌐 オンラインで遊ぶ</b>（仲間と）</div>
  <div class="row" style="margin-bottom:6px">
-  <input id="nm" placeholder="あなたの名前" value="${localStorage.getItem('ks_name')||''}"
+  <input id="nm" placeholder="あなたの名前" value="${(()=>{let v=localStorage.getItem('ks_name')||'';if(/^[ぁ-んァ-ンー]$/.test(v)){v='';localStorage.removeItem('ks_name');}return v.replace(/\"/g,'');})()}"
    style="background:var(--bg3);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:9px 12px;font:inherit;width:150px">
   <select id="np" style="background:var(--bg3);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:9px">
    ${[2,3,4,5,6].map(n=>`<option value="${n}" ${n===4?'selected':''}>${n}人卓（${SETUP[n].NC}面/石${SETUP[n].ROUNDS}）</option>`).join("")}
@@ -934,6 +1012,14 @@ function helpHTML(){return `<div class="modal" onclick="if(event.target===this){
  <p><b>「あいつが高く追っている。なら良い石だ」と追随すると、負ける。</b><br>
  落札できたということは ―― <b>あなたが、卓で最も楽観的だったということだ。</b>（${T("勝者の呪い")}）</p>
 
+ <h3>⌨ 操作</h3>
+ <ul>
+  <li><b>Space</b> または <b>Enter</b> … <b>追う</b>（値を1上げる）</li>
+  <li><b>Esc</b> または <b>X</b> … <b>降りる</b></li>
+  <li>マウス／タップでも同じことができます。<b>競り上げは1ずつなので、キーボードの方が速い。</b></li>
+  <li>あなたの番になると、<b>音が鳴り、タブの見出しが点滅</b>します（別タブを見ていても気づけます）。</li>
+ </ul>
+
  <h3>勝敗</h3>
  <p><b>最終得点 = 残った資金 + 競り落とした石の ${T("自分の価値","あなたにとっての価値")}</b>。<br>
  安く、良い石を。<b>高く買いすぎれば、損をする。</b></p>
@@ -943,8 +1029,19 @@ function helpHTML(){return `<div class="modal" onclick="if(event.target===this){
  <ul>${Object.entries(GLOSS).map(([k,d])=>`<li><b style="color:var(--gold2)">${k}</b> ― ${d}</li>`).join("")}</ul>
  <div class="row" style="margin-top:16px"><button class="pri" onclick="help=false;render()">閉じる</button></div>
  </div></div>`;}
+render=_guardRender(render);
 render();
-</script><div id="verbadge">影の競り v1.0</div>
-<style>#verbadge{position:fixed;right:7px;bottom:5px;font:10px/1.4 system-ui,sans-serif;
- color:#5f6675;z-index:9999;pointer-events:none;user-select:none;letter-spacing:.04em;opacity:.75}</style>
+</script><a id="homelink" href="index.html" title="ゲーム一覧へ戻る">🏠 ゲーム一覧</a>
+<div id="verbadge">影の競り v1.0</div>
+<style>
+#homelink{position:fixed;left:8px;bottom:6px;z-index:9999;
+ font:11px/1.5 system-ui,sans-serif;letter-spacing:.04em;text-decoration:none;
+ color:#8e97a8;background:rgba(26,30,38,.9);border:1px solid #39404f;border-radius:9px;
+ padding:5px 11px;backdrop-filter:blur(4px);transition:.15s}
+#homelink:hover{color:#f5d99a;border-color:#e0b352;transform:translateY(-1px);
+ box-shadow:0 4px 14px rgba(0,0,0,.4)}
+#verbadge{position:fixed;right:8px;bottom:7px;font:10px/1.4 system-ui,sans-serif;
+ color:#5f6675;z-index:9999;pointer-events:none;user-select:none;letter-spacing:.04em;opacity:.75}
+@media(max-width:420px){#homelink{font-size:10px;padding:4px 9px}}
+</style>
 </body></html>

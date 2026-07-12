@@ -6,6 +6,12 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#12141a">
+<meta property="og:title" content="卓上遊戯 — オリジナルボードゲーム">
+<meta property="og:description" content="ブラウザでそのまま遊べる、自作のボードゲーム。オンライン対戦・ひとり用あり。">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2312141a'/><path d='M16 5 L26 12 L24 24 L16 28 L8 24 L6 12 Z' fill='%23e0b352'/><path d='M16 5 L26 12 L16 15 Z' fill='%23f5d99a'/><path d='M16 15 L24 24 L16 28 Z' fill='%238a6a24'/></svg>">
 <title>卓上遊戯 — オリジナルボードゲーム</title>
 <meta name="description" content="自作のオリジナルボードゲーム。ブラウザで、そのまま遊べます。">
 <style>
@@ -31,8 +37,10 @@ h1{font-family:var(--ttl);font-size:32px;letter-spacing:.22em;margin:0 0 6px;
 .game{display:block;text-decoration:none;color:inherit;
  background:var(--bg2);border:1px solid var(--line);border-radius:16px;overflow:hidden;
  transition:transform .18s cubic-bezier(.2,.8,.3,1), box-shadow .18s, border-color .18s}
-.game:hover{transform:translateY(-3px);border-color:var(--gold);
- box-shadow:0 14px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(224,179,82,.18)}
+.game:hover,.game:focus-visible{transform:translateY(-3px);border-color:var(--gold);
+ box-shadow:0 14px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(224,179,82,.18);outline:none}
+.game:active{transform:scale(.995)}
+.game:focus-visible{box-shadow:0 0 0 3px rgba(224,179,82,.45)}
 .art{width:100%;display:block;background:#0d0f14;border-bottom:1px solid var(--line)}
 .body{padding:18px 20px 20px}
 .gtitle{font-family:var(--ttl);font-size:22px;letter-spacing:.08em;color:var(--gold2);margin:0}
@@ -219,13 +227,14 @@ footer a{color:var(--muted)}
 
 <div class="note">
   <h2>あそびかた</h2>
-  <p><b>ブラウザで開くだけ。</b>インストールも、アカウント登録も要りません。</p>
+  <p><b>ブラウザで開くだけ。</b>インストールも、アカウント登録も要りません。スマートフォンでも遊べます。</p>
   <ul>
-    <li><b>ひとりで試す</b> … NPC（コンピュータ）と対戦できます。ルールを覚えるのに。</li>
-    <li><b>オンラインで遊ぶ</b> … 「卓を作る」と<b>合言葉（4文字）</b>が出ます。仲間に伝えて、同じページから「参加する」。</li>
-    <li><b>観戦</b> … 席に着かずに、盤面を見守れます。</li>
+    <li><b>① まず、ひとりで試す</b> … NPC（コンピュータ）と対戦できます。<b>ルールを覚えるのに。</b></li>
+    <li><b>② 仲間と遊ぶ</b> … 「卓を作る」と<b>合言葉（4文字）</b>が出ます。仲間に伝えて、同じページから「参加する」。</li>
+    <li><b>③ 観戦</b> … 席に着かずに、盤面を見守れます。<b>遊ばない人がホストになって観戦する</b>と、進行役として最も安全です。</li>
   </ul>
-  <p style="margin-top:8px">スマートフォンでも遊べます。</p>
+  <p style="margin-top:10px;color:#8e97a8">💡 <b>うまく動かないときは</b> ―― ページを再読み込みしてください（Windows: <b>Ctrl+Shift+R</b> / Mac: <b>Cmd+Shift+R</b>）。<br>
+  <b>全員が同じ版を開いていること</b>が大切です（画面の隅に版番号が出ます）。</p>
 </div>
 
 <footer>
