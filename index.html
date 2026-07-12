@@ -276,10 +276,18 @@ footer a{color:var(--muted)}
   }
   // ゲームカードにホバー：かすかな光の音
   const hover = ()=>{ tn(1180,.05,"sine",.035,0); };
-  // ゲームを選ぶ：宝石が鳴るような、余韻のある和音
-  const enter = ()=>{ [659,880,1319].forEach((f,i)=>tn(f,.5,"sine",.075,i*.055)); tn(220,.35,"triangle",.05,0); };
+  // ゲームを選ぶ：短く鳴り切る和音（★遷移までに完全に終わる長さにする）
+  const ENTER_MS = 170;                       // 音の総長。遷移待ちもこれに合わせる
+  const enter = ()=>{ tn(880,.10,"sine",.09,0); tn(1319,.11,"sine",.07,.055); tn(440,.09,"triangle",.05,0); };
   // 一般のクリック
   const click = ()=>{ tn(520,.05,"triangle",.06,0); };
+
+  /* ★bfcache 対策 ―― ページを離れるとき AudioContext を破棄する。
+     破棄しないと、スケジュール済みの音がページ凍結中に残り、
+     「戻る」で復元されたときに続きから再生されてしまう。 */
+  function killAudio(){ if(AC){ try{ AC.close(); }catch(e){} AC=null; } }
+  window.addEventListener("pagehide", killAudio);
+  window.addEventListener("pageshow", (e)=>{ if(e.persisted) AC=null; });   // 復元時は作り直す
 
   // ミュート切替ボタン
   const btn=document.createElement("button");
@@ -296,11 +304,11 @@ footer a{color:var(--muted)}
     a.addEventListener("mouseenter", ()=>{ ac(); hover(); });
     a.addEventListener("click", (e)=>{
       ac(); enter();
-      // 音の余韻を聞かせてから遷移（80msだけ待つ。体感の遅延にはならない）
+      // 音が鳴り切ってから遷移する（ENTER_MS で完全に終わるので、切れない）
       const href=a.getAttribute("href");
-      if(href && !e.metaKey && !e.ctrlKey && e.button===0){
+      if(href && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button===0){
         e.preventDefault();
-        setTimeout(()=>{ location.href=href; }, 130);
+        setTimeout(()=>{ killAudio(); location.href=href; }, ENTER_MS);
       }
     });
     a.addEventListener("keydown", (e)=>{ if(e.key==="Enter"||e.key===" "){ ac(); enter(); } });
