@@ -148,6 +148,51 @@
   .scorepop{display:inline-block;animation:pop .42s cubic-bezier(.2,1.4,.4,1) both}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
+<script>
+/* ============================================================
+   ★キャッシュ自己修復
+   meta の Cache-Control は文書自体には効かない（ブラウザが無視する）。
+   そこで：
+     ① 残存する Service Worker を強制解除（「シークレットなら見える」の主犯）
+     ② サーバから no-store で自分自身を取り直し、版番号を比較
+     ③ 古ければ「?v=新版」という別URLへ飛ぶ → キャッシュが原理的に効かない
+   ============================================================ */
+(function(){
+  const PAGE_VER = "1.1";
+
+  // ① 残存 Service Worker を解除（過去の実験などで残っていると、強制リロードすら効かなくなる）
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations()
+      .then(rs => rs.forEach(r => r.unregister()))
+      .catch(()=>{});
+  }
+  if (window.caches && caches.keys) {
+    caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(()=>{});
+  }
+
+  // ② サーバの最新版を確認（キャッシュを完全に無視して取得）
+  const url = location.pathname + "?cb=" + Date.now();
+  fetch(url, { cache: "no-store" })
+    .then(r => r.ok ? r.text() : null)
+    .then(t => {
+      if (!t) return;
+      const m = t.match(/PAGE_VER\s*=\s*"([\d.]+)"/);
+      if (!m) return;
+      const latest = m[1];
+      if (latest !== PAGE_VER) {
+        // ③ 別URLへ飛ぶ（?v= が付くのでキャッシュが効かない）。無限ループ防止つき
+        const done = sessionStorage.getItem("cb_" + latest);
+        if (!done) {
+          sessionStorage.setItem("cb_" + latest, "1");
+          location.replace(location.pathname + "?v=" + latest);
+        } else {
+          console.warn("新しい版 v" + latest + " があります。手動で再読み込みしてください。");
+        }
+      }
+    })
+    .catch(()=>{});
+})();
+</script>
 </head>
 <body>
 <div class="wrap">
