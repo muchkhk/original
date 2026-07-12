@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>卓上遊戯 — オリジナルボードゲーム</title>
+<meta name="description" content="自作のオリジナルボードゲーム。ブラウザで、そのまま遊べます。">
+<style>
+:root{
+  --bg:#12141a; --bg2:#1a1e26; --bg3:#232832; --line:#39404f;
+  --ink:#eef1f7; --muted:#949cad;
+  --gold:#e0b352; --gold2:#f5d99a;
+  --ui:"Yu Gothic","Hiragino Kaku Gothic ProN",system-ui,sans-serif;
+  --ttl:"Yu Mincho","Hiragino Mincho ProN",serif;
+}
+*{box-sizing:border-box}
+html{-webkit-tap-highlight-color:transparent}
+body{margin:0 auto;max-width:900px;background:var(--bg);color:var(--ink);
+ font-family:var(--ui);line-height:1.7;padding:36px 16px 80px}
+header{text-align:center;margin-bottom:40px}
+h1{font-family:var(--ttl);font-size:32px;letter-spacing:.22em;margin:0 0 6px;
+ background:linear-gradient(180deg,var(--gold2),var(--gold));-webkit-background-clip:text;
+ -webkit-text-fill-color:transparent;background-clip:text}
+.tag{color:var(--muted);font-size:13px;letter-spacing:.1em}
+.rule{height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent);margin:26px 0 34px}
+
+.games{display:grid;gap:20px}
+.game{display:block;text-decoration:none;color:inherit;
+ background:var(--bg2);border:1px solid var(--line);border-radius:16px;overflow:hidden;
+ transition:transform .18s cubic-bezier(.2,.8,.3,1), box-shadow .18s, border-color .18s}
+.game:hover{transform:translateY(-3px);border-color:var(--gold);
+ box-shadow:0 14px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(224,179,82,.18)}
+.art{width:100%;display:block;background:#0d0f14;border-bottom:1px solid var(--line)}
+.body{padding:18px 20px 20px}
+.gtitle{font-family:var(--ttl);font-size:22px;letter-spacing:.08em;color:var(--gold2);margin:0}
+.gsub{color:var(--muted);font-size:12.5px;letter-spacing:.06em;margin-top:2px}
+.desc{font-size:14px;margin:12px 0 0}
+.hook{font-size:14px;color:var(--gold2);margin-top:10px;font-weight:700}
+.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
+.chip{font-size:11px;padding:3px 10px;border-radius:12px;border:1px solid var(--line);
+ background:var(--bg3);color:var(--muted)}
+.chip.on{border-color:var(--gold);color:var(--gold2)}
+.play{margin-left:auto;font-size:13px;color:var(--gold2);font-weight:700;white-space:nowrap}
+.game:hover .play{text-decoration:underline}
+
+.note{margin-top:40px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.note h2{font-family:var(--ttl);font-size:16px;color:var(--gold2);margin:0 0 8px;letter-spacing:.08em}
+.note p,.note li{font-size:13px;color:var(--muted);margin:4px 0}
+.note b{color:var(--ink)}
+footer{text-align:center;color:var(--muted);font-size:12px;margin-top:36px}
+footer a{color:var(--muted)}
+@media (max-width:560px){h1{font-size:25px}.gtitle{font-size:19px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>卓 上 遊 戯</h1>
+  <div class="tag">オリジナルボードゲーム ― ブラウザで、そのまま遊べます</div>
+</header>
+<div class="rule"></div>
+
+<div class="games">
+
+  <!-- ===== 影の競り ===== -->
+  <a class="game" href="seri.html">
+    <svg class="art" viewBox="0 0 760 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+     <defs>
+      <radialGradient id="sg" cx="50%" cy="50%" r="52%">
+       <stop offset="0%" stop-color="#f5d99a" stop-opacity=".28"/>
+       <stop offset="100%" stop-color="#0d0f14" stop-opacity="0"/></radialGradient>
+      <linearGradient id="sa" x1="0" y1="0" x2="1" y2="1">
+       <stop offset="0%" stop-color="#8fd4ff"/><stop offset="100%" stop-color="#2a5f80"/></linearGradient>
+      <linearGradient id="sb" x1="0" y1="1" x2="1" y2="0">
+       <stop offset="0%" stop-color="#ff9a9a"/><stop offset="100%" stop-color="#7a3040"/></linearGradient>
+      <linearGradient id="sc" x1="0" y1="0" x2="0" y2="1">
+       <stop offset="0%" stop-color="#f7e6b0"/><stop offset="100%" stop-color="#8a6a24"/></linearGradient>
+      <linearGradient id="sd" x1="1" y1="0" x2="0" y2="1">
+       <stop offset="0%" stop-color="#3b4354"/><stop offset="100%" stop-color="#1b1f28"/></linearGradient>
+      <filter id="sf"><feGaussianBlur stdDeviation="3"/></filter>
+     </defs>
+     <rect width="760" height="240" fill="#0d0f14"/>
+     <ellipse cx="380" cy="126" rx="280" ry="112" fill="url(#sg)"/>
+     <g filter="url(#sf)" opacity=".45">
+      <path d="M130 104 L352 118 L352 130 L130 114 Z" fill="#6cb6e8"/>
+      <path d="M630 104 L410 120 L410 132 L630 114 Z" fill="#e88b8b"/>
+      <path d="M266 196 L366 152 L376 160 L274 204 Z" fill="#f0d18a" opacity=".8"/>
+      <path d="M498 198 L394 154 L386 162 L492 206 Z" fill="#8fd98f" opacity=".5"/>
+     </g>
+     <path d="M334 176 L426 176 L442 192 L318 192 Z" fill="#20242e" stroke="#39404f"/>
+     <g>
+      <path d="M380 66 L430 98 L422 150 L380 174 L338 150 L330 98 Z" fill="url(#sd)" stroke="#5a6478" stroke-width="1.1"/>
+      <path d="M380 66 L430 98 L380 116 Z" fill="url(#sa)" opacity=".9"/>
+      <path d="M380 66 L330 98 L380 116 Z" fill="url(#sb)" opacity=".85"/>
+      <path d="M380 116 L422 150 L380 174 Z" fill="url(#sc)" opacity=".8"/>
+      <path d="M380 116 L338 150 L380 174 Z" fill="#252a35"/>
+      <path d="M330 98 L380 116 L338 150 Z" fill="#2f3543" opacity=".9"/>
+      <path d="M430 98 L380 116 L422 150 Z" fill="#191d25"/>
+      <path d="M380 66 L380 116 M330 98 L380 116 L430 98 M338 150 L380 116 L422 150 M380 116 L380 174"
+       stroke="#7d879b" stroke-width=".7" opacity=".5" fill="none"/>
+     </g>
+     <g>
+      <path d="M84 240 q6-56 42-70 q-15-20 2-36 q19-17 39-2 q17 16 3 37 q37 14 43 71 Z" fill="#10131a" stroke="#2b3140"/>
+      <circle cx="132" cy="150" r="9" fill="#6cb6e8" opacity=".2"/><circle cx="132" cy="150" r="4.2" fill="#6cb6e8"/>
+      <path d="M676 240 q-6-56-42-70 q15-20-2-36 q-19-17-39-2 q-17 16-3 37 q-37 14-43 71 Z" fill="#10131a" stroke="#2b3140"/>
+      <circle cx="628" cy="150" r="9" fill="#e88b8b" opacity=".2"/><circle cx="628" cy="150" r="4.2" fill="#e88b8b"/>
+      <path d="M196 240 q10-50 50-62 q-16-22 3-40 q21-19 43-2 q20 17 4 41 q42 12 51 63 Z" fill="#080a0e" stroke="#232833"/>
+      <circle cx="254" cy="192" r="10" fill="#f0d18a" opacity=".22"/><circle cx="254" cy="192" r="4.8" fill="#f0d18a"/>
+      <path d="M564 240 q-10-50-50-62 q16-22-3-40 q-21-19-43-2 q-20 17-4 41 q-42 12-51 63 Z" fill="#080a0e" stroke="#232833"/>
+      <circle cx="506" cy="192" r="10" fill="#8fd98f" opacity=".18"/><circle cx="506" cy="192" r="4.8" fill="#8fd98f"/>
+     </g>
+     <g fill="#f5d99a" opacity=".45">
+      <circle cx="200" cy="60" r="1.3"/><circle cx="556" cy="50" r="1.1"/><circle cx="296" cy="36" r="1"/>
+      <circle cx="472" cy="70" r="1.4"/><circle cx="620" cy="86" r="1"/><circle cx="146" cy="82" r="1"/>
+     </g>
+    </svg>
+    <div class="body">
+      <h2 class="gtitle">影 の 競 り</h2>
+      <div class="gsub">盲目の宝石商たち</div>
+      <p class="desc">
+        未研磨の原石の値打ちは、<b>色味・透明度・輝き</b>で決まる。<br>
+        だが、あなたは<b>ひとつの目しか持たない鑑定士</b>だ。見えるのは、そのうち1つだけ。<br>
+        他の商人も同じ ―― <b>誰が、何を見ているのかは、分からない。</b>
+      </p>
+      <p class="hook">「あいつが高く入れた。あいつには、何が見えている？」―― 追うか、降りるか。</p>
+      <div class="meta">
+        <span class="chip on">2〜6人</span>
+        <span class="chip">競り上げ</span>
+        <span class="chip">読み合い</span>
+        <span class="chip">15〜25分</span>
+        <span class="chip on">オンライン対戦・ひとり用あり</span>
+        <span class="play">▶ 遊ぶ</span>
+      </div>
+    </div>
+  </a>
+
+  <!-- ===== 魔女の調合 ===== -->
+  <a class="game" href="witch.html">
+    <svg class="art" viewBox="0 0 760 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+     <defs>
+      <radialGradient id="wg" cx="50%" cy="62%" r="55%">
+       <stop offset="0%" stop-color="#8fd98f" stop-opacity=".26"/>
+       <stop offset="100%" stop-color="#0d0f14" stop-opacity="0"/></radialGradient>
+      <linearGradient id="wp" x1="0" y1="0" x2="0" y2="1">
+       <stop offset="0%" stop-color="#3a4152"/><stop offset="100%" stop-color="#151920"/></linearGradient>
+      <filter id="wf"><feGaussianBlur stdDeviation="4"/></filter>
+     </defs>
+     <rect width="760" height="240" fill="#0d0f14"/>
+     <ellipse cx="380" cy="150" rx="290" ry="110" fill="url(#wg)"/>
+     <!-- 帯（素材の列） -->
+     <g>
+      <rect x="180" y="60" width="400" height="30" rx="6" fill="#171b23" stroke="#39404f"/>
+      <g font-size="17" text-anchor="middle" dominant-baseline="central">
+       <text x="212" y="76">🔥</text><text x="252" y="76">🍄</text><text x="292" y="76">✨</text>
+       <text x="332" y="76">❄️</text><text x="372" y="76">🌙</text><text x="412" y="76">🐍</text>
+       <text x="452" y="76">🔥</text><text x="492" y="76">✨</text><text x="532" y="76">🍄</text>
+      </g>
+      <!-- 切れ目 -->
+      <path d="M312 52 L312 98" stroke="#e0b352" stroke-width="2.4" filter="url(#wf)"/>
+      <path d="M312 52 L312 98" stroke="#f5d99a" stroke-width="1.2"/>
+      <path d="M432 52 L432 98" stroke="#e0b352" stroke-width="2.4" filter="url(#wf)"/>
+      <path d="M432 52 L432 98" stroke="#f5d99a" stroke-width="1.2"/>
+     </g>
+     <!-- 坩堝3つ -->
+     <g>
+      <g transform="translate(240,150)">
+       <path d="M-34 -6 q34 -12 68 0 l-8 42 q-26 10 -52 0 Z" fill="url(#wp)" stroke="#5a6478"/>
+       <ellipse cx="0" cy="-6" rx="34" ry="9" fill="#8fd98f" opacity=".55"/>
+       <ellipse cx="0" cy="-6" rx="34" ry="9" fill="none" stroke="#7fd6a0" opacity=".8"/>
+      </g>
+      <g transform="translate(380,158)">
+       <path d="M-38 -6 q38 -13 76 0 l-9 47 q-29 11 -58 0 Z" fill="url(#wp)" stroke="#5a6478"/>
+       <ellipse cx="0" cy="-6" rx="38" ry="10" fill="#d5a0e8" opacity=".5"/>
+       <ellipse cx="0" cy="-6" rx="38" ry="10" fill="none" stroke="#d5a0e8" opacity=".8"/>
+      </g>
+      <g transform="translate(520,150)">
+       <path d="M-34 -6 q34 -12 68 0 l-8 42 q-26 10 -52 0 Z" fill="url(#wp)" stroke="#5a6478"/>
+       <ellipse cx="0" cy="-6" rx="34" ry="9" fill="#6cb6e8" opacity=".5"/>
+       <ellipse cx="0" cy="-6" rx="34" ry="9" fill="none" stroke="#6cb6e8" opacity=".8"/>
+      </g>
+     </g>
+     <!-- 泡 -->
+     <g fill="#f5d99a" opacity=".45">
+      <circle cx="240" cy="122" r="2"/><circle cx="252" cy="108" r="1.4"/>
+      <circle cx="380" cy="126" r="2.4"/><circle cx="392" cy="106" r="1.5"/><circle cx="368" cy="98" r="1.1"/>
+      <circle cx="520" cy="122" r="1.8"/><circle cx="510" cy="106" r="1.2"/>
+     </g>
+     <!-- 沈黙（口を結んだ印） -->
+     <g opacity=".5">
+      <path d="M92 200 q22 -12 44 0" stroke="#949cad" stroke-width="2" fill="none"/>
+      <path d="M624 200 q22 -12 44 0" stroke="#949cad" stroke-width="2" fill="none"/>
+     </g>
+    </svg>
+    <div class="body">
+      <h2 class="gtitle">魔 女 の 調 合</h2>
+      <div class="gsub">沈黙の坩堝</div>
+      <p class="desc">
+        魔女たちは、それぞれ<b>秘めた「好み」</b>を持っている。誰にも明かせない。<br>
+        調合師は、並んだ素材の帯に<b>切れ目を入れる</b>だけ。並べ替えはできない。<br>
+        そして仲間たちが、順に<b>坩堝を選んでいく</b> ―― <b>ひとことも、喋らずに。</b>
+      </p>
+      <p class="hook">言葉を交わさずに、相手の望みを見抜けるか。</p>
+      <div class="meta">
+        <span class="chip on">3〜4人</span>
+        <span class="chip">協力</span>
+        <span class="chip">カット＆チューズ</span>
+        <span class="chip">秘匿情報</span>
+        <span class="chip on">オンライン対戦・ひとり用あり</span>
+        <span class="play">▶ 遊ぶ</span>
+      </div>
+    </div>
+  </a>
+
+</div>
+
+<div class="note">
+  <h2>あそびかた</h2>
+  <p><b>ブラウザで開くだけ。</b>インストールも、アカウント登録も要りません。</p>
+  <ul>
+    <li><b>ひとりで試す</b> … NPC（コンピュータ）と対戦できます。ルールを覚えるのに。</li>
+    <li><b>オンラインで遊ぶ</b> … 「卓を作る」と<b>合言葉（4文字）</b>が出ます。仲間に伝えて、同じページから「参加する」。</li>
+    <li><b>観戦</b> … 席に着かずに、盤面を見守れます。</li>
+  </ul>
+  <p style="margin-top:8px">スマートフォンでも遊べます。</p>
+</div>
+
+<footer>
+  <p>自作ボードゲーム置き場 ― <a href="https://github.com/muchkhk/original">GitHub</a></p>
+</footer>
+
+</body>
+</html>
