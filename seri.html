@@ -109,7 +109,7 @@ async function withRetry(fn,n=1,ms=700){
      ③ 古ければ「?v=新版」という別URLへ飛ぶ → キャッシュが原理的に効かない
    ============================================================ */
 (function(){
-  const PAGE_VER = "1.3";
+  const PAGE_VER = "1.4";
 
   // ① 残存 Service Worker を解除（過去の実験などで残っていると、強制リロードすら効かなくなる）
   if ("serviceWorker" in navigator) {
@@ -353,7 +353,7 @@ function npcTurn(){
 
 
 /* ============ オンライン基盤 ============ */
-const VER="1.3";
+const VER="1.4";
 /* --- 手番通知（音 + タブのタイトル点滅）--- */
 let _wasMyTurn=false, _titleT=null, _baseTitle=document.title;
 function notifyTurn(mine){
@@ -440,7 +440,7 @@ async function spectate(c){
 const seatAlive=(x)=>x&&x.lastSeen&&(nowMs()-x.lastSeen<30000);   // 30秒タイムアウト（前作教訓#4）
 
 /* --- 購読 --- */
-let DB={meta:null,seats:{},game:null,money:{},hist:{},priv:{},reveal:null};
+let DB={meta:null,seats:{},game:null,money:{},hist:{},priv:{},reveal:null,series:{}};
 function attach(){
   detach();
   const on=(k,f)=>{const r=ref(k);const cb=r.on("value",sn=>{f(sn.val());ON.lastSync=nowMs();render();},err=>E("同期エラー: "+err.message));ON.unsub.push(()=>r.off("value",cb));};
@@ -450,6 +450,7 @@ function attach(){
   on("money",v=>DB.money=v||{});
   on("hist",v=>DB.hist=v||{});
   on("reveal",v=>DB.reveal=v);
+  on("series",v=>DB.series=v||{});   // 連戦の通算記録（v1.4）
   // ★観戦は全員の priv を読む（＝全情報が見える）。プレイヤーは自席のみ
   if(ON.spec) on("priv",v=>DB.priv=v||{});
   else on("priv/"+ON.seat,v=>{DB.priv={};DB.priv[ON.seat]=v;});
@@ -551,11 +552,24 @@ async function oNext(){
   }));
 }
 async function finishOnline(){
-  const lens=[];for(let i=0;i<DB.meta.n;i++)lens.push((DB.priv&&DB.priv[i]&&DB.priv[i].lens)!=null?DB.priv[i].lens:0);
-  await withRetry(()=>ref().update({
-    "reveal/lens":(ON.spec||isHost())?lens.join(","):null,             // 終了時に全員の目を公開
-    "meta/phase":"ended","game/phase":"end"}));
+  const up={"meta/phase":"ended","game/phase":"end"};
+  // ★v1.4修正: 目の公開は「全privを持つ者（ホスト/観戦）」だけが書く。
+  //   v1.3では非ホストが終幕させると null で消してしまい、決算の目と得点が壊れた
+  if(ON.spec||isHost()){
+    const lens=[];for(let i=0;i<DB.meta.n;i++)lens.push((DB.priv&&DB.priv[i]&&DB.priv[i].lens)!=null?DB.priv[i].lens:0);
+    up["reveal/lens"]=lens.join(",");
+  }
+  await withRetry(()=>ref().update(up));
   SFX.win();
+}
+/* 非ホストが終幕させた場合の修復：ホスト/観戦が「終了なのに目が未公開」を見つけたら書く（冪等） */
+function maybeRevealLens(){
+  if(!DB.meta||DB.meta.phase!=="ended")return;
+  if(DB.reveal&&DB.reveal.lens!=null)return;
+  if(!(ON.spec||isHost()))return;
+  const n=DB.meta.n, lens=[];
+  for(let i=0;i<n;i++){const p=DB.priv&&DB.priv[i]; if(!p||p.lens==null)return; lens.push(p.lens);}
+  withRetry(()=>ref("reveal/lens").set(lens.join(","))).catch(()=>{});
 }
 /* 終了時の目の公開はホストが行う（privを読めるのはホスト自身の席だけなので、
    全席分は「観戦者/ホスト」が持つ。ホストが必ず全privを読むために購読を足す） */
@@ -571,6 +585,7 @@ function ensureHostPriv(){
 /* ---- オンライン描画 ---- */
 function onlineHTML(){
   ensureHostPriv();
+  maybeRevealLens();   // v1.4: 終了時の目の公開を自己修復
   const m=DB.meta; if(!m)return `<div class="card"><div class="kv">卓を読み込み中…</div></div>`;
   const n=m.n, g=DB.game;
   let h="";
@@ -582,7 +597,7 @@ function onlineHTML(){
   }
   h+=`<div class="bar"><div>
     <b style="color:var(--gold2)">合言葉 ${ON.room}</b>
-    <span class="kv">　${n}人卓 / ${m.nc}面 / 原石${m.rounds}${m.ver?" / v"+m.ver:""}</span>
+    <span class="kv">　${n}人卓 / ${m.nc}面 / 原石${m.rounds}${m.gen?` / <b style="color:var(--gold2)">第${m.gen+1}戦</b>`:""}${m.ver?" / v"+m.ver:""}</span>
     ${ON.spec?'<span class="pill" style="background:var(--gold);margin-left:8px">👁 観戦</span>':''}
   </div>
   <div class="kv">${ON.conn?'🟢 接続中':'🔴 切断'} ・ 最終同期 ${Math.max(0,Math.round((nowMs()-ON.lastSync)/1000))}秒前</div></div>`;
@@ -734,27 +749,74 @@ function onlineHist(){
   }
   return h+`</table></div>`;
 }
-function onlineEnd(){
+function calcOnlineScores(){
   const m=DB.meta,hist=DB.hist||{};
-  const lensArr=(DB.reveal&&DB.reveal.lens)?String(DB.reveal.lens).split(",").map(Number):null;
-  const sc=[...Array(m.n)].map((_,p)=>{
+  const lensArr=(DB.reveal&&DB.reveal.lens!=null)?String(DB.reveal.lens).split(",").map(Number):null;
+  return [...Array(m.n)].map((_,p)=>{
     let t=DB.money[p]||0;
     for(const k in hist){const x=hist[k];if(x.w!==p)continue;
       const v=String(x.v).split(",").map(Number);
-      const L=lensArr?lensArr[p]:(DB.priv[p]?DB.priv[p].lens:0);
+      const L=lensArr?lensArr[p]:(DB.priv[p]&&DB.priv[p].lens!=null?DB.priv[p].lens:0);
       t+=x.total+TASTE*v[L];}
     return t;});
+}
+/* --- 同じ卓で連戦（ホストのみ・v1.4）。目も原石も引き直し、今戦の結果は series に積む --- */
+async function rematchOnline(){
+  if(!isHost())return E("同じ卓での連戦は、ホストだけが始められます");
+  const m=DB.meta; if(!m||m.phase!=="ended")return;
+  const n=m.n, sv=DB.seats||{};
+  for(let i=0;i<n;i++) if(!sv[i]||!seatAlive(sv[i])) return E("席"+(i+1)+"が不在です（全員が戻ると連戦できます）");
+  const gen=m.gen||0;
+  const sc=calcOnlineScores();
+  const nc=m.nc, rounds=m.rounds;
+  const lots=genLots(nc,rounds);
+  ON.lots=lots; localStorage.setItem(lsKey(),JSON.stringify(lots));
+  const priv={},money={};
+  for(let i=0;i<n;i++){const lens=rn(nc),see={};for(let r=0;r<rounds;r++)see[r]=lots[r][lens];priv[i]={lens,see};money[i]=m.money;}
+  const live=[...Array(n).keys()];
+  await withRetry(()=>ref().update({
+    ["series/"+gen]:{sc:sc.join(","),t:nowMs()},
+    hist:null, reveal:null,
+    priv, money,
+    game:{round:0,price:0,cur:live[rn(n)],last:-1,live:live.join(","),phase:"auction",bids:""},
+    "meta/phase":"playing","meta/gen":gen+1,
+  }));
+}
+function onlineEnd(){
+  const m=DB.meta;
+  const lensArr=(DB.reveal&&DB.reveal.lens!=null)?String(DB.reveal.lens).split(",").map(Number):null;
+  const sc=calcOnlineScores();
   const rk=[...Array(m.n).keys()].sort((a,b)=>sc[b]-sc[a]);
-  let h=`<div class="card"><div class="big">決算</div><table style="margin-top:10px">
+  const gen=m.gen||0;
+  let h=`<div class="card"><div class="big">決算${gen?`（第${gen+1}戦）`:""}</div><table style="margin-top:10px">
    <tr><th>順位</th><th></th><th>得点</th><th>残金</th><th>持っていた ${T("目")}</th></tr>`;
   rk.forEach((p,i)=>{const L=lensArr?lensArr[p]:null;
     h+=`<tr><td>${i===0?"🏆1":i+1}</td><td><span class="pill" style="background:${CC[p]}">${esc((DB.seats[p]||{}).name||("席"+(p+1)))}</span></td>
      <td class="big" style="font-size:20px">${sc[p]}</td><td>${DB.money[p]||0}</td>
      <td><b style="color:var(--gold2)">${L!=null?R.COMPS[L].e+R.COMPS[L].f:"?"}</b></td></tr>`;});
-  h+=`</table><div class="row" style="margin-top:12px"><button class="pri" onclick="leaveRoom()">← 卓を出る</button><button onclick="location.href='index.html'">🏠 ゲーム一覧</button></div></div>`;
+  h+=`</table>`;
+  // ★通算（連戦時のみ）: 過去の series ＋ 今戦
+  const ser=DB.series||{}, serKeys=Object.keys(ser);
+  if(serKeys.length){
+    const all=serKeys.sort((a,b)=>Number(a)-Number(b)).map(k=>String(ser[k].sc).split(",").map(Number));
+    all.push(sc);
+    const tot=[...Array(m.n)].map(()=>0), wins=[...Array(m.n)].map(()=>0);
+    all.forEach(a=>{a.forEach((v,i)=>tot[i]+=v);const mx=Math.max(...a);a.forEach((v,i)=>{if(v===mx)wins[i]++;});});
+    const rk2=[...Array(m.n).keys()].sort((a,b)=>tot[b]-tot[a]);
+    h+=`<div class="big" style="font-size:18px;margin-top:14px">通算（${all.length}戦）</div><table style="margin-top:6px">
+     <tr><th></th><th>通算得点</th><th>優勝</th></tr>`;
+    rk2.forEach(p=>{h+=`<tr><td><span class="pill" style="background:${CC[p]}">${esc((DB.seats[p]||{}).name||("席"+(p+1)))}</span></td>
+      <td class="big" style="font-size:18px">${tot[p]}</td><td>${wins[p]}回</td></tr>`;});
+    h+=`</table>`;
+  }
+  h+=`<div class="row" style="margin-top:12px">`;
+  if(isHost()&&!ON.spec) h+=`<button class="pri" onclick="rematchOnline()">↺ 同じ卓でもう一度（${T("目")}も原石も引き直し）</button>`;
+  h+=`<button onclick="leaveRoom()">← 卓を出る</button><button onclick="location.href='index.html'">🏠 ゲーム一覧</button></div>`;
+  if(!isHost()&&!ON.spec) h+=`<div class="kv" style="margin-top:8px">ホストが「もう一度」を押すと、同じ卓・同じ合言葉のまま連戦できます（このページを閉じずに待つ）</div>`;
+  h+=`</div>`;
   return h+onlineHist();
 }
-function leaveRoom(){detach();ON.room=null;ON.seat=null;ON.spec=false;DB={meta:null,seats:{},game:null,money:{},hist:{},priv:{},reveal:null};S=null;render();}
+function leaveRoom(){detach();ON.room=null;ON.seat=null;ON.spec=false;DB={meta:null,seats:{},game:null,money:{},hist:{},priv:{},reveal:null,series:{}};S=null;render();}
 
 /* ---- 遷移（confirm はサンドボックスでブロックされるので使わない） ---- */
 let _leave=false, _leaveT=null;
