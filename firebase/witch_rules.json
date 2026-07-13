@@ -1,0 +1,84 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "rooms": {
+      "$code": {
+        ".read": "auth != null && $code.matches(/^[A-Z0-9]{4}$/)",
+
+        "meta": {
+          ".write": "auth != null && $code.matches(/^[A-Z0-9]{4}$/) && ((!data.exists() && newData.child('host').val() === auth.uid) || data.child('host').val() === auth.uid)",
+          ".validate": "newData.hasChildren(['host','phase'])",
+          "host": { ".validate": "newData.isString() && newData.val().length <= 128" },
+          "phase": {
+            ".write": "auth != null && $code.matches(/^[A-Z0-9]{4}$/) && (root.child('rooms').child($code).child('seats').child('0').child('uid').val() === auth.uid || root.child('rooms').child($code).child('seats').child('1').child('uid').val() === auth.uid || root.child('rooms').child($code).child('seats').child('2').child('uid').val() === auth.uid || root.child('rooms').child($code).child('seats').child('3').child('uid').val() === auth.uid)",
+            ".validate": "newData.isString() && (newData.val() === 'lobby' || newData.val() === 'playing' || newData.val() === 'ended')"
+          },
+          "createdAt": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        },
+
+        "seats": {
+          ".write": "auth != null && $code.matches(/^[A-Z0-9]{4}$/) && data.parent().child('meta').child('host').val() === auth.uid",
+          "$s": {
+            ".write": "auth != null && $code.matches(/^[A-Z0-9]{4}$/) && $s.matches(/^[0-3]$/) && (!data.exists() || data.child('uid').val() === auth.uid)",
+            ".validate": "$s.matches(/^[0-3]$/) && newData.hasChildren(['uid','name','lastSeen','online'])",
+            "uid": { ".validate": "newData.isString() && newData.val().length <= 128 && (newData.val() === auth.uid || root.child('rooms').child($code).child('meta').child('host').val() === auth.uid)" },
+            "name": { ".validate": "newData.isString() && newData.val().length <= 24" },
+            "lastSeen": { ".validate": "newData.isNumber()" },
+            "online": { ".validate": "newData.isBoolean()" },
+            "$other": { ".validate": false }
+          }
+        },
+
+        "recipes": {
+          ".write": "auth != null && $code.matches(/^[A-Z0-9]{4}$/) && data.parent().child('meta').child('host').val() === auth.uid",
+          "$s": {
+            ".validate": "$s.matches(/^[0-3]$/)",
+            "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length <= 32" }
+          }
+        },
+
+        "game": {
+          ".write": "auth != null && $code.matches(/^[A-Z0-9]{4}$/)",
+          ".validate": "newData.hasChildren(['n', 'rounds', 'round', 'cutter', 'phase', 'band'])",
+          "n": { ".validate": "newData.isNumber() && newData.val() >= 3 && newData.val() <= 4" },
+          "rounds": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12" },
+          "round": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12" },
+          "cutter": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3" },
+          "teamTotal": { ".validate": "newData.isNumber()" },
+          "advanced": { ".validate": "newData.isBoolean()" },
+          "phase": { ".validate": "newData.isString() && (newData.val() === 'cut' || newData.val() === 'choose' || newData.val() === 'await_score' || newData.val() === 'score' || newData.val() === 'end')" },
+          "chooseIdx": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 4" },
+          "band": { "$i": { ".validate": "$i.matches(/^([0-9]|1[01])$/) && newData.isNumber()" } },
+          "cuts": { "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isNumber()" } },
+          "assign": { "$pi": { ".validate": "$pi.matches(/^[0-3]$/) && newData.isNumber()" } },
+          "roundEval": {
+            ".validate": "newData.hasChildren(['roundScore', 'omni', 'pct'])",
+            "roundScore": { ".validate": "newData.isNumber()" },
+            "omni": { ".validate": "newData.isNumber()" },
+            "rational": { ".validate": "newData.isNumber()" },
+            "pct": { ".validate": "newData.isNumber()" },
+            "cutPct": { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          },
+          "history": {
+            "$h": { ".validate": "$h.matches(/^([0-9]|1[01])$/) && newData.hasChildren(['round', 'cutter'])" }
+          },
+          "$other": { ".validate": false }
+        },
+
+        "reveal": {
+          ".write": "auth != null && $code.matches(/^[A-Z0-9]{4}$/)",
+          "$s": {
+            ".validate": "$s.matches(/^[0-3]$/)",
+            "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length <= 32" }
+          }
+        },
+
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

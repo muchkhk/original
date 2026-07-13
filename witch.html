@@ -11,6 +11,7 @@
 <!-- ============ Firebase ============ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
   // ▼▼▼ Firebaseコンソール「プロジェクト設定→マイアプリ→Config」の内容をここに貼る ▼▼▼
   // 変数名は必ず FIREBASE_CONFIG のままにする（firebaseConfig に変えない）
@@ -26,10 +27,10 @@
   };
   // ▲▲▲ ここまで ▲▲▲
 
-  let _db=null, _fbReady=false, _fbError="";
+  let _db=null, _auth=null, _fbReady=false, _fbError="";
   try{
     if(FIREBASE_CONFIG.apiKey==="YOUR_API_KEY"){ _fbError="Firebase未設定：FIREBASE_CONFIG を自分のプロジェクトの値に差し替えてください。"; }
-    else { firebase.initializeApp(FIREBASE_CONFIG); _db=firebase.database(); _fbReady=true; }
+    else { firebase.initializeApp(FIREBASE_CONFIG); _db=firebase.database(); _auth=firebase.auth(); _fbReady=true; }
   }catch(e){ _fbError="Firebase初期化に失敗："+e.message; }
 
   // 教訓#6: 通信は withRetry で共通化（1回失敗→0.7秒→もう1回）
@@ -158,7 +159,7 @@
      ③ 古ければ「?v=新版」という別URLへ飛ぶ → キャッシュが原理的に効かない
    ============================================================ */
 (function(){
-  const PAGE_VER = "1.1";
+  const PAGE_VER = "1.2";
 
   // ① 残存 Service Worker を解除（過去の実験などで残っていると、強制リロードすら効かなくなる）
   if ("serviceWorker" in navigator) {
@@ -308,8 +309,10 @@ function chooseOrder(cutter,n){const o=[];for(let i=0;i<n;i++){const idx=(cutter
 const NAMES_FALLBACK=["魔女A","魔女B","魔女C","魔女D"];
 const PCOL=["#e5b45a","#79cbe4","#b183d6","#86c96f"];
 const HEARTBEAT_MS=12000, TIMEOUT_MS=30000;
-let myUid = localStorage.getItem("witch_uid");
-if(!myUid){ myUid = "u"+Math.random().toString(36).slice(2,10); localStorage.setItem("witch_uid",myUid); }
+/* uid は匿名認証（Firebase Anonymous Auth）のものを使う。旧 localStorage 乱数方式は廃止
+   ―― セキュリティルールが auth.uid と席の uid を照合するため、認証と紐づかない uid では書き込めない。
+   匿名認証の uid はブラウザ側で永続化されるため、再訪時も同じ席に復帰できる。 */
+let myUid = null; // ensureAuth() 完了後に auth.currentUser.uid が入る
 let myName = localStorage.getItem("witch_name") || "";
 /* ★過去のIMEバグで壊れた名前（1文字のひらがな/カタカナだけ）を掃除する */
 if(/^[ぁ-んァ-ンー]$/.test(myName)){ myName=""; localStorage.removeItem("witch_name"); }
@@ -329,10 +332,23 @@ if(_fbReady){
 }
 
 // ============ 部屋操作 ============
+// オンライン入口（作る／参加する／観戦する）共通の認証ゲート。
+// 認証済みならそのまま、未認証なら匿名サインイン。失敗は握りつぶさず赤バナー（教訓#7）。
+async function ensureAuth(){
+  try{
+    if(_auth.currentUser){ myUid=_auth.currentUser.uid; return true; }
+    const cred=await withRetry(()=>_auth.signInAnonymously());
+    myUid=cred.user.uid; return true;
+  }catch(e){
+    showError("匿名認証に失敗しました："+e.message+"（Firebaseコンソールで Authentication → 匿名ログイン が有効になっているか確認してください）");
+    return false;
+  }
+}
 function genCode(){ const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let c="";for(let i=0;i<4;i++)c+=A[(Math.random()*A.length)|0];return c; }
 
 async function createRoom(){
   if(!requireFb()||!requireName())return;
+  if(!(await ensureAuth()))return;
   try{
     let code=null;
     for(let attempt=0;attempt<6;attempt++){
@@ -352,6 +368,7 @@ async function createRoom(){
 }
 async function joinRoom(){
   if(!requireFb()||!requireName())return;
+  if(!(await ensureAuth()))return;
   const el=document.getElementById("joincode");
   const raw=(el&&el.value)||_inJoin||"";
   const code=raw.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,4);
@@ -683,6 +700,7 @@ function helpHTML(){
 
 async function spectate(){
   if(!requireFb())return;
+  if(!(await ensureAuth()))return;
   const el=document.getElementById("joincode"); const raw=(el&&el.value)||_inJoin||"";
   const code=raw.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,4);
   if(code.length!==4){ showError("観戦する部屋の合言コードを入力してください。"); return; }
@@ -1135,7 +1153,7 @@ function homeHTML(){
       <button class="ghost" onclick="spectate()">👁 観戦する（合言コードで監視）</button>
     </div>
     ${!_fbReady?`<div class="hint" style="margin-top:12px"><span class="hi">⚙</span><span>${_fbError} 上部の &lt;script&gt; 内 FIREBASE_CONFIG を自分のFirebaseプロジェクトの値に差し替えてください（手順はハンドオフ資料参照）。</span></div>`:''}
-    <div class="hint" style="margin-top:10px"><span class="hi">✎</span><span>秘匿について：この簡易構成では各自の好みはUI上は本人にしか見えませんが、DBを直接覗ける人には技術的には見えます（身内プレイ向け）。厳密な秘匿には認証＋セキュリティルールが必要です。</span></div>
+    <div class="hint" style="margin-top:10px"><span class="hi">✎</span><span>秘匿について：部屋の外からのアクセスは匿名認証＋セキュリティルールで遮断されています。ただし同じ合言コードの部屋に入った人には、好みは技術的には見えます（観戦モードと同根の仕様）。合言コードは信頼できる仲間だけに伝えてください。</span></div>
   </div>`;
 }
 function lobbyHTML(){
@@ -1305,7 +1323,7 @@ render=_guardRender(render);
 render();
 </script>
 <a id="homelink" href="index.html" title="ゲーム一覧へ戻る">🏠 ゲーム一覧</a>
-<div id="verbadge">魔女の調合 v1.1</div>
+<div id="verbadge">魔女の調合 v1.2</div>
 <style>
 #homelink{position:fixed;left:8px;bottom:6px;z-index:9999;
  font:11px/1.5 system-ui,sans-serif;letter-spacing:.04em;text-decoration:none;
