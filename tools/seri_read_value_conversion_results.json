@@ -1,0 +1,1169 @@
+{
+  "meta": {
+    "gamesPerCell": 10000,
+    "seed": "fixed paired common random numbers",
+    "rules": "seri.html v1.4, 4 players"
+  },
+  "paired": {
+    "A": {
+      "strategies": {
+        "S0": {
+          "games": 10000,
+          "winRate": 0.24220000000000005,
+          "winCI95": [
+            0.23380307176965295,
+            0.2505969282303471
+          ],
+          "meanScore": 42.4113,
+          "scoreSD": 11.78024330436347,
+          "avgPrice": 9.570337797321606,
+          "profitPerWin": 3.089550045913682,
+          "overpayRate": 0.2404040404040404,
+          "cashHalf": 17.9374,
+          "cashBackStart": 15.0925,
+          "cashBeforeLast2": 12.7096,
+          "fundsBlockedPerGame": 1.2149,
+          "spend": 25.0164,
+          "estimateMAE": 2.941943374622671,
+          "overestimate": 1.4380269595086916,
+          "underestimate": 1.5039164151139794,
+          "observedPositions": 2.4076584781929844,
+          "effectiveSignals": 0,
+          "bands": {
+            "good": {
+              "n": 5992,
+              "mae": 5.489652870493992,
+              "baseMAE": 5.489652870493992,
+              "improvement": 0
+            },
+            "middle": {
+              "n": 25453,
+              "mae": 2.0171296114406947,
+              "baseMAE": 2.0171296114406947,
+              "improvement": 0
+            },
+            "slightlyGood": {
+              "n": 17228,
+              "mae": 2.9495588576735545,
+              "baseMAE": 2.9495588576735545,
+              "improvement": 0
+            },
+            "slightlyBad": {
+              "n": 19938,
+              "mae": 2.524526030695155,
+              "baseMAE": 2.524526030695155,
+              "improvement": 0
+            },
+            "bad": {
+              "n": 8245,
+              "mae": 4.938872043662826,
+              "baseMAE": 4.938872043662826,
+              "improvement": 0
+            }
+          },
+          "limitUpRate": 0,
+          "limitDownRate": 0,
+          "limitSameRate": 1,
+          "correctDirectionRate": 0,
+          "goodStoneUpPerGame": 0,
+          "badStoneDownPerGame": 0,
+          "positiveSignalLots": 0,
+          "positiveSignalProfit": 0,
+          "negativeSignalLots": 0,
+          "negativeSignalProfit": 0
+        },
+        "S1": {
+          "games": 10000,
+          "winRate": 0.23658333333333334,
+          "winCI95": [
+            0.2282536409501244,
+            0.24491302571654228
+          ],
+          "meanScore": 42.4609,
+          "scoreSD": 11.619323181235638,
+          "avgPrice": 9.534937960630655,
+          "profitPerWin": 3.207559329744484,
+          "overpayRate": 0.22772765183107135,
+          "cashHalf": 16.5139,
+          "cashBackStart": 13.7889,
+          "cashBeforeLast2": 11.5745,
+          "fundsBlockedPerGame": 1.3691,
+          "spend": 25.7649,
+          "estimateMAE": 2.8881135681636647,
+          "overestimate": 1.2254336392290877,
+          "underestimate": 1.6626799289344405,
+          "observedPositions": 2.409779650371611,
+          "effectiveSignals": 2.4693682612791794,
+          "bands": {
+            "good": {
+              "n": 5951,
+              "mae": 5.1403041132209495,
+              "baseMAE": 5.488993446479583,
+              "improvement": 0.3486893332586337
+            },
+            "middle": {
+              "n": 25296,
+              "mae": 2.2551344261719874,
+              "baseMAE": 2.0188962681846934,
+              "improvement": -0.23623815798729417
+            },
+            "slightlyGood": {
+              "n": 17135,
+              "mae": 3.1080224751159182,
+              "baseMAE": 2.948409687773563,
+              "improvement": -0.1596127873423555
+            },
+            "slightlyBad": {
+              "n": 19849,
+              "mae": 2.271280075682532,
+              "baseMAE": 2.5208826641140614,
+              "improvement": 0.24960258843152902
+            },
+            "bad": {
+              "n": 8193,
+              "mae": 4.241029876452541,
+              "baseMAE": 4.939948736726474,
+              "improvement": 0.698918860273933
+            }
+          },
+          "limitUpRate": 0.11945200460588297,
+          "limitDownRate": 0.3194677064796399,
+          "limitSameRate": 0.5610802889144771,
+          "correctDirectionRate": 0.5441807774862867,
+          "goodStoneUpPerGame": 0.7157,
+          "badStoneDownPerGame": 1.3586,
+          "positiveSignalLots": 1.5882,
+          "positiveSignalProfit": 1.4765772572723839,
+          "negativeSignalLots": 5.5042,
+          "negativeSignalProfit": 0.9920787762072599
+        },
+        "S2": {
+          "games": 10000,
+          "winRate": 0.2358916666666667,
+          "winCI95": [
+            0.22757039235443208,
+            0.2442129409789013
+          ],
+          "meanScore": 42.5632,
+          "scoreSD": 11.563131312927304,
+          "avgPrice": 9.505283496568726,
+          "profitPerWin": 3.30778739184178,
+          "overpayRate": 0.21500309023485784,
+          "cashHalf": 16.3387,
+          "cashBackStart": 13.6572,
+          "cashBeforeLast2": 11.4636,
+          "fundsBlockedPerGame": 1.3814,
+          "spend": 25.8247,
+          "estimateMAE": 2.863732216366489,
+          "overestimate": 1.1475583261229023,
+          "underestimate": 1.7161738902435717,
+          "observedPositions": 2.4105377697370147,
+          "effectiveSignals": 1.3866514591363173,
+          "bands": {
+            "good": {
+              "n": 5948,
+              "mae": 4.67374613315402,
+              "baseMAE": 5.487895090786819,
+              "improvement": 0.8141489576327996
+            },
+            "middle": {
+              "n": 25231,
+              "mae": 2.3626558598548684,
+              "baseMAE": 2.018112639213666,
+              "improvement": -0.34454322064120246
+            },
+            "slightlyGood": {
+              "n": 17096,
+              "mae": 3.1978139915769583,
+              "baseMAE": 2.9485259709873657,
+              "improvement": -0.24928802058959296
+            },
+            "slightlyBad": {
+              "n": 19823,
+              "mae": 2.1924113403622076,
+              "baseMAE": 2.5238359481410484,
+              "improvement": 0.33142460777884064
+            },
+            "bad": {
+              "n": 8180,
+              "mae": 4.0217794621027325,
+              "baseMAE": 4.94437652811736,
+              "improvement": 0.9225970660146269
+            }
+          },
+          "limitUpRate": 0.13275125199926585,
+          "limitDownRate": 0.4466032145572773,
+          "limitSameRate": 0.42064553344345684,
+          "correctDirectionRate": 0.5630883417813178,
+          "goodStoneUpPerGame": 0.7827,
+          "badStoneDownPerGame": 1.7242,
+          "positiveSignalLots": 1.7928,
+          "positiveSignalProfit": 1.5968317715305667,
+          "negativeSignalLots": 5.1464,
+          "negativeSignalProfit": 1.1280312451422354
+        },
+        "S2+": {
+          "games": 10000,
+          "winRate": 0.23500000000000004,
+          "winCI95": [
+            0.22668962311323973,
+            0.24331037688676035
+          ],
+          "meanScore": 42.3226,
+          "scoreSD": 11.623369960557907,
+          "avgPrice": 9.556738675586711,
+          "profitPerWin": 3.052820776171961,
+          "overpayRate": 0.23850047685422934,
+          "cashHalf": 15.7326,
+          "cashBackStart": 13.0937,
+          "cashBeforeLast2": 10.9615,
+          "fundsBlockedPerGame": 1.4669,
+          "spend": 26.2294,
+          "estimateMAE": 2.8842816579848796,
+          "overestimate": 1.5172281894164883,
+          "underestimate": 1.3670534685683582,
+          "observedPositions": 2.4099956700300473,
+          "effectiveSignals": 1.4061118181937464,
+          "bands": {
+            "good": {
+              "n": 5935,
+              "mae": 4.530883909014332,
+              "baseMAE": 5.488289806234204,
+              "improvement": 0.9574058972198725
+            },
+            "middle": {
+              "n": 25214,
+              "mae": 2.132022606488474,
+              "baseMAE": 2.0177679067184897,
+              "improvement": -0.11425469976998462
+            },
+            "slightlyGood": {
+              "n": 17086,
+              "mae": 2.816770806508219,
+              "baseMAE": 2.9480276249561044,
+              "improvement": 0.1312568184478854
+            },
+            "slightlyBad": {
+              "n": 19797,
+              "mae": 2.5555660958731217,
+              "baseMAE": 2.524372379653483,
+              "improvement": -0.031193716219638856
+            },
+            "bad": {
+              "n": 8181,
+              "mae": 4.944659088131038,
+              "baseMAE": 4.941938638308275,
+              "improvement": -0.0027204498227628715
+            }
+          },
+          "limitUpRate": 0.17616417146681013,
+          "limitDownRate": 0,
+          "limitSameRate": 0.8238358285331899,
+          "correctDirectionRate": 0.6036049456278861,
+          "goodStoneUpPerGame": 0.8826,
+          "badStoneDownPerGame": 0,
+          "positiveSignalLots": 1.8343,
+          "positiveSignalProfit": 1.541241890639481,
+          "negativeSignalLots": 0,
+          "negativeSignalProfit": 0
+        },
+        "S2-": {
+          "games": 10000,
+          "winRate": 0.2435250000000001,
+          "winCI95": [
+            0.2351124988349541,
+            0.2519375011650461
+          ],
+          "meanScore": 42.624,
+          "scoreSD": 11.677740534880868,
+          "avgPrice": 9.513723818152748,
+          "profitPerWin": 3.3441910966340935,
+          "overpayRate": 0.2178920428106096,
+          "cashHalf": 18.5504,
+          "cashBackStart": 15.6842,
+          "cashBeforeLast2": 13.2359,
+          "fundsBlockedPerGame": 1.1431,
+          "spend": 24.5756,
+          "estimateMAE": 2.9350016377674617,
+          "overestimate": 1.0791499727039313,
+          "underestimate": 1.8558516650635588,
+          "observedPositions": 2.4081550419840383,
+          "effectiveSignals": 1.382340707619518,
+          "bands": {
+            "good": {
+              "n": 6002,
+              "mae": 5.620758413862057,
+              "baseMAE": 5.4890036654448515,
+              "improvement": -0.1317547484172054
+            },
+            "middle": {
+              "n": 25468,
+              "mae": 2.264864457358183,
+              "baseMAE": 2.0177870268572327,
+              "improvement": -0.2470774305009503
+            },
+            "slightlyGood": {
+              "n": 17249,
+              "mae": 3.365558351208799,
+              "baseMAE": 2.949794190967592,
+              "improvement": -0.4157641602412065
+            },
+            "slightlyBad": {
+              "n": 19967,
+              "mae": 2.1629504682726455,
+              "baseMAE": 2.5249661942204638,
+              "improvement": 0.3620157259478184
+            },
+            "bad": {
+              "n": 8248,
+              "mae": 4.018417555771138,
+              "baseMAE": 4.939500484966052,
+              "improvement": 0.9210829291949145
+            }
+          },
+          "limitUpRate": 0,
+          "limitDownRate": 0.46598383029609797,
+          "limitSameRate": 0.5340161697039021,
+          "correctDirectionRate": 0.5237656903765691,
+          "goodStoneUpPerGame": 0,
+          "badStoneDownPerGame": 1.7566,
+          "positiveSignalLots": 0,
+          "positiveSignalProfit": 0,
+          "negativeSignalLots": 5.154,
+          "negativeSignalProfit": 1.1812378734963136
+        }
+      },
+      "counterfactual": {
+        "S2vsS0": {
+          "meanPositiveEstimateLift": 1.0140487258052509,
+          "meanPriceLift": 0.27240116583215007,
+          "meanProfitChange": 0.2800986473357746,
+          "priceAbsorptionRate": 0.26862729462614104,
+          "S2OnlyGoodBuyPerGame": 0.1823,
+          "S2OnlyBadAvoidPerGame": 0.1384,
+          "readCausedBadBuyPerGame": 0.0413,
+          "correctButPriceAtValuePerGame": 0.143,
+          "meanExtraSpend": 14.478,
+          "missedFuturePositiveAfterExtraSpendPerGame": 0.8113
+        },
+        "S2vsS1": {
+          "cheaperGoodPerGame": 0.023,
+          "lessOverpayPerGame": 0.0829
+        }
+      }
+    },
+    "B": {
+      "strategies": {
+        "S0": {
+          "games": 10000,
+          "winRate": 0.24220000000000005,
+          "winCI95": [
+            0.23380307176965295,
+            0.2505969282303471
+          ],
+          "meanScore": 42.4113,
+          "scoreSD": 11.78024330436347,
+          "avgPrice": 9.570337797321606,
+          "profitPerWin": 3.089550045913682,
+          "overpayRate": 0.2404040404040404,
+          "cashHalf": 17.9374,
+          "cashBackStart": 15.0925,
+          "cashBeforeLast2": 12.7096,
+          "fundsBlockedPerGame": 1.2149,
+          "spend": 25.0164,
+          "estimateMAE": 2.941943374622671,
+          "overestimate": 1.4380269595086916,
+          "underestimate": 1.5039164151139794,
+          "observedPositions": 2.4076584781929844,
+          "effectiveSignals": 0,
+          "bands": {
+            "good": {
+              "n": 5992,
+              "mae": 5.489652870493992,
+              "baseMAE": 5.489652870493992,
+              "improvement": 0
+            },
+            "middle": {
+              "n": 25453,
+              "mae": 2.0171296114406947,
+              "baseMAE": 2.0171296114406947,
+              "improvement": 0
+            },
+            "slightlyGood": {
+              "n": 17228,
+              "mae": 2.9495588576735545,
+              "baseMAE": 2.9495588576735545,
+              "improvement": 0
+            },
+            "slightlyBad": {
+              "n": 19938,
+              "mae": 2.524526030695155,
+              "baseMAE": 2.524526030695155,
+              "improvement": 0
+            },
+            "bad": {
+              "n": 8245,
+              "mae": 4.938872043662826,
+              "baseMAE": 4.938872043662826,
+              "improvement": 0
+            }
+          },
+          "limitUpRate": 0,
+          "limitDownRate": 0,
+          "limitSameRate": 1,
+          "correctDirectionRate": 0,
+          "goodStoneUpPerGame": 0,
+          "badStoneDownPerGame": 0,
+          "positiveSignalLots": 0,
+          "positiveSignalProfit": 0,
+          "negativeSignalLots": 0,
+          "negativeSignalProfit": 0
+        },
+        "S1": {
+          "games": 10000,
+          "winRate": 0.23658333333333334,
+          "winCI95": [
+            0.2282536409501244,
+            0.24491302571654228
+          ],
+          "meanScore": 42.4609,
+          "scoreSD": 11.619323181235638,
+          "avgPrice": 9.534937960630655,
+          "profitPerWin": 3.207559329744484,
+          "overpayRate": 0.22772765183107135,
+          "cashHalf": 16.5139,
+          "cashBackStart": 13.7889,
+          "cashBeforeLast2": 11.5745,
+          "fundsBlockedPerGame": 1.3691,
+          "spend": 25.7649,
+          "estimateMAE": 2.8881135681636647,
+          "overestimate": 1.2254336392290877,
+          "underestimate": 1.6626799289344405,
+          "observedPositions": 2.409779650371611,
+          "effectiveSignals": 2.4693682612791794,
+          "bands": {
+            "good": {
+              "n": 5951,
+              "mae": 5.1403041132209495,
+              "baseMAE": 5.488993446479583,
+              "improvement": 0.3486893332586337
+            },
+            "middle": {
+              "n": 25296,
+              "mae": 2.2551344261719874,
+              "baseMAE": 2.0188962681846934,
+              "improvement": -0.23623815798729417
+            },
+            "slightlyGood": {
+              "n": 17135,
+              "mae": 3.1080224751159182,
+              "baseMAE": 2.948409687773563,
+              "improvement": -0.1596127873423555
+            },
+            "slightlyBad": {
+              "n": 19849,
+              "mae": 2.271280075682532,
+              "baseMAE": 2.5208826641140614,
+              "improvement": 0.24960258843152902
+            },
+            "bad": {
+              "n": 8193,
+              "mae": 4.241029876452541,
+              "baseMAE": 4.939948736726474,
+              "improvement": 0.698918860273933
+            }
+          },
+          "limitUpRate": 0.11945200460588297,
+          "limitDownRate": 0.3194677064796399,
+          "limitSameRate": 0.5610802889144771,
+          "correctDirectionRate": 0.5441807774862867,
+          "goodStoneUpPerGame": 0.7157,
+          "badStoneDownPerGame": 1.3586,
+          "positiveSignalLots": 1.5882,
+          "positiveSignalProfit": 1.4765772572723839,
+          "negativeSignalLots": 5.5042,
+          "negativeSignalProfit": 0.9920787762072599
+        },
+        "S2": {
+          "games": 10000,
+          "winRate": 0.2378,
+          "winCI95": [
+            0.22945557397866098,
+            0.24614442602133904
+          ],
+          "meanScore": 42.6121,
+          "scoreSD": 11.56912414964937,
+          "avgPrice": 9.514052692599847,
+          "profitPerWin": 3.2726961808854265,
+          "overpayRate": 0.21763252897586927,
+          "cashHalf": 16.8114,
+          "cashBackStart": 14.0872,
+          "cashBeforeLast2": 11.8315,
+          "fundsBlockedPerGame": 1.3256,
+          "spend": 25.5757,
+          "estimateMAE": 2.8146597085982057,
+          "overestimate": 1.0854456041225782,
+          "underestimate": 1.729214104475692,
+          "observedPositions": 2.4079756206021607,
+          "effectiveSignals": 1.213829815061864,
+          "bands": {
+            "good": {
+              "n": 5965,
+              "mae": 4.987242917015961,
+              "baseMAE": 5.490025146689019,
+              "improvement": 0.5027822296730579
+            },
+            "middle": {
+              "n": 25313,
+              "mae": 2.1962978706592313,
+              "baseMAE": 2.0177774266187334,
+              "improvement": -0.1785204440404977
+            },
+            "slightlyGood": {
+              "n": 17128,
+              "mae": 3.1895794021484996,
+              "baseMAE": 2.948155067725362,
+              "improvement": -0.24142433442313754
+            },
+            "slightlyBad": {
+              "n": 19844,
+              "mae": 2.097900221729492,
+              "baseMAE": 2.5237351340455554,
+              "improvement": 0.4258349123160633
+            },
+            "bad": {
+              "n": 8208,
+              "mae": 4.093276315789498,
+              "baseMAE": 4.940789473684211,
+              "improvement": 0.8475131578947128
+            }
+          },
+          "limitUpRate": 0.10531272070940909,
+          "limitDownRate": 0.489288236678961,
+          "limitSameRate": 0.4053990426116299,
+          "correctDirectionRate": 0.5972460516475298,
+          "goodStoneUpPerGame": 0.6989,
+          "badStoneDownPerGame": 1.8703,
+          "positiveSignalLots": 1.7034,
+          "positiveSignalProfit": 1.7246096043207702,
+          "negativeSignalLots": 5.5872,
+          "negativeSignalProfit": 1.1044709335624283
+        },
+        "S2+": {
+          "games": 10000,
+          "winRate": 0.23753333333333335,
+          "winCI95": [
+            0.22919212854186854,
+            0.24587453812479815
+          ],
+          "meanScore": 42.365,
+          "scoreSD": 11.610141041348289,
+          "avgPrice": 9.563203838208835,
+          "profitPerWin": 3.0635414759201613,
+          "overpayRate": 0.23801501556491486,
+          "cashHalf": 16.3715,
+          "cashBackStart": 13.6309,
+          "cashBeforeLast2": 11.3985,
+          "fundsBlockedPerGame": 1.403,
+          "spend": 25.9861,
+          "estimateMAE": 2.8704816948620078,
+          "overestimate": 1.4634581260147599,
+          "underestimate": 1.4070235688472352,
+          "observedPositions": 2.4074268056355734,
+          "effectiveSignals": 1.219556905672236,
+          "bands": {
+            "good": {
+              "n": 5954,
+              "mae": 4.820429963050067,
+              "baseMAE": 5.488579106483036,
+              "improvement": 0.6681491434329697
+            },
+            "middle": {
+              "n": 25274,
+              "mae": 2.056826778507574,
+              "baseMAE": 2.0180422568647622,
+              "improvement": -0.038784521642811584
+            },
+            "slightlyGood": {
+              "n": 17121,
+              "mae": 2.8030442147070467,
+              "baseMAE": 2.9492436189474915,
+              "improvement": 0.14619940424044486
+            },
+            "slightlyBad": {
+              "n": 19821,
+              "mae": 2.5240617526865483,
+              "baseMAE": 2.5226779678119167,
+              "improvement": -0.001383784874631585
+            },
+            "bad": {
+              "n": 8202,
+              "mae": 4.940136552060473,
+              "baseMAE": 4.940136552060473,
+              "improvement": 0
+            }
+          },
+          "limitUpRate": 0.147396951762426,
+          "limitDownRate": 0,
+          "limitSameRate": 0.8526030482375739,
+          "correctDirectionRate": 0.7123567557963933,
+          "goodStoneUpPerGame": 0.8474,
+          "badStoneDownPerGame": 0,
+          "positiveSignalLots": 1.7035,
+          "positiveSignalProfit": 1.6946287056061051,
+          "negativeSignalLots": 0,
+          "negativeSignalProfit": 0
+        },
+        "S2-": {
+          "games": 10000,
+          "winRate": 0.24345000000000008,
+          "winCI95": [
+            0.23503837741124825,
+            0.2518616225887519
+          ],
+          "meanScore": 42.6318,
+          "scoreSD": 11.733568458060834,
+          "avgPrice": 9.519801716326421,
+          "profitPerWin": 3.290937511914293,
+          "overpayRate": 0.22120553585725725,
+          "cashHalf": 18.344,
+          "cashBackStart": 15.5406,
+          "cashBeforeLast2": 13.1327,
+          "fundsBlockedPerGame": 1.1481,
+          "spend": 24.6214,
+          "estimateMAE": 2.898371886213574,
+          "overestimate": 1.068010660980879,
+          "underestimate": 1.8303612252327548,
+          "observedPositions": 2.4081205470903324,
+          "effectiveSignals": 1.2142857142857142,
+          "bands": {
+            "good": {
+              "n": 5999,
+              "mae": 5.650014335722632,
+              "baseMAE": 5.490915152525421,
+              "improvement": -0.1590991831972107
+            },
+            "middle": {
+              "n": 25474,
+              "mae": 2.175573682970779,
+              "baseMAE": 2.016919211745309,
+              "improvement": -0.15865447122546986
+            },
+            "slightlyGood": {
+              "n": 17245,
+              "mae": 3.3641846332270386,
+              "baseMAE": 2.949492606552624,
+              "improvement": -0.4146920266744145
+            },
+            "slightlyBad": {
+              "n": 19952,
+              "mae": 2.098136928628712,
+              "baseMAE": 2.52556134723336,
+              "improvement": 0.4274244186046483
+            },
+            "bad": {
+              "n": 8246,
+              "mae": 4.091532864419137,
+              "baseMAE": 4.938394373029348,
+              "improvement": 0.8468615086102107
+            }
+          },
+          "limitUpRate": 0,
+          "limitDownRate": 0.5079177284310157,
+          "limitSameRate": 0.4920822715689843,
+          "correctDirectionRate": 0.5401489748380986,
+          "goodStoneUpPerGame": 0,
+          "badStoneDownPerGame": 1.8829,
+          "positiveSignalLots": 0,
+          "positiveSignalProfit": 0,
+          "negativeSignalLots": 5.6025,
+          "negativeSignalProfit": 1.152788933511825
+        }
+      },
+      "counterfactual": {
+        "S2vsS0": {
+          "meanPositiveEstimateLift": 0.5949761080902916,
+          "meanPriceLift": 0.22466633712308454,
+          "meanProfitChange": 0.27376833086175645,
+          "priceAbsorptionRate": 0.3776056451143916,
+          "S2OnlyGoodBuyPerGame": 0.1347,
+          "S2OnlyBadAvoidPerGame": 0.1022,
+          "readCausedBadBuyPerGame": 0.0208,
+          "correctButPriceAtValuePerGame": 0.1752,
+          "meanExtraSpend": 9.6627,
+          "missedFuturePositiveAfterExtraSpendPerGame": 0.5207
+        },
+        "S2vsS1": {
+          "cheaperGoodPerGame": 0.0161,
+          "lessOverpayPerGame": 0.0624
+        }
+      }
+    }
+  },
+  "marketS2Count": {
+    "1": {
+      "s2": {
+        "games": 10000,
+        "winRate": 0.23655833333333334,
+        "winCI95": [
+          0.22822894468521182,
+          0.24488772198145486
+        ],
+        "meanScore": 42.6489,
+        "scoreSD": 11.568726325313447,
+        "avgPrice": 9.511141597517282,
+        "profitPerWin": 3.3117246132638996,
+        "overpayRate": 0.21534691376933682,
+        "cashHalf": 17.0005,
+        "cashBackStart": 14.3732,
+        "cashBeforeLast2": 12.1438,
+        "fundsBlockedPerGame": 1.3184,
+        "spend": 25.3699,
+        "estimateMAE": 2.8124656321600177,
+        "overestimate": 1.0836797021454274,
+        "underestimate": 1.7287859300146085,
+        "observedPositions": 2.4229847948344094,
+        "effectiveSignals": 1.220865444699021,
+        "bands": {
+          "slightlyBad": {
+            "n": 19774,
+            "mae": 2.0815915849094773,
+            "baseMAE": 2.5192171538383734,
+            "improvement": 0.43762556892889654
+          },
+          "middle": {
+            "n": 25439,
+            "mae": 2.1806673218285946,
+            "baseMAE": 2.0012579110814106,
+            "improvement": -0.17940941074718394
+          },
+          "slightlyGood": {
+            "n": 17237,
+            "mae": 3.200393223878829,
+            "baseMAE": 2.951267621975982,
+            "improvement": -0.24912560190284702
+          },
+          "bad": {
+            "n": 8400,
+            "mae": 4.10710523809528,
+            "baseMAE": 4.961785714285714,
+            "improvement": 0.8546804761904345
+          },
+          "good": {
+            "n": 5966,
+            "mae": 4.985268186389588,
+            "baseMAE": 5.47787462286289,
+            "improvement": 0.49260643647330193
+          }
+        },
+        "limitUpRate": 0.1050562382836909,
+        "limitDownRate": 0.4908222245365549,
+        "limitSameRate": 0.40412153717975424,
+        "correctDirectionRate": 0.6001791449107553,
+        "goodStoneUpPerGame": 0.7041,
+        "badStoneDownPerGame": 1.8897,
+        "positiveSignalLots": 1.7119,
+        "positiveSignalProfit": 1.7198434487995795,
+        "negativeSignalLots": 5.6216,
+        "negativeSignalProfit": 1.1145225558559841
+      },
+      "others": {
+        "games": 30000,
+        "winRate": 0.2544805555555555,
+        "winCI95": [
+          0.2495516302854834,
+          0.2594094808256276
+        ],
+        "meanScore": 42.982366666666664,
+        "scoreSD": 10.988824128732901,
+        "avgPrice": 9.511141597517282,
+        "profitPerWin": 5.503563915609746,
+        "overpayRate": 0.1139840287564079,
+        "cashHalf": 26.773133333333334,
+        "cashBackStart": 24.678066666666666,
+        "cashBeforeLast2": 22.6499,
+        "fundsBlockedPerGame": 0.32183333333333336,
+        "spend": 15.346266666666667,
+        "estimateMAE": 3.5171035416981407,
+        "overestimate": 0.5515949631472958,
+        "underestimate": 2.965508578550891,
+        "observedPositions": 2.422381242257706,
+        "effectiveSignals": 0,
+        "bands": {
+          "slightlyBad": {
+            "n": 60474,
+            "mae": 1.817093768614859,
+            "baseMAE": 2.5202566392168535,
+            "improvement": 0.7031628706019946
+          },
+          "middle": {
+            "n": 77760,
+            "mae": 3.2196933452054584,
+            "baseMAE": 2.023996913580247,
+            "improvement": -1.1956964316252114
+          },
+          "slightlyGood": {
+            "n": 52824,
+            "mae": 5.060292352011709,
+            "baseMAE": 2.9352567014993185,
+            "improvement": -2.1250356505123906
+          },
+          "bad": {
+            "n": 25616,
+            "mae": 2.998919333486452,
+            "baseMAE": 4.951826983135541,
+            "improvement": 1.9529076496490883
+          },
+          "good": {
+            "n": 18237,
+            "mae": 6.680420362351543,
+            "baseMAE": 5.509074957503976,
+            "improvement": -1.1713454048475676
+          }
+        },
+        "limitUpRate": 0.017274627412083726,
+        "limitDownRate": 0.811251920940271,
+        "limitSameRate": 0.17147345164764527,
+        "correctDirectionRate": 0.4771617941735601,
+        "goodStoneUpPerGame": 0.11966666666666667,
+        "badStoneDownPerGame": 2.361866666666667,
+        "positiveSignalLots": 0,
+        "positiveSignalProfit": 0,
+        "negativeSignalLots": 0,
+        "negativeSignalProfit": 0
+      }
+    },
+    "2": {
+      "s2": {
+        "games": 20000,
+        "winRate": 0.233775,
+        "winCI95": [
+          0.22790932136748443,
+          0.2396406786325156
+        ],
+        "meanScore": 41.65495,
+        "scoreSD": 11.028367535474143,
+        "avgPrice": 9.869444185457985,
+        "profitPerWin": 3.2624232867371292,
+        "overpayRate": 0.2290743266280259,
+        "cashHalf": 19.1962,
+        "cashBackStart": 16.38195,
+        "cashBeforeLast2": 13.93715,
+        "fundsBlockedPerGame": 1.11825,
+        "spend": 24.0738,
+        "estimateMAE": 2.804885685447135,
+        "overestimate": 1.0908837185226112,
+        "underestimate": 1.71400196692493,
+        "observedPositions": 2.4223647092316054,
+        "effectiveSignals": 1.2313206863531665,
+        "bands": {
+          "slightlyBad": {
+            "n": 39800,
+            "mae": 2.0867215075377463,
+            "baseMAE": 2.523140703517588,
+            "improvement": 0.43641919597984163
+          },
+          "middle": {
+            "n": 51131,
+            "mae": 2.2007593045315286,
+            "baseMAE": 2.015665643151904,
+            "improvement": -0.18509366137962444
+          },
+          "slightlyGood": {
+            "n": 34736,
+            "mae": 3.1591479157070097,
+            "baseMAE": 2.944841087056656,
+            "improvement": -0.21430682865035372
+          },
+          "bad": {
+            "n": 16900,
+            "mae": 4.08010508875767,
+            "baseMAE": 4.954201183431953,
+            "improvement": 0.8740960946742825
+          },
+          "good": {
+            "n": 11989,
+            "mae": 4.94148252564848,
+            "baseMAE": 5.490449578780549,
+            "improvement": 0.5489670531320685
+          }
+        },
+        "limitUpRate": 0.11544035818732369,
+        "limitDownRate": 0.46589585651802584,
+        "limitSameRate": 0.4186637852946505,
+        "correctDirectionRate": 0.6022882836759452,
+        "goodStoneUpPerGame": 0.77185,
+        "badStoneDownPerGame": 1.8477,
+        "positiveSignalLots": 1.81865,
+        "positiveSignalProfit": 1.4816484755175543,
+        "negativeSignalLots": 5.647,
+        "negativeSignalProfit": 0.9820258544359837
+      },
+      "others": {
+        "games": 20000,
+        "winRate": 0.26622499999999993,
+        "winCI95": [
+          0.2600994237969028,
+          0.27235057620309705
+        ],
+        "meanScore": 42.69995,
+        "scoreSD": 10.634289821022367,
+        "avgPrice": 9.869444185457985,
+        "profitPerWin": 6.180917196547192,
+        "overpayRate": 0.08880679194344783,
+        "cashHalf": 28.59895,
+        "cashBackStart": 26.7724,
+        "cashBeforeLast2": 24.918,
+        "fundsBlockedPerGame": 0.22845,
+        "spend": 12.9756,
+        "estimateMAE": 3.494102523164737,
+        "overestimate": 0.5406482207946631,
+        "underestimate": 2.953454302370163,
+        "observedPositions": 2.4221760495605453,
+        "effectiveSignals": 0,
+        "bands": {
+          "slightlyBad": {
+            "n": 40383,
+            "mae": 1.7861383783164684,
+            "baseMAE": 2.5189807592303692,
+            "improvement": 0.7328423809139007
+          },
+          "middle": {
+            "n": 51953,
+            "mae": 3.1870259657653546,
+            "baseMAE": 2.0204415529420823,
+            "improvement": -1.1665844128232725
+          },
+          "slightlyGood": {
+            "n": 35305,
+            "mae": 5.046282497336169,
+            "baseMAE": 2.9336637869990088,
+            "improvement": -2.1126187103371605
+          },
+          "bad": {
+            "n": 17074,
+            "mae": 2.9640352861224275,
+            "baseMAE": 4.955897856389832,
+            "improvement": 1.991862570267405
+          },
+          "good": {
+            "n": 12184,
+            "mae": 6.709542318395424,
+            "baseMAE": 5.514855548260013,
+            "improvement": -1.1946867701354102
+          }
+        },
+        "limitUpRate": 0.01701731687263781,
+        "limitDownRate": 0.8152633222646416,
+        "limitSameRate": 0.1677193608627206,
+        "correctDirectionRate": 0.47758530907308705,
+        "goodStoneUpPerGame": 0.1185,
+        "badStoneDownPerGame": 2.3861,
+        "positiveSignalLots": 0,
+        "positiveSignalProfit": 0,
+        "negativeSignalLots": 0,
+        "negativeSignalProfit": 0
+      }
+    },
+    "3": {
+      "s2": {
+        "games": 30000,
+        "winRate": 0.23566111111111102,
+        "winCI95": [
+          0.23085844513301265,
+          0.24046377708920938
+        ],
+        "meanScore": 40.86886666666667,
+        "scoreSD": 10.691573194914863,
+        "avgPrice": 10.335794341458215,
+        "profitPerWin": 3.2795823850524406,
+        "overpayRate": 0.24361402447758343,
+        "cashHalf": 21.263766666666665,
+        "cashBackStart": 18.516133333333332,
+        "cashBeforeLast2": 16.047733333333333,
+        "fundsBlockedPerGame": 0.9295666666666667,
+        "spend": 22.250166666666665,
+        "estimateMAE": 2.796608110487522,
+        "overestimate": 1.0962430569569026,
+        "underestimate": 1.7003650535299377,
+        "observedPositions": 2.422173933582125,
+        "effectiveSignals": 1.2367527130151723,
+        "bands": {
+          "slightlyBad": {
+            "n": 59980,
+            "mae": 2.0888119373125793,
+            "baseMAE": 2.5161387129043016,
+            "improvement": 0.4273267755917222
+          },
+          "middle": {
+            "n": 77031,
+            "mae": 2.2120153704354846,
+            "baseMAE": 2.014305928781919,
+            "improvement": -0.1977094416535654
+          },
+          "slightlyGood": {
+            "n": 52355,
+            "mae": 3.123129557826401,
+            "baseMAE": 2.9424314774138094,
+            "improvement": -0.18069808041259147
+          },
+          "bad": {
+            "n": 25414,
+            "mae": 4.071147241677912,
+            "baseMAE": 4.95884158337924,
+            "improvement": 0.8876943417013277
+          },
+          "good": {
+            "n": 18079,
+            "mae": 4.898450578018647,
+            "baseMAE": 5.5027932960893855,
+            "improvement": 0.6043427180707387
+          }
+        },
+        "limitUpRate": 0.12902228387135561,
+        "limitDownRate": 0.4511743157876655,
+        "limitSameRate": 0.41980340034097885,
+        "correctDirectionRate": 0.60373490052108,
+        "goodStoneUpPerGame": 0.8564,
+        "badStoneDownPerGame": 1.8419333333333334,
+        "positiveSignalLots": 1.9341333333333333,
+        "positiveSignalProfit": 1.246156762718875,
+        "negativeSignalLots": 5.627,
+        "negativeSignalProfit": 0.887654759789112
+      },
+      "others": {
+        "games": 10000,
+        "winRate": 0.2930166666666667,
+        "winCI95": [
+          0.28409580467035217,
+          0.30193752866298124
+        ],
+        "meanScore": 42.465,
+        "scoreSD": 10.450663854511815,
+        "avgPrice": 10.335794341458215,
+        "profitPerWin": 6.936250409701737,
+        "overpayRate": 0.055473615208128484,
+        "cashHalf": 29.9665,
+        "cashBackStart": 28.464,
+        "cashBeforeLast2": 26.8094,
+        "fundsBlockedPerGame": 0.1579,
+        "spend": 10.8062,
+        "estimateMAE": 3.4423411888070987,
+        "overestimate": 0.5420688307965396,
+        "underestimate": 2.9002723580104877,
+        "observedPositions": 2.4212845064683712,
+        "effectiveSignals": 0,
+        "bands": {
+          "slightlyBad": {
+            "n": 20217,
+            "mae": 1.7680949315617371,
+            "baseMAE": 2.5341049611712916,
+            "improvement": 0.7660100296095542
+          },
+          "middle": {
+            "n": 25996,
+            "mae": 3.1246219540421696,
+            "baseMAE": 2.027581166333282,
+            "improvement": -1.0970407877088877
+          },
+          "slightlyGood": {
+            "n": 17676,
+            "mae": 4.963978295391134,
+            "baseMAE": 2.9318284679791806,
+            "improvement": -2.032149827411953
+          },
+          "bad": {
+            "n": 8546,
+            "mae": 2.9438900931424272,
+            "baseMAE": 4.940205944301428,
+            "improvement": 1.9963158511590005
+          },
+          "good": {
+            "n": 6101,
+            "mae": 6.633780522891481,
+            "baseMAE": 5.5030322897885595,
+            "improvement": -1.130748233102922
+          }
+        },
+        "limitUpRate": 0.01721503514311908,
+        "limitDownRate": 0.8152566975654477,
+        "limitSameRate": 0.16752826729143322,
+        "correctDirectionRate": 0.4813319261536579,
+        "goodStoneUpPerGame": 0.1198,
+        "badStoneDownPerGame": 2.4105,
+        "positiveSignalLots": 0,
+        "positiveSignalProfit": 0,
+        "negativeSignalLots": 0,
+        "negativeSignalProfit": 0
+      }
+    },
+    "4": {
+      "s2": {
+        "games": 40000,
+        "winRate": 0.25,
+        "winCI95": [
+          0.24575647552145624,
+          0.25424352447854376
+        ],
+        "meanScore": 40.273175,
+        "scoreSD": 10.590819157146193,
+        "avgPrice": 10.857915634076798,
+        "profitPerWin": 3.3432861672928826,
+        "overpayRate": 0.25722812908039544,
+        "cashHalf": 22.970725,
+        "cashBackStart": 20.418125,
+        "cashBeforeLast2": 18.0302,
+        "fundsBlockedPerGame": 0.778425,
+        "spend": 20.37325,
+        "estimateMAE": 2.790315048143762,
+        "overestimate": 1.1055632217099354,
+        "underestimate": 1.6847518264329053,
+        "observedPositions": 2.4217336760001666,
+        "effectiveSignals": 1.2405116901367779,
+        "bands": {
+          "slightlyBad": {
+            "n": 80244,
+            "mae": 2.100356712028342,
+            "baseMAE": 2.5227182094611433,
+            "improvement": 0.42236149743280116
+          },
+          "middle": {
+            "n": 103117,
+            "mae": 2.2257886478469513,
+            "baseMAE": 2.018057158373498,
+            "improvement": -0.2077314894734534
+          },
+          "slightlyGood": {
+            "n": 70136,
+            "mae": 3.0893054636707156,
+            "baseMAE": 2.939460476787955,
+            "improvement": -0.1498449868827607
+          },
+          "bad": {
+            "n": 34009,
+            "mae": 4.059218089329189,
+            "baseMAE": 4.955100120556323,
+            "improvement": 0.8958820312271342
+          },
+          "good": {
+            "n": 24167,
+            "mae": 4.83662490172545,
+            "baseMAE": 5.503744775934125,
+            "improvement": 0.6671198742086747
+          }
+        },
+        "limitUpRate": 0.13895653457309423,
+        "limitDownRate": 0.4390434846778515,
+        "limitSameRate": 0.4219999807490543,
+        "correctDirectionRate": 0.6060439529939439,
+        "goodStoneUpPerGame": 0.9198,
+        "badStoneDownPerGame": 1.8326,
+        "positiveSignalLots": 2.04165,
+        "positiveSignalProfit": 1.067837288467661,
+        "negativeSignalLots": 5.580525,
+        "negativeSignalProfit": 0.8083065661384905
+      },
+      "others": null
+    }
+  }
+}
