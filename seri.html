@@ -25,6 +25,10 @@ button.out{border-color:var(--bad)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
 .bar{background:var(--bg3);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.room-code-box{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap}
+.room-code-value{color:var(--gold2);font-family:var(--ttl);font-size:18px;letter-spacing:.16em}
+.room-copy-btn{min-width:84px;min-height:40px;padding:7px 12px;font-size:13px}
+.room-copy-status{display:inline-block;min-width:7em;color:var(--good);font-size:12px}
 .bar.mine{border-color:var(--gold);animation:pl 2.2s ease-in-out infinite}
 @keyframes pl{0%,100%{box-shadow:0 0 0 rgba(224,179,82,0)}50%{box-shadow:0 0 18px rgba(224,179,82,.3)}}
 .lot{background:linear-gradient(160deg,#252b38,#1c212b);border:1px solid var(--gold);border-radius:14px;padding:18px;text-align:center;margin-bottom:12px}
@@ -635,6 +639,38 @@ const rpath=(k)=>"rooms/"+ON.room+(k?"/"+k:"");
 const ref=(k)=>_db.ref(rpath(k));
 const nowMs=()=>Date.now();
 function lsKey(){return "ks_lots_"+ON.room;}
+const SPECTATOR_SESSION_KEY="seri_spectator_session_v1";
+let roomCopyTimer=null;
+function roomCodeCopyHTML(){
+  const code=esc(ON.room||"");
+  return `<span class="room-code-box"><span>部屋番号 <span id="room-code-text" class="room-code-value">${code}</span></span><button type="button" class="room-copy-btn" aria-label="部屋番号 ${code} をコピー" onclick="copyRoomCode(event)">コピー</button><span id="room-copy-status" class="room-copy-status" role="status" aria-live="polite"></span></span>`;
+}
+function roomCopyFeedback(message,failed=false){
+  const el=document.getElementById("room-copy-status");if(!el)return;
+  el.textContent=message;el.style.color=failed?"var(--bad)":"var(--good)";
+  clearTimeout(roomCopyTimer);roomCopyTimer=setTimeout(()=>{const x=document.getElementById("room-copy-status");if(x)x.textContent="";},1800);
+}
+function fallbackCopyRoomCode(code){
+  const ta=document.createElement("textarea");ta.value=code;ta.setAttribute("readonly","");ta.setAttribute("aria-hidden","true");
+  ta.style.position="fixed";ta.style.opacity="0";ta.style.pointerEvents="none";document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,code.length);
+  let ok=false;try{ok=document.execCommand("copy");}finally{ta.remove();}return ok;
+}
+async function copyRoomCode(ev){
+  ev?.preventDefault();ev?.stopPropagation();const code=ON.room||"";if(!code)return roomCopyFeedback("コピーできませんでした",true);
+  try{
+    let copied=false;
+    if(navigator.clipboard&&globalThis.isSecureContext){try{await navigator.clipboard.writeText(code);copied=true;}catch(_){}}
+    if(!copied)copied=fallbackCopyRoomCode(code);
+    if(!copied)throw new Error("clipboard copy failed");
+    roomCopyFeedback("コピーしました");
+  }catch(e){
+    console.error("Room code copy failed:",e);const el=document.getElementById("room-code-text");
+    if(el){const range=document.createRange();range.selectNodeContents(el);const sel=getSelection();sel.removeAllRanges();sel.addRange(range);}
+    roomCopyFeedback("コピーできませんでした。部屋番号を選択しました",true);
+  }
+}
+function clearSpectatorSession(){localStorage.removeItem(SPECTATOR_SESSION_KEY);}
+function saveSpectatorSession(){if(ON.spec&&ON.room)localStorage.setItem(SPECTATOR_SESSION_KEY,JSON.stringify({room:ON.room,savedAt:new Date().toISOString()}));}
 function hostBlindKey(gameId=DB.meta&&DB.meta.gameId){return gameId?`ks_c1_blinds_${ON.room}_${gameId}`:null;}
 function saveHostBlinds(blinds,gameId){const key=hostBlindKey(gameId);ON.blinds=blinds?blinds.slice():null;if(key&&ON.blinds)localStorage.setItem(key,JSON.stringify(ON.blinds));}
 function loadHostBlinds(){const key=hostBlindKey();if(!key)return;try{const v=JSON.parse(localStorage.getItem(key)||"null");ON.blinds=Array.isArray(v)?v:null;}catch(_){ON.blinds=null;}}
@@ -670,7 +706,7 @@ async function createRoom(name,n){
   if(c1&&![3,4].includes(n))return E("C1オンライン実験は3人または4人専用です");
   const config=c1?{n,nc:n,rounds:n===3?6:8,money:n===3?28:34,rule:"c1"}:{n,nc:SETUP[n].NC,rounds:SETUP[n].ROUNDS,money:SETUP[n].MONEY,rule:"current"};
   setOnlinePlayers(config);
-  ON.room=code4();ON.uid=uid();ON.seat=0;ON.spec=false;
+  clearSpectatorSession();ON.room=code4();ON.uid=uid();ON.seat=0;ON.spec=false;
   const nc=R.COMPS.length;
   const lots=genLots(nc,R.ROUNDS);
   ON.lots=lots; localStorage.setItem(lsKey(),JSON.stringify(lots));
@@ -685,7 +721,7 @@ async function joinRoom(name,c){
   if(!name||!name.trim())return E("名前を入力してください");
   if(!c||c.trim().length!==4)return E("合言葉を4文字で入力してください");
   if(!FB_OK)return E("Firebaseが未設定です");
-  ON.room=c.toUpperCase();ON.uid=uid();ON.spec=false;
+  clearSpectatorSession();ON.room=c.toUpperCase();ON.uid=uid();ON.seat=null;ON.spec=false;
   const meta=(await withRetry(()=>ref("meta").get())).val();
   if(!meta)return E("その合言葉の卓はありません");
   if(meta.rule==="c1"&&!C1_ONLINE_EXPERIMENT)return E("この卓はC1実験用です。URLに ?experiment=c1 を付けて開いてください");
@@ -703,15 +739,21 @@ async function joinRoom(name,c){
   attach();
   if(meta.host===ON.uid&&meta.rule!=="c1"){const all=(await withRetry(()=>ref("priv").get())).val();if(all)DB.priv=all;}
 }
-async function spectate(c){
+async function spectate(c,restoring=false){
   if(!c||c.trim().length!==4)return E("合言葉を4文字で入力してください");
   if(!FB_OK)return E("Firebaseが未設定です");
-  ON.room=c.toUpperCase();ON.uid=uid();ON.seat=null;ON.spec=true;
+  ON.room=c.toUpperCase();ON.uid=uid();ON.seat=null;ON.spec=true;ON.lots=null;ON.blinds=null;ON.c1Memo=null;ON.c1MemoKey=null;
   const meta=(await withRetry(()=>ref("meta").get())).val();
-  if(!meta)return E("その合言葉の卓はありません");
-  if(meta.rule==="c1"&&!C1_ONLINE_EXPERIMENT)return E("この卓はC1実験用です。URLに ?experiment=c1 を付けて開いてください");
+  if(!meta){if(restoring)clearSpectatorSession();ON.room=null;ON.spec=false;return E("その部屋番号の卓はありません");}
+  if(meta.rule==="c1"&&!C1_ONLINE_EXPERIMENT){if(restoring)clearSpectatorSession();ON.room=null;ON.spec=false;return E("この卓はC1実験用です。URLに ?experiment=c1 を付けて開いてください");}
   DB.meta=meta;setOnlinePlayers(meta);
-  attach();
+  saveSpectatorSession();attach();
+}
+async function restoreSpectatorSession(){
+  if(ON.room||!FB_OK)return;
+  let saved=null;try{saved=JSON.parse(localStorage.getItem(SPECTATOR_SESSION_KEY)||"null");}catch(_){clearSpectatorSession();return;}
+  if(!saved||typeof saved.room!=="string"||saved.room.length!==4)return;
+  try{await spectate(saved.room,true);}catch(e){clearSpectatorSession();ON.room=null;ON.spec=false;console.error("Spectator restore failed:",e);E("観戦セッションを復元できませんでした");}
 }
 const seatAlive=(x)=>x&&x.lastSeen&&(nowMs()-x.lastSeen<30000);   // 30秒タイムアウト（前作教訓#4）
 
@@ -740,7 +782,7 @@ function attach(){
     ref("seats/"+ON.seat+"/lastSeen").set(nowMs());
   }
   // ホストならlocalStorageから原石を復元
-  const raw=localStorage.getItem(lsKey()); if(raw){try{ON.lots=JSON.parse(raw);}catch(e){}}
+  if(!ON.spec&&isHost()){const raw=localStorage.getItem(lsKey());if(raw){try{ON.lots=JSON.parse(raw);}catch(e){}}}
 }
 function detach(){ON.unsub.forEach(f=>{try{f();}catch(e){}});ON.unsub=[];if(ON.hb)clearInterval(ON.hb);ON._hostPriv=false;}
 const isHost=()=>DB.meta&&DB.meta.host===ON.uid;
@@ -802,7 +844,7 @@ function exportOnlineC1MemoJSON(){
 
 /* --- 開始（ホスト）--- */
 async function startOnline(){
-  if(!isHost())return E("ホストのみ開始できます");
+  if(ON.spec||!isHost())return E("ホストのみ開始できます");
   const sv=DB.seats||{};const n=DB.meta.n;
   if(onlineIsC1()&&![3,4].includes(n))return E("C1オンライン実験は3人または4人専用です");
   for(let i=0;i<n;i++) if(!sv[i]||!seatAlive(sv[i])) return E("全席が埋まっていません（"+n+"人卓）");
@@ -858,6 +900,7 @@ function advance(g){
 }
 /* --- 槌（誰でも解決できる。transactionで二重解決を防ぐ）--- */
 async function maybeHammer(){
+  if(ON.spec)return;
   const g=DB.game; if(!g||g.phase!=="hammer")return;
   // 解決役は「原石を持つホスト」。ホスト不在なら待つ
   if(!ON.lots)return;
@@ -874,8 +917,9 @@ async function maybeHammer(){
   await withRetry(()=>ref("game/phase").set("reveal"));
   SFX.hammer();setTimeout(()=>SFX.reveal(),300);
 }
-/* --- 次の原石へ（★誰でも押せる。transactionで一度だけ進む）--- */
+/* --- 次の原石へ（参加者だけ。transactionで一度だけ進む）--- */
 async function oNext(){
+  if(ON.spec)return;
   const g=DB.game; if(!g||g.phase!=="reveal")return;
   onlineActionPointerReady=false;onlineActionUnlockAt=performance.now()+350;
   const n=DB.meta.n, rounds=DB.meta.rounds, nr=g.round+1;
@@ -889,10 +933,11 @@ async function oNext(){
   }));
 }
 async function finishOnline(){
+  if(ON.spec)return;
   const up={"meta/phase":"ended","game/phase":"end"};
-  // ★v1.4修正: 目の公開は「全privを持つ者（ホスト/観戦）」だけが書く。
+  // ★v1.4修正: 目の公開は全privを持つホストだけが書く。
   //   v1.3では非ホストが終幕させると null で消してしまい、決算の目と得点が壊れた
-  if(isHost()||(!onlineIsC1()&&ON.spec)){
+  if(isHost()){
     const lens=onlineIsC1()&&isHost()&&Array.isArray(ON.blinds)?ON.blinds.slice():[];
     if(!lens.length)for(let i=0;i<DB.meta.n;i++)lens.push((DB.priv&&DB.priv[i]&&DB.priv[i].lens)!=null?DB.priv[i].lens:0);
     up["reveal/lens"]=lens.join(",");
@@ -900,17 +945,16 @@ async function finishOnline(){
   await withRetry(()=>ref().update(up));
   SFX.win();
 }
-/* 非ホストが終幕させた場合の修復：ホスト/観戦が「終了なのに目が未公開」を見つけたら書く（冪等） */
+/* 非ホストが終幕させた場合の修復：ホストが「終了なのに目が未公開」を見つけたら書く（冪等） */
 function maybeRevealLens(){
   if(!DB.meta||DB.meta.phase!=="ended")return;
   if(DB.reveal&&DB.reveal.lens!=null)return;
-  if(!(isHost()||(!onlineIsC1()&&ON.spec)))return;
+  if(!isHost()||ON.spec)return;
   const n=DB.meta.n, lens=onlineIsC1()&&isHost()&&Array.isArray(ON.blinds)?ON.blinds.slice():[];
   if(!lens.length)for(let i=0;i<n;i++){const p=DB.priv&&DB.priv[i]; if(!p||p.lens==null)return; lens.push(p.lens);}
   withRetry(()=>ref("reveal/lens").set(lens.join(","))).catch(()=>{});
 }
-/* 終了時の目の公開はホストが行う（privを読めるのはホスト自身の席だけなので、
-   全席分は「観戦者/ホスト」が持つ。ホストが必ず全privを読むために購読を足す） */
+/* 終了時の目の公開はホストが行う。ホストが必ず全privを読むために購読を足す。 */
 function ensureHostPriv(){
   if(isHost()&&!ON.spec&&!onlineIsC1()&&!ON._hostPriv){
     ON._hostPriv=true;
@@ -934,7 +978,7 @@ function onlineHTML(){
      <span class="kv">古い版のまま遊ぶと、通信の形が合わず、原因不明の不具合になります。</span></div>`;
   }
   h+=`<div class="bar"><div>
-    <b style="color:var(--gold2)">合言葉 ${ON.room}</b>
+    ${roomCodeCopyHTML()}
     <span class="kv">　${n}人卓 / ${m.nc}面 / 原石${m.rounds}${m.gen?` / <b style="color:var(--gold2)">第${m.gen+1}戦</b>`:""}${m.ver?" / v"+m.ver:""}</span>
     ${onlineIsC1()?'<span class="pill" style="background:#6d541f;margin-left:8px">C1盲点ルール・オンライン実験</span>':''}
     ${ON.spec?'<span class="pill" style="background:var(--gold);margin-left:8px">👁 観戦</span>':''}
@@ -948,7 +992,7 @@ function onlineHTML(){
       h+=`<tr><td><span class="pill" style="background:${CC[i]}">席${i+1}</span></td>
        <td>${sv&&seatAlive(sv)?esc(sv.name)+(sv.uid===ON.uid?' <b class="pos">(あなた)</b>':''):'<span class="kv">…待機中</span>'}</td></tr>`;}
     h+=`</table>`;
-    if(isHost())h+=`<div class="row" style="margin-top:12px"><button class="pri" onclick="startOnline()">▶ 競りを始める（全席が埋まったら）</button></div>`;
+    if(isHost()&&!ON.spec)h+=`<div class="row" style="margin-top:12px"><button class="pri" onclick="startOnline()">▶ 競りを始める（全席が埋まったら）</button></div>`;
     else h+=`<div class="kv" style="margin-top:10px">ホストの開始を待っています…</div>`;
     return h+`</div>`;
   }
@@ -1026,8 +1070,7 @@ function onlineHTML(){
     h+=`</table>
      <div class="kv" style="margin-top:8px">進行: <b>${m.phase==="lobby"?"ロビー":g.phase==="auction"?"競り中":g.phase==="hammer"?"槌の解決中":g.phase==="reveal"?"開示中":"終了"}</b>
       ・ 原石 ${r+1}/${m.rounds} ・ 現在価格 ${g.price} ・ 残り ${live.length}人</div>
-     ${g.phase==="hammer"?`<div class="hint" style="margin-top:6px">⏳ 槌の解決はホストの端末が行います。ホストが切断していると、ここで止まります。</div>`:''}
-      ${rev?`<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="pri" onpointerdown="onlineActionPointerReady=false" onclick="oNext()">→ 次の原石へ</button></div>`:''}
+      ${g.phase==="hammer"?`<div class="hint" style="margin-top:6px">⏳ 槌の解決はホストの端末が行います。ホストが切断していると、ここで止まります。</div>`:''}
     </div>`;
   } else if(rev){
     h+=`<div class="card"><div class="row" style="justify-content:flex-end">
@@ -1104,7 +1147,7 @@ function calcOnlineScores(){
 }
 /* --- 同じ卓で連戦（ホストのみ・v1.4）。目も原石も引き直し、今戦の結果は series に積む --- */
 async function rematchOnline(){
-  if(!isHost())return E("同じ卓での連戦は、ホストだけが始められます");
+  if(ON.spec||!isHost())return E("同じ卓での連戦は、ホストだけが始められます");
   const m=DB.meta; if(!m||m.phase!=="ended")return;
   const n=m.n, sv=DB.seats||{};
   for(let i=0;i<n;i++) if(!sv[i]||!seatAlive(sv[i])) return E("席"+(i+1)+"が不在です（全員が戻ると連戦できます）");
@@ -1163,7 +1206,7 @@ function onlineEnd(){
   h+=`</div>`;
   return h+onlineC1AnswerHTML()+onlineHist();
 }
-function leaveRoom(){detach();ON.room=null;ON.seat=null;ON.spec=false;ON.blinds=null;ON.c1Memo=null;ON.c1MemoKey=null;DB={meta:null,seats:{},game:null,money:{},hist:{},priv:{},reveal:null,series:{}};S=null;render();}
+function leaveRoom(){if(ON.spec)clearSpectatorSession();detach();ON.room=null;ON.seat=null;ON.spec=false;ON.blinds=null;ON.c1Memo=null;ON.c1MemoKey=null;DB={meta:null,seats:{},game:null,money:{},hist:{},priv:{},reveal:null,series:{}};S=null;render();}
 
 /* ---- 遷移（confirm はサンドボックスでブロックされるので使わない） ---- */
 let _leave=false, _leaveT=null;
@@ -1586,6 +1629,7 @@ function helpHTML(){return `<div class="modal" onclick="if(event.target===this){
  </div></div>`;}
 render=_guardRender(render);
 render();
+restoreSpectatorSession();
 </script><a id="homelink" href="index.html" title="ゲーム一覧へ戻る">🏠 ゲーム一覧</a>
 <div id="verbadge">影の競り v1.3</div>
 <style>
