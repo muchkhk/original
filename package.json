@@ -3,6 +3,9 @@
   "private": true,
   "scripts": {
     "emulators:witch": "firebase emulators:start --only auth,database --project balance-simulator-firebase",
+    "emulators:seri-lockdown": "firebase emulators:start --config firebase.seri.json --only database --project seri-lockdown-test",
+    "test:seri-lockdown-static": "node --test tests/seri_lockdown_static.test.mjs",
+    "test:seri-lockdown-rules": "firebase emulators:exec --config firebase.seri.json --only database --project seri-lockdown-test \"node --test tests/seri_lockdown.test.mjs\"",
     "test:witch-static": "node --test tests/witch_static.test.mjs",
     "test:witch-rules": "firebase emulators:exec --only database --project witch-rules-test \"node --test tests/witch_rules.test.mjs\""
   },

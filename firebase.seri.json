@@ -1,0 +1,13 @@
+{
+  "database": {
+    "rules": "firebase/firebase_rules.json"
+  },
+  "emulators": {
+    "database": {
+      "port": 9160
+    },
+    "ui": {
+      "enabled": false
+    }
+  }
+}
