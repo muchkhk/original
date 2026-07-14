@@ -1,0 +1,14 @@
+{
+  "name": "original-boardgames-security-tests",
+  "private": true,
+  "scripts": {
+    "emulators:witch": "firebase emulators:start --only auth,database --project balance-simulator-firebase",
+    "test:witch-static": "node --test tests/witch_static.test.mjs",
+    "test:witch-rules": "firebase emulators:exec --only database --project witch-rules-test \"node --test tests/witch_rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.0.0",
+    "firebase-tools": "^14.11.2"
+  }
+}

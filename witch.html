@@ -27,10 +27,22 @@
   };
   // ▲▲▲ ここまで ▲▲▲
 
-  let _db=null, _auth=null, _fbReady=false, _fbError="";
+  const _emulatorMode = new URLSearchParams(location.search).get("emulator")==="1" &&
+    (location.hostname==="localhost" || location.hostname==="127.0.0.1");
+  let _db=null, _auth=null, _authPersistenceReady=Promise.resolve(), _fbReady=false, _fbError="";
   try{
     if(FIREBASE_CONFIG.apiKey==="YOUR_API_KEY"){ _fbError="Firebase未設定：FIREBASE_CONFIG を自分のプロジェクトの値に差し替えてください。"; }
-    else { firebase.initializeApp(FIREBASE_CONFIG); _db=firebase.database(); _auth=firebase.auth(); _fbReady=true; }
+    else {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      _db=firebase.database(); _auth=firebase.auth();
+      if(_emulatorMode){
+        _auth.useEmulator("http://127.0.0.1:9099");
+        _db.useEmulator("127.0.0.1",9150);
+      }
+      // 認証監視・匿名サインインより前に、同じプロファイルの匿名UIDを永続化する。
+      _authPersistenceReady=_auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      _fbReady=true;
+    }
   }catch(e){ _fbError="Firebase初期化に失敗："+e.message; }
 
   // 教訓#6: 通信は withRetry で共通化（1回失敗→0.7秒→もう1回）
@@ -159,7 +171,7 @@
      ③ 古ければ「?v=新版」という別URLへ飛ぶ → キャッシュが原理的に効かない
    ============================================================ */
 (function(){
-  const PAGE_VER = "1.2";
+  const PAGE_VER = "1.3";
 
   // ① 残存 Service Worker を解除（過去の実験などで残っていると、強制リロードすら効かなくなる）
   if ("serviceWorker" in navigator) {
@@ -196,6 +208,7 @@
 </script>
 </head>
 <body>
+<div id="emulatorBadge" class="emulator-badge" hidden>LOCAL EMULATOR</div>
 <div class="wrap">
   <div class="topbar"><h1>魔女の調合 ― オンライン</h1>
     <div style="display:flex;gap:8px">
@@ -316,14 +329,34 @@ let myUid = null; // ensureAuth() 完了後に auth.currentUser.uid が入る
 let myName = localStorage.getItem("witch_name") || "";
 /* ★過去のIMEバグで壊れた名前（1文字のひらがな/カタカナだけ）を掃除する */
 if(/^[ぁ-んァ-ンー]$/.test(myName)){ myName=""; localStorage.removeItem("witch_name"); }
-let ST = { view:"home", room:null, mySeat:null, isHost:false,
+const RESUME_KEY="witch_v13_room", GAME_ID="witch-v1.3";
+let ST = { view:"home", room:null, mySeat:null, isHost:false, spectator:false,
   meta:null, seats:null, game:null, myRecipes:null, allRecipes:null,
   connected:false, lastUpdate:0, error:"" };
 let _roomRefs=[], _hbTimer=null, _serverOffset=0;
+// Firebaseの初期接続コールバックが即時にrender()してもTDZに入らない位置で、
+// render() が参照する再描画またぎの状態をすべて初期化する。
+let SOLO={active:false}, soloCuts=[];
+let _inJoin="", _lobbyRounds=null, _lobbyAdv=false;
+let localCuts=[];
 
-function roomPath(p){ return "rooms/"+ST.room+(p?"/"+p:""); }
+const CODE_ALPHABET="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const CODE_RE=/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
+function normalizeCode(raw){ return (raw||"").toUpperCase().split("").filter(ch=>CODE_ALPHABET.includes(ch)).join("").slice(0,6); }
+function roomPath(p){ return "roomsV2/"+ST.room+(p?"/"+p:""); }
 function showError(msg){ ST.error=msg; renderBanner(); }
 function now(){ return Date.now()+_serverOffset; }
+function savedRoom(){
+  try{
+    const v=JSON.parse(localStorage.getItem(RESUME_KEY)||"null");
+    return v&&v.game===GAME_ID&&CODE_RE.test(v.code)&&(v.kind==="player"||v.kind==="spectator")?v:null;
+  }catch(_){ return null; }
+}
+function rememberRoom(kind,seat=ST.mySeat){
+  if(!ST.room)return;
+  localStorage.setItem(RESUME_KEY,JSON.stringify({game:GAME_ID,code:ST.room,kind,seat:seat==null?null:seat}));
+}
+function forgetRoom(){ localStorage.removeItem(RESUME_KEY); }
 
 // 接続監視（教訓#5）
 if(_fbReady){
@@ -332,10 +365,23 @@ if(_fbReady){
 }
 
 // ============ 部屋操作 ============
+let _authSettledPromise=null;
+async function waitForAuthSettled(){
+  await _authPersistenceReady;
+  if(_auth.currentUser)return _auth.currentUser;
+  if(!_authSettledPromise){
+    _authSettledPromise=new Promise((resolve,reject)=>{
+      let unsubscribe=()=>{};
+      unsubscribe=_auth.onAuthStateChanged(user=>{ unsubscribe(); resolve(user); },reject);
+    });
+  }
+  return _authSettledPromise;
+}
 // オンライン入口（作る／参加する／観戦する）共通の認証ゲート。
-// 認証済みならそのまま、未認証なら匿名サインイン。失敗は握りつぶさず赤バナー（教訓#7）。
+// LOCAL永続化と初期認証状態の確定を待ち、UIDが無い場合だけ匿名サインインする。
 async function ensureAuth(){
   try{
+    await waitForAuthSettled();
     if(_auth.currentUser){ myUid=_auth.currentUser.uid; return true; }
     const cred=await withRetry(()=>_auth.signInAnonymously());
     myUid=cred.user.uid; return true;
@@ -344,7 +390,65 @@ async function ensureAuth(){
     return false;
   }
 }
-function genCode(){ const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let c="";for(let i=0;i<4;i++)c+=A[(Math.random()*A.length)|0];return c; }
+function genCode(){ let c="";for(let i=0;i<6;i++)c+=CODE_ALPHABET[(Math.random()*CODE_ALPHABET.length)|0];return c; }
+
+function findSeatByUid(seats,uid){
+  for(const [seat,data] of Object.entries(seats||{}))if(data&&data.uid===uid)return parseInt(seat);
+  return null;
+}
+async function readRoomState(code){
+  const base="roomsV2/"+code+"/";
+  const [metaSnap,seatsSnap,gameSnap]=await Promise.all([
+    withRetry(()=>_db.ref(base+"meta").get()),
+    withRetry(()=>_db.ref(base+"seats").get()),
+    withRetry(()=>_db.ref(base+"game").get())
+  ]);
+  return {exists:metaSnap.exists(),meta:metaSnap.val(),seats:seatsSnap.val()||{},game:gameSnap.val()};
+}
+function resumePlayerRoom(code,state,seat){
+  clearSubs();
+  ST.room=code; ST.spectator=false; ST.mySeat=seat;
+  ST.meta=state.meta; ST.seats=state.seats; ST.game=state.game; ST.allRecipes=null; ST.myRecipes=null;
+  ST.isHost=state.meta.host===myUid;
+  const own=state.seats&&state.seats[seat];
+  if(own&&own.name){ myName=own.name; localStorage.setItem("witch_name",myName); }
+  rememberRoom("player",seat);
+  subscribeRoom();
+  resumeAwaitingHostScore();
+  render();
+}
+function subscribeSpectatorRoom(){
+  clearSubs();
+  const onMeta=_db.ref(roomPath("meta")).on("value",s=>{ ST.meta=s.val(); touch(); });
+  const onSeats=_db.ref(roomPath("seats")).on("value",s=>{ ST.seats=s.val()||{}; touch(); });
+  const onGame=_db.ref(roomPath("game")).on("value",s=>{ ST.game=s.val(); touch(); });
+  const onReveal=_db.ref(roomPath("reveal")).on("value",s=>{ ST.allRecipes=s.val(); touch(); });
+  _roomRefs=[["meta",onMeta],["seats",onSeats],["game",onGame],["reveal",onReveal]];
+}
+function resumeSpectatorRoom(code,state){
+  clearSubs();
+  ST.room=code; ST.spectator=true; ST.mySeat=null; ST.isHost=false;
+  ST.meta=state.meta; ST.seats=state.seats; ST.game=state.game; ST.myRecipes=null; ST.allRecipes=null;
+  rememberRoom("spectator",null);
+  subscribeSpectatorRoom();
+  render();
+}
+async function restoreSavedRoom(){
+  const saved=savedRoom();
+  if(!saved||!requireFb())return;
+  if(!(await ensureAuth()))return;
+  try{
+    const state=await readRoomState(saved.code);
+    if(!state.exists){ forgetRoom(); return; }
+    if(saved.kind==="spectator"){ resumeSpectatorRoom(saved.code,state); return; }
+    const seat=findSeatByUid(state.seats,myUid);
+    if(seat===null){ forgetRoom(); showError("前回の部屋にあなたの席がないため、再接続できませんでした。"); return; }
+    resumePlayerRoom(saved.code,state,seat);
+  }catch(e){
+    // 一時的な通信エラーでは復帰情報を消さない。
+    showError("前回の部屋への再接続に失敗しました："+e.message);
+  }
+}
 
 async function createRoom(){
   if(!requireFb()||!requireName())return;
@@ -353,15 +457,16 @@ async function createRoom(){
     let code=null;
     for(let attempt=0;attempt<6;attempt++){
       const cand=genCode();
-      const res=await withRetry(()=>_db.ref("rooms/"+cand+"/meta").transaction(cur=>{
+      const res=await withRetry(()=>_db.ref("roomsV2/"+cand+"/meta").transaction(cur=>{
         if(cur!==null) return; // 既存の部屋→衝突→abort
         return {host:myUid,phase:"lobby",createdAt:Date.now()};
       }));
       if(res.committed){ code=cand; break; } // 作成成功
     }
     if(!code){ showError("部屋の作成に失敗しました。もう一度お試しください。"); return; }
-    ST.room=code; ST.isHost=true;
+    clearSubs(); ST.room=code; ST.spectator=false; ST.isHost=true;
     await claimSeat(0);
+    rememberRoom("player",ST.mySeat);
     subscribeRoom();
     ST.view="lobby"; render();
   }catch(e){ showError("部屋作成に失敗："+e.message); }
@@ -371,16 +476,19 @@ async function joinRoom(){
   if(!(await ensureAuth()))return;
   const el=document.getElementById("joincode");
   const raw=(el&&el.value)||_inJoin||"";
-  const code=raw.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,4);
-  if(code.length!==4){ showError("4文字の合言コードを入力してください。"); return; }
+  const code=normalizeCode(raw);
+  if(!CODE_RE.test(code)){ showError("6文字の合言コードを入力してください。"); return; }
   try{
-    const metaSnap=await withRetry(()=>_db.ref("rooms/"+code+"/meta").get());
-    if(!metaSnap.exists()){ showError("その合言コードの部屋が見つかりません。"); return; }
-    if(metaSnap.val().phase!=="lobby"){ showError("その部屋は既にゲーム開始済みです。"); return; }
-    ST.room=code; ST.isHost=(metaSnap.val().host===myUid);
+    const state=await readRoomState(code);
+    if(!state.exists){ showError("その合言コードの部屋が見つかりません。"); return; }
+    const existingSeat=findSeatByUid(state.seats,myUid);
+    if(existingSeat!==null){ resumePlayerRoom(code,state,existingSeat); return; }
+    if(state.meta.phase!=="lobby"){ showError("その部屋は既にゲーム開始済みです。新しいUIDでは途中参加できません。"); return; }
+    clearSubs(); ST.room=code; ST.spectator=false; ST.isHost=(state.meta.host===myUid);
     // 空席を探して着席（教訓#1: transactionで競合回避）
     const seat=await claimEmptySeat();
     if(seat===null){ showError("満席です（最大4人）。"); ST.room=null; return; }
+    rememberRoom("player",seat);
     subscribeRoom();
     ST.view="lobby"; render();
   }catch(e){ showError("参加に失敗："+e.message); }
@@ -407,11 +515,12 @@ function subscribeRoom(){
   clearSubs();
   armPresence(ST.mySeat);
   startHeartbeat();
-  // 共有情報の購読（meta/seats/game）— 秘匿でない部分のみ
+  // 共有情報の購読（meta/seats/game/reveal）— privateRecipes は含めない
   const onMeta=_db.ref(roomPath("meta")).on("value",s=>{ ST.meta=s.val(); touch(); });
   const onSeats=_db.ref(roomPath("seats")).on("value",s=>{ ST.seats=s.val()||{}; resyncMySeat(); touch(); });
   const onGame=_db.ref(roomPath("game")).on("value",s=>{ ST.game=s.val(); onGameUpdate(); touch(); });
-  _roomRefs=[["meta",onMeta],["seats",onSeats],["game",onGame]];
+  const onReveal=_db.ref(roomPath("reveal")).on("value",s=>{ ST.allRecipes=s.val(); touch(); });
+  _roomRefs=[["meta",onMeta],["seats",onSeats],["game",onGame],["reveal",onReveal]];
   ensureRecipeSub();
 }
 // 生存フラグ＋切断検知（教訓#4）を指定席に張る
@@ -429,16 +538,25 @@ function resyncMySeat(){
   let found=null;
   for(const s of Object.keys(ST.seats)){ if(ST.seats[s]&&ST.seats[s].uid===myUid){ found=parseInt(s); break; } }
   if(found!==null && found!==ST.mySeat){ ST.mySeat=found; armPresence(found); ensureRecipeSub(); }
+  if(found!==null)rememberRoom("player",found);
 }
-// 表示分離: 自席の好みだけ購読（席が変わったら購読先を張り替える）
-let _recipeSubSeat=null, _recipeCb=null;
+// 表示分離: 自分のUID配下だけ購読する。席番号の変更に秘匿パスは影響されない。
+let _recipeSubUid=null, _recipeCb=null;
 function ensureRecipeSub(){
-  if(ST.mySeat===_recipeSubSeat)return;
-  if(_recipeSubSeat!==null && _recipeCb){ try{_db.ref(roomPath("recipes/"+_recipeSubSeat)).off("value",_recipeCb);}catch(e){} }
-  _recipeSubSeat=ST.mySeat;
-  _recipeCb=_db.ref(roomPath("recipes/"+ST.mySeat)).on("value",s=>{ ST.myRecipes=s.val()?s.val().map(byId):null; touch(); });
+  if(!myUid||ST.spectator)return;
+  if(myUid===_recipeSubUid)return;
+  if(_recipeSubUid!==null && _recipeCb){ try{_db.ref(roomPath("privateRecipes/"+_recipeSubUid)).off("value",_recipeCb);}catch(e){} }
+  _recipeSubUid=myUid;
+  _recipeCb=_db.ref(roomPath("privateRecipes/"+myUid)).on("value",s=>{ ST.myRecipes=s.val()?s.val().map(byIdAny).filter(Boolean):null; touch(); });
 }
-function clearSubs(){ _roomRefs.forEach(([p,cb])=>{ try{_db.ref(roomPath(p)).off("value",cb);}catch(e){} }); _roomRefs=[]; if(_recipeSubSeat!==null&&_recipeCb){try{_db.ref(roomPath("recipes/"+_recipeSubSeat)).off("value",_recipeCb);}catch(e){}} _recipeSubSeat=null; _recipeCb=null; if(_hbTimer)clearInterval(_hbTimer); }
+function clearSubs(){
+  _roomRefs.forEach(([p,cb])=>{ try{_db.ref(roomPath(p)).off("value",cb);}catch(e){} }); _roomRefs=[];
+  if(_recipeSubUid!==null&&_recipeCb){try{_db.ref(roomPath("privateRecipes/"+_recipeSubUid)).off("value",_recipeCb);}catch(e){}}
+  _recipeSubUid=null; _recipeCb=null;
+  if(_presenceSeat!==null&&ST.room){try{_db.ref(roomPath("seats/"+_presenceSeat+"/online")).onDisconnect().cancel();}catch(e){}}
+  _presenceSeat=null;
+  if(_hbTimer)clearInterval(_hbTimer); _hbTimer=null;
+}
 function startHeartbeat(){ const beat=()=>{ if(ST.room&&ST.mySeat!=null) _db.ref(roomPath("seats/"+ST.mySeat)).update({lastSeen:now(),online:true}).catch(()=>{}); }; beat(); _hbTimer=setInterval(beat,HEARTBEAT_MS); }
 function touch(){ ST.lastUpdate=Date.now(); render(); }
 function seatActive(s){ const seat=ST.seats&&ST.seats[s]; if(!seat)return false; if(seat.online===false)return false; return (now()-(seat.lastSeen||0))<TIMEOUT_MS; }
@@ -467,8 +585,8 @@ async function startGame(rounds,advanced){
     const ids = advanced
       ? dealAdvanced(n2).map(seat=>seat.map(r=>r.id))   // 上級：通常枠2＋秘伝枠1
       : dealRecipeIds(n2);                              // 通常
-    const recipes={}; for(let s=0;s<n2;s++)recipes[s]=ids[s];
-    await withRetry(()=>_db.ref(roomPath("recipes")).set(recipes));
+    const privateRecipes={}; for(let s=0;s<n2;s++)privateRecipes[compact[s].uid]=ids[s];
+    await withRetry(()=>_db.ref(roomPath("privateRecipes")).set(privateRecipes));
     // ゲーム初期化
     const band=makeBand(n2);
     const game={n:n2,rounds,round:1,cutter:0,teamTotal:0,advanced:!!advanced,phase:"cut",band,cuts:null,assign:null,chooseIdx:0,roundEval:null,history:null};
@@ -516,24 +634,27 @@ async function pickPile(pi){
   }catch(e){ showError("選択の送信に失敗："+e.message); }
 }
 
-// 採点（resolver＝ホスト、不在時は最小の生存席が担当）
+// 採点（resolver＝ホスト固定。ホスト不在時は await_score のまま安全に待つ）
 function amResolver(){
-  if(!ST.seats)return false;
-  const hostUid=ST.meta&&ST.meta.host;
-  const hostSeat=Object.keys(ST.seats).find(s=>ST.seats[s]&&ST.seats[s].uid===hostUid);
-  if(hostSeat!==undefined && seatActive(parseInt(hostSeat))) return ST.mySeat===parseInt(hostSeat);
-  // ホスト不在→最小の生存席
-  for(let s=0;s<4;s++)if(seatActive(s))return ST.mySeat===s;
-  return false;
+  return !!(myUid&&ST.meta&&ST.meta.host===myUid);
+}
+function hostOnline(){
+  if(!ST.seats||!ST.meta)return false;
+  const hostSeat=Object.keys(ST.seats).find(s=>ST.seats[s]&&ST.seats[s].uid===ST.meta.host);
+  return hostSeat!==undefined&&seatActive(parseInt(hostSeat));
 }
 async function resolveScore(){
   const g=ST.game; if(!g||g.phase!=="await_score")return;
   if(!amResolver())return; // resolverのみ
   try{
     // 採点時だけ全好みを一度読む（ゲームマスターの役割）
-    const recSnap=await withRetry(()=>_db.ref(roomPath("recipes")).get());
-    const rec=recSnap.val(); const n=g.n;
-    const players=[];for(let p=0;p<n;p++)players.push(rec[p].map(byId));
+    const recSnap=await withRetry(()=>_db.ref(roomPath("privateRecipes")).get());
+    const rec=recSnap.val()||{}; const n=g.n;
+    const players=[];for(let p=0;p<n;p++){
+      const uid=ST.seats&&ST.seats[p]&&ST.seats[p].uid;
+      if(!uid||!rec[uid])throw new Error("着席者の好みを取得できませんでした");
+      players.push(rec[uid].map(byIdAny).filter(Boolean));
+    }
     const piles=toPiles(g.band,g.cuts);
     const pp={};for(let pi=0;pi<n;pi++)pp[g.assign[pi]]=piles[pi];
     const totals=[];for(let p=0;p<n;p++)totals.push(scorePile(players[p],pp[p]));
@@ -560,9 +681,32 @@ async function resolveScore(){
     }));
   }catch(e){ showError("採点に失敗："+e.message); }
 }
-function onGameUpdate(){ soundOnGameTransition(); if(ST.game&&ST.game.phase==="await_score") setTimeout(resolveScore,120); }
+function onGameUpdate(){
+  soundOnGameTransition();
+  resumeAwaitingHostScore();
+  if(ST.game&&ST.game.phase==="end"&&amResolver())setTimeout(publishReveal,120);
+}
+function resumeAwaitingHostScore(){
+  if(ST.game&&ST.game.phase==="await_score"&&amResolver())setTimeout(resolveScore,120);
+}
 
-// 次の儀式へ（ホストのみ）
+async function publishReveal(){
+  const g=ST.game;if(!g||g.phase!=="end"||!amResolver())return;
+  try{
+    const existing=await withRetry(()=>_db.ref(roomPath("reveal")).get());
+    if(existing.exists())return;
+    const privateRecipes=(await withRetry(()=>_db.ref(roomPath("privateRecipes")).get())).val()||{};
+    const reveal={};
+    for(let s=0;s<g.n;s++){
+      const uid=ST.seats&&ST.seats[s]&&ST.seats[s].uid;
+      if(!uid||!privateRecipes[uid])throw new Error("公開用の好みを作成できませんでした");
+      reveal[s]=privateRecipes[uid];
+    }
+    await withRetry(()=>_db.ref(roomPath("reveal")).transaction(cur=>cur===null?reveal:undefined));
+  }catch(e){ showError("好みの公開に失敗："+e.message); }
+}
+
+// 次の儀式へ（着席者なら誰でも。transactionのphaseガードで二重進行を防ぐ）
 async function nextRound(){
   // 誰でも進行できる（進行役の切断で止まらないように）。
   // 二重実行は下のtransaction内 phase ガードで防がれるため安全。
@@ -571,9 +715,7 @@ async function nextRound(){
     if(g.round>=g.rounds){
       await withRetry(()=>_db.ref(roomPath("game/phase")).set("end"));
       await withRetry(()=>_db.ref(roomPath("meta/phase")).set("ended"));
-      // 終了時のみ全好みを配信（秘匿解除）
-      const rec=(await _db.ref(roomPath("recipes")).get()).val();
-      await withRetry(()=>_db.ref(roomPath("reveal")).set(rec));
+      // reveal は game.phase=end を観測したホストだけが publishReveal() で作る。
       return;
     }
     const band=makeBand(g.n);
@@ -584,7 +726,7 @@ async function nextRound(){
     }));
   }catch(e){ showError("進行に失敗："+e.message); }
 }
-async function leaveRoom(){ try{ if(ST.room&&ST.mySeat!=null){ await _db.ref(roomPath("seats/"+ST.mySeat)).remove(); } }catch(e){} clearSubs(); _sndPrev={key:"",myTurn:false}; localCuts=[]; _lobbyRounds=null; ST={view:"home",room:null,mySeat:null,isHost:false,meta:null,seats:null,game:null,myRecipes:null,allRecipes:null,connected:ST.connected,lastUpdate:0,error:""}; render(); }
+async function leaveRoom(){ try{ if(ST.room&&ST.mySeat!=null){ await _db.ref(roomPath("seats/"+ST.mySeat)).remove(); } }catch(e){} clearSubs(); forgetRoom(); _sndPrev={key:"",myTurn:false}; localCuts=[]; _lobbyRounds=null; ST={view:"home",room:null,mySeat:null,isHost:false,spectator:false,meta:null,seats:null,game:null,myRecipes:null,allRecipes:null,connected:ST.connected,lastUpdate:0,error:""}; render(); }
 
 // ============ 入力ガード ============
 function requireFb(){ if(!_fbReady){ showError(_fbError||"Firebaseが利用できません。"); return false; } return true; }
@@ -702,19 +844,12 @@ async function spectate(){
   if(!requireFb())return;
   if(!(await ensureAuth()))return;
   const el=document.getElementById("joincode"); const raw=(el&&el.value)||_inJoin||"";
-  const code=raw.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,4);
-  if(code.length!==4){ showError("観戦する部屋の合言コードを入力してください。"); return; }
+  const code=normalizeCode(raw);
+  if(!CODE_RE.test(code)){ showError("観戦する部屋の6文字の合言コードを入力してください。"); return; }
   try{
-    const metaSnap=await withRetry(()=>_db.ref("rooms/"+code+"/meta").get());
-    if(!metaSnap.exists()){ showError("その合言コードの部屋が見つかりません。"); return; }
-    ST.room=code; ST.spectator=true; ST.mySeat=null;
-    clearSubs();
-    const onMeta=_db.ref(roomPath("meta")).on("value",s=>{ ST.meta=s.val(); touch(); });
-    const onSeats=_db.ref(roomPath("seats")).on("value",s=>{ ST.seats=s.val()||{}; touch(); });
-    const onGame=_db.ref(roomPath("game")).on("value",s=>{ ST.game=s.val(); touch(); });
-    const onRec=_db.ref(roomPath("recipes")).on("value",s=>{ ST.allRecipes=s.val(); touch(); });
-    _roomRefs=[["meta",onMeta],["seats",onSeats],["game",onGame],["recipes",onRec]];
-    render();
+    const state=await readRoomState(code);
+    if(!state.exists){ showError("その合言コードの部屋が見つかりません。"); return; }
+    resumeSpectatorRoom(code,state);
   }catch(e){ showError("観戦に失敗："+e.message); }
 }
 function spectatorHTML(){
@@ -723,7 +858,7 @@ function spectatorHTML(){
   // ヘッダ：接続鮮度も出す
   const age=ST.lastUpdate?Math.round((now()-ST.lastUpdate)/1000):null;
   let html=`<div class="panel"><div class="row spread">
-    <div><span class="eyebrow" style="margin:0">👁 観戦モード（全情報・書込なし）</span>
+    <div><span class="eyebrow" style="margin:0">👁 観戦モード（公開情報のみ・書込なし）</span>
       <div class="kv" style="margin-top:4px">部屋 <b style="color:var(--candle-soft);letter-spacing:.2em">${ST.room}</b> ・ 局面 <b>${phase}</b>${g&&g.advanced?' ・ <span class="tag hard" style="font-size:11px">🌟 秘伝</span>':''}</div></div>
     <div class="kv" style="text-align:right">${ST.connected?'🟢 接続中':'🔴 切断'}<br>${age!=null?`最終同期 ${age}秒前`:''}</div>
   </div></div>`;
@@ -750,7 +885,7 @@ function spectatorHTML(){
   let turnLine="";
   if(g.phase==="cut") turnLine=`${pill(g.cutter)} が素材を分けています`;
   else if(g.phase==="choose"){ const cur=order[g.chooseIdx]; turnLine=`${pill(cur)} が坩堝を選んでいます（${g.chooseIdx+1}/${order.length}）`; }
-  else if(g.phase==="await_score") turnLine=`採点の処理中…`;
+  else if(g.phase==="await_score") turnLine=hostOnline()?`進行役が採点しています…`:`進行役の再接続を待っています`;
   else if(g.phase==="score") turnLine=`結果を確認中（誰かが「次の儀式へ」を押すと進みます）`;
   else if(g.phase==="end") turnLine=`儀式は終わりました`;
   html+=`<div class="panel"><div class="row spread">
@@ -758,9 +893,9 @@ function spectatorHTML(){
     <div class="kv" style="text-align:right">総魔力<br><span class="big" style="font-size:22px">${g.teamTotal||0}</span></div></div>
     <div class="turnbar" style="margin-top:10px"><span>⏳</span><span class="who">${turnLine}</span></div></div>`;
 
-  // 全員の好み（観戦のみ可視）＋ 現在の坩堝での発火状況
-  if(ST.allRecipes){
-    html+=`<div class="panel"><div class="eyebrow">📖 全員の好み（観戦のみ可視・叶っているものが光ります）</div>`;
+  // 全員の好み・個人点・発火状況は終了後の reveal 作成後だけ表示する。
+  if(g.phase==="end"&&ST.allRecipes){
+    html+=`<div class="panel"><div class="eyebrow">📖 終了後に明かされた全員の好み</div>`;
     for(let p=0;p<g.n;p++){ if(!ST.allRecipes[p])continue;
       const recs=ST.allRecipes[p].map(byIdAny).filter(Boolean);
       let pileOf=null, myPt=null;
@@ -779,7 +914,7 @@ function spectatorHTML(){
       html+=`<div class="crucible" ${taken?'style="border-color:'+PCOL[owner]+'"':''}>
         <div class="cHead"><span>坩堝 ${["一","二","三","四"][pi]}</span>${taken?`<span style="color:${PCOL[owner]}">${nameOf(owner)}</span>`:'<span class="kv">未取得</span>'}</div>
         <div class="mats">${piles[pi].map(m=>matChip(m,true)).join("")}</div>`;
-      if(taken&&ST.allRecipes&&ST.allRecipes[owner]){ const recs=ST.allRecipes[owner].map(byIdAny).filter(Boolean); const t=scorePile(recs,piles[pi]);
+      if(g.phase==="end"&&taken&&ST.allRecipes&&ST.allRecipes[owner]){ const recs=ST.allRecipes[owner].map(byIdAny).filter(Boolean); const t=scorePile(recs,piles[pi]);
         html+=`<div style="margin-top:8px" class="kv">${nameOf(owner)}：<b style="color:${t<0?'var(--bad)':'var(--good)'};font-family:var(--grimoire)">${t>0?'+':''}${t}</b></div>`; }
       html+=`</div>`; }
     html+=`</div></div>`;
@@ -795,8 +930,9 @@ function spectatorHTML(){
       <div class="meterwrap"><div class="meter" style="width:${Math.max(0,Math.min(100,e.pct))}%"></div></div></div>`;
   }
 
-  // 工房の記録（観戦は個人点も見える）
-  html+=recordPanel(g.history, g.n, true, ST.allRecipes);
+  // プレイ中は個人点を出さない。終了後、reveal がある場合だけ答え合わせを表示。
+  html+=recordPanel(g.history, g.n, g.phase==="end"&&!!ST.allRecipes, g.phase==="end"?ST.allRecipes:null);
+  if(g.phase==="end"&&ST.allRecipes)html+=highlightPanel(g.history,g.n,ST.allRecipes);
   return html;
 }
 
@@ -844,8 +980,6 @@ function highlightPanel(history,n,allRecipes){
 }
 
 // ============ ソロモード（Firebase不要・1人で全席・全情報表示） ============
-let SOLO={active:false};
-let soloCuts=[];
 function openSolo(){ SOLO={active:true, phase:"setup", n:3, rounds:6}; soloCuts=[]; render(); }
 function exitSolo(){ SOLO={active:false}; soloCuts=[]; render(); }
 function dealAdvanced(n){
@@ -983,9 +1117,6 @@ function soloHTML(){
   html+=recordPanel(g.history, g.n, true);
   return html;
 }
-
-let _inJoin="", _lobbyRounds=null, _lobbyAdv=false; // 再描画をまたいで保持する入力値
-let localCuts=[]; // オンライン切り役の一時的な刃
 
 // ============ 描画 ============
 // 夕暮れの魔女工房のイラスト（ヒーロー画像）
@@ -1145,7 +1276,7 @@ function homeHTML(){
     <div class="row">
       <button class="primary" onclick="createRoom()">🚪 部屋を作る（ホスト）</button>
       <span class="kv">または</span>
-      <input id="joincode" maxlength="4" placeholder="合言コード" style="width:130px;text-transform:uppercase" value="${_inJoin}" oninput="_inJoin=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
+      <input id="joincode" maxlength="6" placeholder="6文字コード" style="width:150px;text-transform:uppercase" value="${_inJoin}" oninput="_inJoin=normalizeCode(this.value);this.value=_inJoin">
       <button onclick="joinRoom()">参加する</button>
     </div>
     <div class="row" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
@@ -1153,7 +1284,7 @@ function homeHTML(){
       <button class="ghost" onclick="spectate()">👁 観戦する（合言コードで監視）</button>
     </div>
     ${!_fbReady?`<div class="hint" style="margin-top:12px"><span class="hi">⚙</span><span>${_fbError} 上部の &lt;script&gt; 内 FIREBASE_CONFIG を自分のFirebaseプロジェクトの値に差し替えてください（手順はハンドオフ資料参照）。</span></div>`:''}
-    <div class="hint" style="margin-top:10px"><span class="hi">✎</span><span>秘匿について：部屋の外からのアクセスは匿名認証＋セキュリティルールで遮断されています。ただし同じ合言コードの部屋に入った人には、好みは技術的には見えます（観戦モードと同根の仕様）。合言コードは信頼できる仲間だけに伝えてください。</span></div>
+    <div class="hint" style="margin-top:10px"><span class="hi">✎</span><span>好みはFirebaseのUIDごとに分離され、通常プレイヤーは自分の好みだけを読めます。観戦者には終了後の公開まで配信されません。進行役（ホスト）は配布・採点のため全好みを扱います。</span></div>
   </div>`;
 }
 function lobbyHTML(){
@@ -1195,7 +1326,7 @@ function gameHTML(){
   let turnWho="", isMine=false;
   if(g.phase==="cut"){ turnWho=`${pill(g.cutter)} が素材を分けています`; isMine=myTurn_cut; }
   else if(g.phase==="choose"){ turnWho=`${pill(curChooser)} が坩堝を選んでいます`; isMine=myTurn_pick; }
-  else if(g.phase==="await_score"){ turnWho="調合の結果を確かめています"; }
+  else if(g.phase==="await_score"){ turnWho=hostOnline()?"進行役が調合の結果を確かめています":"進行役の再接続を待っています"; }
   else if(g.phase==="score"){ turnWho="結果を確認中"; }
   if(turnWho){
     html+=`<div class="turnbar ${isMine?'active':''}" style="margin-top:10px"><span>${isMine?'✨':'⏳'}</span><span class="who">${isMine?'<span class="yourturn">あなたの番です</span>':turnWho}</span>`;
@@ -1279,7 +1410,7 @@ function gameHTML(){
       <div class="hint"><span class="hi">✎</span><span>誰でも進められます。準備ができた人が押してください。</span></div>`;
     html+=`</div>`;
   }
-  if(g.phase==="await_score"){ html+=`<div class="panel"><div class="kv">⚗️ 調合の結果を確かめています…</div></div>`; }
+  if(g.phase==="await_score"){ html+=`<div class="panel"><div class="kv">${hostOnline()?"⚗️ 進行役が調合の結果を確かめています…":"⏳ 進行役の再接続を待っています"}</div></div>`; }
 
   // 記録（切り方履歴のミニ盤面・個人点は非公開＝B方式）
   html+=recordPanel(g.history, g.n, false);
@@ -1290,8 +1421,7 @@ function submitCut(){ ac(); SFX.cut(); confirmCut(localCuts.slice()); localCuts=
 function rankFor(pct){ if(pct>=92)return{t:"大魔女",i:"🌕",l:"沈黙のうちに、互いの心を読み切った。"};if(pct>=82)return{t:"熟達の魔女",i:"🌔",l:"言葉なくとも、意はよく通じていた。"};if(pct>=70)return{t:"一人前の魔女",i:"🌓",l:"良き調合であった。"};if(pct>=58)return{t:"見習いを抜けし者",i:"🌒",l:"まだ視えぬ好みがある。"};return{t:"駆け出しの魔女",i:"🌑",l:"沈黙は深く、心は遠かった。"}; }
 function endHTML(){
   const g=ST.game; if(!g||!g.history)return `<div class="panel"><div class="kv">結果を集計中…</div></div>`;
-  // 終了時は全好みを表示（秘匿解除）。reveal ノードから取得
-  if(ST.allRecipes===null && _fbReady){ _db.ref(roomPath("reveal")).get().then(s=>{ if(s.exists()){ ST.allRecipes=s.val(); render(); } }); }
+  // 終了時は購読中の reveal が作成されてから全好みを表示する。
   const sa=g.history.reduce((s,h)=>s+h.roundScore,0), so=g.history.reduce((s,h)=>s+h.omni,0), sr=g.history.reduce((s,h)=>s+h.rational,0);
   const keen=so>0?Math.min(100,Math.round(sa/so*100)):100; const ratP=so>0?Math.round(sr/so*100):100;
   const rank=rankFor(keen);
@@ -1318,12 +1448,19 @@ function endHTML(){
 }
 
 // 定期再描画（鮮度表示の更新・タイムアウト反映）
-setInterval(()=>{ if(ST.room){ if(ST.game&&ST.game.phase==="await_score"&&amResolver()) resolveScore(); render(); } }, 3000);
+setInterval(()=>{ if(ST.room){
+  if(ST.game&&ST.game.phase==="await_score"&&amResolver())resolveScore();
+  if(ST.game&&ST.game.phase==="end"&&amResolver()&&!ST.allRecipes)publishReveal();
+  render();
+} }, 3000);
 render=_guardRender(render);
+const emulatorBadge=document.getElementById("emulatorBadge");
+if(emulatorBadge)emulatorBadge.hidden=!_emulatorMode;
 render();
+restoreSavedRoom();
 </script>
 <a id="homelink" href="index.html" title="ゲーム一覧へ戻る">🏠 ゲーム一覧</a>
-<div id="verbadge">魔女の調合 v1.2</div>
+<div id="verbadge">魔女の調合 v1.3</div>
 <style>
 #homelink{position:fixed;left:8px;bottom:6px;z-index:9999;
  font:11px/1.5 system-ui,sans-serif;letter-spacing:.04em;text-decoration:none;
@@ -1332,7 +1469,11 @@ render();
 #homelink:hover{color:#f5d99a;border-color:#e0b352;transform:translateY(-1px);
  box-shadow:0 4px 14px rgba(0,0,0,.4)}
 #verbadge{position:fixed;right:8px;bottom:7px;font:10px/1.4 system-ui,sans-serif;
- color:#5f6675;z-index:9999;pointer-events:none;user-select:none;letter-spacing:.04em;opacity:.75}
+  color:#5f6675;z-index:9999;pointer-events:none;user-select:none;letter-spacing:.04em;opacity:.75}
+.emulator-badge{position:fixed;right:8px;top:8px;z-index:10000;padding:5px 9px;border-radius:7px;
+  font:700 11px/1.2 system-ui,sans-serif;letter-spacing:.08em;color:#201506;background:#ffd36a;border:1px solid #fff0b8;
+  box-shadow:0 3px 12px rgba(0,0,0,.4)}
+.emulator-badge[hidden]{display:none}
 @media(max-width:420px){#homelink{font-size:10px;padding:4px 9px}}
 </style>
 </body>

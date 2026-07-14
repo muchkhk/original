@@ -7,3 +7,8 @@
 # 共有すべき許可リスト settings.json だけは追跡対象に残す。
 .claude/*
 !.claude/settings.json
+
+# ── Local test/runtime artifacts ──
+node_modules/
+.firebase-config/
+*-debug.log

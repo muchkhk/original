@@ -1,0 +1,16 @@
+{
+  "database": {
+    "rules": "firebase/witch_rules.json"
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "database": {
+      "port": 9150
+    },
+    "ui": {
+      "enabled": false
+    }
+  }
+}
