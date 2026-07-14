@@ -29,6 +29,22 @@ test("6文字のルームコードを使用する", () => {
   assert.match(html, /maxlength:6/);
 });
 
+test("存在しないmetaを読まずRulesで保護された新規ルームを作る", () => {
+  const createRoom = html.match(/async function createRoom\(\)[\s\S]*?\n\nasync function joinRoom/);
+  assert.ok(createRoom);
+  assert.doesNotMatch(createRoom[0], /\/meta`\)\.get\(\)/);
+  assert.match(createRoom[0], /\.set\(meta\)/);
+  assert.match(createRoom[0], /PERMISSION_DENIED/);
+});
+
+test("参加時は占有済み席を飛ばし競合時だけ次の空席を試す", () => {
+  const joinRoom = html.match(/async function joinRoom\(spectator=false\)[\s\S]*?\n\nfunction attachHostStreams/);
+  assert.ok(joinRoom);
+  assert.match(joinRoom[0], /if\(seats\[i\]\)continue/);
+  assert.match(joinRoom[0], /transaction\(cur=>cur\|\|\{uid:user\.uid/);
+  assert.match(joinRoom[0], /if\(e\?\.code!=="PERMISSION_DENIED"\)throw e/);
+});
+
 test("秘匿情報はUID別privateから読む", () => {
   assert.match(html, /private\/\$\{user\.uid\}/);
   assert.match(html, /private\/\$\{s\.uid\}/);
@@ -67,6 +83,11 @@ test("Emulator接続はlocalhostかつ明示パラメータ時だけ", () => {
   assert.match(html, /\^127\\\./);
   assert.match(html, /local&&q\.get\("emulator"\)==="1"/);
   assert.match(html, /useEmulator\("127\.0\.0\.1",9170\)/);
+});
+
+test("ブラウザ受入Emulatorは本番と同じboadgame2 namespaceを使う", () => {
+  const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+  assert.match(pkg.scripts["emulators:seri-v2"], /--project boadgame2(?:\s|$)/);
 });
 
 test("series機能と自己申告UIDを廃止している", () => {

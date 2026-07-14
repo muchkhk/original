@@ -30,12 +30,32 @@
 <script nonce="seri-v2">
 "use strict";
 const FIREBASE_CONFIG={apiKey:"AIzaSyCGvLgGTr1L-bkLn0i5b3sJ7nCRJ9fX42M",authDomain:"boadgame2.firebaseapp.com",databaseURL:"https://boadgame2-default-rtdb.firebaseio.com",projectId:"boadgame2",storageBucket:"boadgame2.firebasestorage.app",messagingSenderId:"536616889122",appId:"1:536616889122:web:29e72276c32a9fc0107144"};
-const ROOT="seriRoomsV2",VER="2.0",SESSION_KEY="seri_v2_session",NAME_KEY="seri_v2_name";
-const COMPONENTS=["色味","透明度","輝き"],CODE_CHARS="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const ROOT="seriRoomsV2",VER="2.0",SESSION_KEY="seri_v2_session",NAME_KEY="seri_v2_name",SOLO_KEY="seri_c1_solo_state_v2";
+const COMPONENTS=["色味","透明度","輝き","大きさ"],CODE_CHARS="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const app=document.getElementById("app");
 let auth=null,db=null,user=null,roomRef=null,heartbeat=null,actionBusy=false,revealAttached=false,hostPrivateAttached=false,hostActionsAttached=false;
-let unsub=[];
+let unsub=[],appMode="home",soloTimer=null,SOLO=null;
 const ST={room:"",seat:null,spectator:false,meta:null,seats:{},game:null,money:{},history:{},privateData:null,allPrivate:{},reveal:null,error:"",notice:""};
+
+/* C1_CORE_START: 旧正本 9c99921 のC1 solo規則を純粋ロジックとして維持する。 */
+const C1_SETUP={players:4,rounds:8,money:34,min:-2,max:6,taste:2,expected:2};
+const C1_NAMES=["あなた","鴉","鳶","梟"];
+const C1_NPC=[{opt:1,read:1,curse:1},{opt:1,read:1,curse:1},{opt:.85,read:1,curse:1.4},{opt:1.1,read:.3,curse:.3}];
+function c1RandomInt(n,random=Math.random){return Math.floor(random()*n)}
+function c1Shuffle(random=Math.random){const a=[0,1,2,3];for(let i=a.length-1;i>0;i--){const j=c1RandomInt(i+1,random);[a[i],a[j]]=[a[j],a[i]]}return a}
+function c1Lot(random=Math.random){return Array.from({length:4},()=>C1_SETUP.min+c1RandomInt(C1_SETUP.max-C1_SETUP.min+1,random))}
+function c1Value(state,seat,values){return values.reduce((a,b)=>a+b,0)+C1_SETUP.taste*values[state.lens[seat]]}
+function c1Score(state,seat){return state.money[seat]+state.won[seat].reduce((sum,lot)=>sum+c1Value(state,seat,lot.values),0)}
+function c1Ranks(state){return Array.from({length:4},(_,seat)=>({seat,score:c1Score(state,seat)})).sort((a,b)=>b.score-a.score||a.seat-b.seat)}
+function c1PrepareRound(state,random=Math.random){state.lot=c1Lot(random);state.price=0;state.lastBidder=-1;state.bidLog=[];state.live=[0,1,2,3].filter(p=>state.money[p]>=1);state.starter=state.round%4;state.cur=state.live.includes(state.starter)?state.starter:state.live.find(p=>p>state.starter)??state.live[0]??0;state.phase="auction";return state}
+function c1CreateState(humanName="あなた",random=Math.random){const state={mode:"c1",round:0,money:Array(4).fill(C1_SETUP.money),won:[[],[],[],[]],lens:c1Shuffle(random),names:[humanName||"あなた",...C1_NAMES.slice(1)],lot:null,price:0,cur:0,starter:0,live:[],lastBidder:-1,phase:"auction",history:[],bidLog:[]};return c1PrepareRound(state,random)}
+function c1Hammer(state){const winner=state.live.length===1?state.live[0]:state.lastBidder;const won=winner>=0&&state.price>0?winner:-1;if(won>=0){state.money[won]-=state.price;state.won[won].push({values:state.lot.slice(),price:state.price})}state.history.push({values:state.lot.slice(),winnerSeat:won,price:won>=0?state.price:0,bids:state.bidLog.map(x=>({...x}))});state.phase="reveal";return state}
+function c1NextTurn(state){if(state.live.length<=1)return c1Hammer(state);let guard=0;do{state.cur=(state.cur+1)%4}while(!state.live.includes(state.cur)&&guard++<8);if(state.cur===state.lastBidder)return c1Hammer(state);return state}
+function c1Act(state,seat,type){if(!state||state.phase!=="auction"||state.cur!==seat||!state.live.includes(seat))return false;if(type==="bid"&&state.price+1<=state.money[seat]){state.price++;state.lastBidder=seat;state.bidLog.push({seat,price:state.price,type:"bid"})}else if(type==="drop"||type==="bid"){state.live=state.live.filter(x=>x!==seat);state.bidLog.push({seat,price:state.price,type:"drop"})}else return false;c1NextTurn(state);return true}
+function c1Advance(state,random=Math.random){if(!state||state.phase!=="reveal")return false;state.round++;if(state.round>=C1_SETUP.rounds||state.money.every(m=>m<1)){state.phase="end";return true}c1PrepareRound(state,random);return true}
+function c1NpcLimit(state,seat){const cfg=C1_NPC[seat],blind=state.lens[seat],E=C1_SETUP.expected;const visibleSum=state.lot.reduce((sum,v,i)=>sum+(i===blind?0:v),0);let blindEstimate=E;const publicBids=state.bidLog.filter(b=>b.seat!==seat&&b.type==="bid");if(cfg.read>0&&publicBids.length){const top=Math.max(...publicBids.map(b=>b.price)),prior=visibleSum+3*E;blindEstimate+=Math.max(-2,Math.min(2,(top-prior)*.15*cfg.read))}const dropped=[0,1,2,3].filter(p=>p!==seat&&!state.live.includes(p));if(cfg.read>0&&dropped.length)blindEstimate-=.2*cfg.read*dropped.length/3;const rivals=state.live.length-1,curse=cfg.curse*(rivals>0?rivals/3:1)*E*1.26;return Math.round((visibleSum+3*blindEstimate-curse)*cfg.opt)}
+function c1NpcAction(state,seat){return state.price+1<=c1NpcLimit(state,seat)&&state.price+1<=state.money[seat]?"bid":"drop"}
+/* C1_CORE_END */
 
 function node(tag,attrs={},...children){const e=document.createElement(tag);for(const [k,v] of Object.entries(attrs)){if(k==="class")e.className=v;else if(k==="onclick")e.addEventListener("click",v);else if(k==="onchange")e.addEventListener("change",v);else if(k==="disabled")e.disabled=!!v;else if(k==="value")e.value=v;else e.setAttribute(k,String(v));}for(const c of children.flat()){if(c==null)continue;e.append(c instanceof Node?c:document.createTextNode(String(c)));}return e;}
 function panel(...c){return node("section",{class:"panel"},...c)}
@@ -53,20 +73,35 @@ function clearSession(){localStorage.removeItem(SESSION_KEY)}
 function listen(path,cb,onError=fail){const r=db.ref(roomPath(path));const fn=s=>cb(s.val());r.on("value",fn,onError);unsub.push(()=>r.off("value",fn))}
 function detach(){for(const fn of unsub.splice(0)){try{fn()}catch(_){}}if(heartbeat)clearInterval(heartbeat);heartbeat=null;roomRef=null;revealAttached=false;hostPrivateAttached=false;hostActionsAttached=false}
 
+function saveSolo(){if(SOLO&&SOLO.phase!=="end")localStorage.setItem(SOLO_KEY,JSON.stringify(SOLO));else localStorage.removeItem(SOLO_KEY)}
+function readSolo(){try{const value=JSON.parse(localStorage.getItem(SOLO_KEY)||"null");return value&&value.mode==="c1"&&value.phase!=="end"?value:null}catch(_){localStorage.removeItem(SOLO_KEY);return null}}
+function startSolo(){const name=safeName(document.getElementById("name")?.value)||"あなた";localStorage.setItem(NAME_KEY,name);detach();clearSession();SOLO=c1CreateState(name);appMode="solo";saveSolo();render();scheduleSoloNpc()}
+function resumeSolo(){const saved=readSolo();if(!saved)return;detach();clearSession();SOLO=saved;appMode="solo";render();scheduleSoloNpc()}
+function discardSolo(){localStorage.removeItem(SOLO_KEY);render()}
+function leaveSolo(){if(soloTimer)clearTimeout(soloTimer);soloTimer=null;saveSolo();SOLO=null;appMode="home";render()}
+function soloAct(type){if(!SOLO||SOLO.cur!==0)return;if(c1Act(SOLO,0,type)){saveSolo();render();scheduleSoloNpc()}}
+function soloNext(){if(!SOLO)return;if(c1Advance(SOLO)){saveSolo();render();scheduleSoloNpc()}}
+function scheduleSoloNpc(){if(soloTimer)clearTimeout(soloTimer);soloTimer=null;if(!SOLO||SOLO.phase!=="auction"||SOLO.cur===0)return;soloTimer=setTimeout(()=>{if(!SOLO||SOLO.phase!=="auction"||SOLO.cur===0)return;const seat=SOLO.cur;c1Act(SOLO,seat,c1NpcAction(SOLO,seat));saveSolo();render();scheduleSoloNpc()},180)}
+function soloSeatList(){const ul=node("ul");for(let i=0;i<4;i++)ul.append(node("li",{class:`seat ${i===0?"mine":""}`},node("span",{},SOLO.names[i],i===0?"（あなた）":"（NPC）"),node("span",{class:"muted"},`💰 ${SOLO.money[i]}`)));return ul}
+function soloHistory(){const box=node("div",{class:"history"});for(const [i,h] of SOLO.history.entries()){const winner=h.winnerSeat>=0?SOLO.names[h.winnerSeat]:"流札";box.append(node("div",{},`第${i+1}ラウンド：${winner} ／ ${h.price} ／ [${h.values.join(", ")}]`))}return box}
+function renderSolo(){if(!SOLO){appMode="home";renderHome();return}const body=[panel(node("h2",{},"solo・C1"),node("p",{class:"muted"},"人間1人＋NPC3人 ／ 4面 ／ 8ラウンド ／ Firebase DB不使用"))];if(SOLO.phase==="end"){const result=node("div");for(const [i,x] of c1Ranks(SOLO).entries())result.append(node("p",{class:i===0?"mine":""},`${i+1}位 ${SOLO.names[x.seat]}：${x.score}点 ／ 盲点 ${COMPONENTS[SOLO.lens[x.seat]]}`));body.push(panel(node("h2",{},"ゲーム終了"),result,soloHistory()),node("div",{class:"row"},node("button",{onclick:leaveSolo},"トップへ")))}else{const visible=node("div",{class:"grid"});SOLO.lot.forEach((value,i)=>visible.append(panel(node("strong",{},COMPONENTS[i]),node("div",{class:"price"},i===SOLO.lens[0]?"？":value))));let action=status(SOLO.phase==="reveal"?"原石を公開しました":SOLO.cur===0?"あなたの番です":`${SOLO.names[SOLO.cur]}が考えています…`);if(SOLO.phase==="auction"&&SOLO.cur===0)action=node("div",{class:"row"},node("button",{class:"primary",onclick:()=>soloAct("bid"),disabled:SOLO.price+1>SOLO.money[0]},`追う（${SOLO.price+1}）`),node("button",{class:"danger",onclick:()=>soloAct("drop")},"降りる"));if(SOLO.phase==="reveal")action=node("div",{},node("p",{},`公開値：[${SOLO.lot.join(", ")}]`),node("button",{class:"primary",onclick:soloNext},SOLO.round+1>=C1_SETUP.rounds?"最終結果へ":"次の原石へ"));body.push(panel(node("h2",{},`第${SOLO.round+1}ラウンド`),node("p",{class:"secret"},`あなたの盲点：${COMPONENTS[SOLO.lens[0]]}（この面は価値で3倍）`),visible,node("div",{class:"price"},`現在価格 ${SOLO.price}`),soloSeatList(),action),panel(node("h2",{},"履歴"),soloHistory()),node("div",{class:"row"},node("button",{onclick:leaveSolo},"中断してトップへ")))}app.replaceChildren(...body)}
+
 async function bootstrap(){try{firebase.initializeApp(FIREBASE_CONFIG);auth=firebase.auth();db=firebase.database();const q=new URLSearchParams(location.search);const local=location.hostname==="localhost"||/^127\./.test(location.hostname);if(local&&q.get("emulator")==="1"){auth.useEmulator("http://127.0.0.1:9199",{disableWarnings:true});db.useEmulator("127.0.0.1",9170)}await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);auth.onAuthStateChanged(async u=>{if(!u){await auth.signInAnonymously();return}user=u;await restoreSession();render()})}catch(e){fail(e)}}
 
 async function restoreSession(){let s=null;try{s=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(_){clearSession()}if(!s||!s.room)return;const code=normalizeCode(s.room);if(code.length!==6){clearSession();return}try{const meta=(await db.ref(`${ROOT}/${code}/meta`).get()).val();if(!meta){clearSession();return}if(s.spectator){ST.room=code;ST.spectator=true;ST.seat=null;attach();return}const seat=(await db.ref(`${ROOT}/${code}/seats/${s.seat}`).get()).val();if(seat&&seat.uid===user.uid){ST.room=code;ST.spectator=false;ST.seat=Number(s.seat);attach()}else clearSession()}catch(_){clearSession()}}
 
-async function createRoom(){try{const name=safeName(document.getElementById("name")?.value);const n=Number(document.getElementById("players")?.value);if(!name)throw new Error("名前を入力してください");if(n!==3&&n!==4)throw new Error("人数は3人または4人です");localStorage.setItem(NAME_KEY,name);let code="";for(let i=0;i<8;i++){code=newCode();if(!(await db.ref(`${ROOT}/${code}/meta`).get()).exists())break}const rounds=n===3?6:8,money=n===3?30:34;await db.ref(`${ROOT}/${code}/meta`).set({hostUid:user.uid,phase:"lobby",n,rounds,money,nc:3,version:VER,createdAt:now()});await db.ref(`${ROOT}/${code}/seats/0`).set({uid:user.uid,name,lastSeen:now()});ST.room=code;ST.seat=0;ST.spectator=false;saveSession();attach();note("ルームを作成しました") }catch(e){fail(e)}}
+async function createRoom(){try{const name=safeName(document.getElementById("name")?.value);const n=Number(document.getElementById("players")?.value),rule=document.getElementById("rule")?.value==="c1"?"c1":"current";if(!name)throw new Error("名前を入力してください");if(n!==3&&n!==4)throw new Error("人数は3人または4人です");localStorage.setItem(NAME_KEY,name);const rounds=n===3?6:8,money=rule==="c1"?(n===3?28:34):(n===3?30:34),nc=rule==="c1"?n:3,meta={hostUid:user.uid,phase:"lobby",n,rounds,money,nc,rule,version:VER,createdAt:now()};let code="",created=false;for(let i=0;i<8;i++){code=newCode();try{await db.ref(`${ROOT}/${code}/meta`).set(meta);created=true;break}catch(e){if(e?.code!=="PERMISSION_DENIED")throw e}}if(!created)throw new Error("ルームコードを確保できませんでした。もう一度お試しください");await db.ref(`${ROOT}/${code}/seats/0`).set({uid:user.uid,name,lastSeen:now()});ST.room=code;ST.seat=0;ST.spectator=false;saveSession();attach();note("ルームを作成しました") }catch(e){fail(e)}}
 
-async function joinRoom(spectator=false){try{const name=safeName(document.getElementById("name")?.value);const code=normalizeCode(document.getElementById("roomCode")?.value);if(code.length!==6)throw new Error("6文字のルームコードを入力してください");if(!spectator&&!name)throw new Error("名前を入力してください");const r=db.ref(`${ROOT}/${code}`),meta=(await r.child("meta").get()).val();if(!meta)throw new Error("ルームが見つかりません");if(spectator){ST.room=code;ST.seat=null;ST.spectator=true;saveSession();attach();return}localStorage.setItem(NAME_KEY,name);let seatNo=null;const seats=(await r.child("seats").get()).val()||{};for(const [k,v] of Object.entries(seats))if(v&&v.uid===user.uid)seatNo=Number(k);if(seatNo==null){if(meta.phase!=="lobby")throw new Error("開始後の途中参加はできません");for(let i=0;i<meta.n;i++){const result=await r.child(`seats/${i}`).transaction(cur=>cur||{uid:user.uid,name,lastSeen:now()},undefined,false);if(result.committed&&result.snapshot.val()?.uid===user.uid){seatNo=i;break}}}if(seatNo==null)throw new Error("空席がありません");ST.room=code;ST.seat=seatNo;ST.spectator=false;saveSession();attach()}catch(e){fail(e)}}
+async function joinRoom(spectator=false){try{const name=safeName(document.getElementById("name")?.value);const code=normalizeCode(document.getElementById("roomCode")?.value);if(code.length!==6)throw new Error("6文字のルームコードを入力してください");if(!spectator&&!name)throw new Error("名前を入力してください");const r=db.ref(`${ROOT}/${code}`),meta=(await r.child("meta").get()).val();if(!meta)throw new Error("ルームが見つかりません");if(spectator){ST.room=code;ST.seat=null;ST.spectator=true;saveSession();attach();return}localStorage.setItem(NAME_KEY,name);let seatNo=null;const seats=(await r.child("seats").get()).val()||{};for(const [k,v] of Object.entries(seats))if(v&&v.uid===user.uid)seatNo=Number(k);if(seatNo==null){if(meta.phase!=="lobby")throw new Error("開始後の途中参加はできません");for(let i=0;i<meta.n;i++){if(seats[i])continue;try{const result=await r.child(`seats/${i}`).transaction(cur=>cur||{uid:user.uid,name,lastSeen:now()},undefined,false);if(result.committed&&result.snapshot.val()?.uid===user.uid){seatNo=i;break}}catch(e){if(e?.code!=="PERMISSION_DENIED")throw e}}}if(seatNo==null)throw new Error("空席がありません");ST.room=code;ST.seat=seatNo;ST.spectator=false;saveSession();attach()}catch(e){fail(e)}}
 
 function attachHostStreams(){if(!isHost())return;if(!hostPrivateAttached){hostPrivateAttached=true;listen("private",v=>{ST.allPrivate=v||{};render();hostRepair()})}if(!hostActionsAttached){hostActionsAttached=true;for(let i=0;i<4;i++)listen(`actions/${i}`,v=>{if(v)processAction(i,v)})}}
 function attach(){detach();roomRef=db.ref(`${ROOT}/${ST.room}`);listen("meta",v=>{ST.meta=v;attachHostStreams();if(v?.phase==="ended"&&!revealAttached){revealAttached=true;listen("reveal",x=>{ST.reveal=x;render()})}render();hostRepair()});listen("seats",v=>{ST.seats=v||{};render()});listen("game",v=>{ST.game=v;render();hostRepair()});listen("money",v=>{ST.money=v||{};render()});listen("history",v=>{ST.history=v||{};render();hostRepair()});if(!ST.spectator&&ST.seat!=null){listen(`private/${user.uid}`,v=>{ST.privateData=v;render();hostRepair()});const beat=()=>roomRef.child(`seats/${ST.seat}`).update({lastSeen:now()}).catch(()=>{});beat();heartbeat=setInterval(beat,15000)}render()}
 
-function lots(rounds){return Array.from({length:rounds},()=>Array.from({length:3},()=>Math.floor(Math.random()*9)-2))}
-function shuffledLenses(n){const a=Array.from({length:n},(_,i)=>i%3);for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-async function startGame(){try{if(!isHost()||ST.meta.phase!=="lobby")return;const ordered=Array.from({length:ST.meta.n},(_,i)=>ST.seats[i]);if(ordered.some(x=>!x))throw new Error("全員が着席するまで開始できません");const allLots=lots(ST.meta.rounds),lenses=shuffledLenses(ST.meta.n),up={};ordered.forEach((s,i)=>{const p={ownerUid:s.uid,seat:i,lens:lenses[i],see:Object.fromEntries(allLots.map((v,r)=>[r,v[lenses[i]]]))};if(s.uid===user.uid)p.lots=allLots;up[`private/${s.uid}`]=p;up[`money/${i}`]=ST.meta.money});up.game={round:0,phase:"auction",price:0,curSeat:0,starter:0,live:Array.from({length:ST.meta.n},(_,i)=>i).join(","),lastActionId:""};up["meta/phase"]="playing";await roomRef.update(up);note("ゲームを開始しました") }catch(e){fail(e)}}
+function lots(rounds,nc){return Array.from({length:rounds},()=>Array.from({length:nc},()=>Math.floor(Math.random()*9)-2))}
+function shuffledLenses(n,nc,unique=false){const a=unique?Array.from({length:n},(_,i)=>i):Array.from({length:n},(_,i)=>i%nc);for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function encodeC1View(values,blind){return values.map((v,i)=>i===blind?"x":String(v)).join(",")}
+function decodeC1View(value){return String(value||"").split(",").map(v=>v==="x"?null:Number(v))}
+async function startGame(){try{if(!isHost()||ST.meta.phase!=="lobby")return;const ordered=Array.from({length:ST.meta.n},(_,i)=>ST.seats[i]);if(ordered.some(x=>!x))throw new Error("全員が着席するまで開始できません");const c1=ST.meta.rule==="c1",allLots=lots(ST.meta.rounds,ST.meta.nc),lenses=shuffledLenses(ST.meta.n,ST.meta.nc,c1),up={};ordered.forEach((s,i)=>{const p={ownerUid:s.uid,seat:i,lens:lenses[i],see:Object.fromEntries(allLots.map((v,r)=>[r,c1?encodeC1View(v,lenses[i]):v[lenses[i]]]))};if(s.uid===user.uid)p.lots=allLots;up[`private/${s.uid}`]=p;up[`money/${i}`]=ST.meta.money});up.game={round:0,phase:"auction",price:0,curSeat:0,starter:0,live:Array.from({length:ST.meta.n},(_,i)=>i).join(","),lastActionId:""};up["meta/phase"]="playing";await roomRef.update(up);note("ゲームを開始しました") }catch(e){fail(e)}}
 
 function nextLive(live,seat){for(let d=1;d<=4;d++){const n=(seat+d)%ST.meta.n;if(live.includes(n))return n}return live[0]}
 async function sendAction(type){try{if(ST.spectator||ST.seat==null||!ST.game)return;const action={id:`${user.uid.slice(-8)}-${now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`,type,round:ST.game.round,price:ST.game.price,createdAt:now()};await roomRef.child(`actions/${ST.seat}`).set(action)}catch(e){fail(e)}}
@@ -79,9 +114,9 @@ async function finishGame(){await roomRef.child("game").update({phase:"end"});aw
 function hostWaiting(){const hostSeat=Object.values(ST.seats).find(s=>s?.uid===ST.meta?.hostUid);return ST.meta?.phase==="playing"&&(!hostSeat?.lastSeen||now()-hostSeat.lastSeen>30000)}
 function seatList(){const ul=node("ul");for(let i=0;i<(ST.meta?.n||0);i++){const s=ST.seats[i],money=ST.money[i];ul.append(node("li",{class:`seat ${i===ST.seat?"mine":""}`},node("span",{},s?s.name:`空席 ${i+1}`,i===ST.seat?"（あなた）":""),node("span",{class:"muted"},money==null?"":`💰 ${money}`)))}return ul}
 function historyView(){const box=node("div",{class:"history"});for(const k of Object.keys(ST.history||{}).map(Number).sort((a,b)=>a-b)){const h=ST.history[k],winner=ST.seats[h.winnerSeat]?.name||`席${h.winnerSeat+1}`;box.append(node("div",{},`第${k+1}ラウンド：${winner} ／ ${h.price} ／ [${Object.values(h.values).join(", ")}]`))}return box}
-function scores(){const result=[];const lenses=ST.reveal?.lenses||{};for(let i=0;i<ST.meta.n;i++){let score=Number(ST.money[i]||0);for(const h of Object.values(ST.history||{}))if(h.winnerSeat===i){const v=Object.values(h.values).map(Number);score+=v.reduce((a,b)=>a+b,0)+Number(v[lenses[i]]||0)}result.push({seat:i,score})}return result.sort((a,b)=>b.score-a.score)}
+function scores(){const result=[];const lenses=ST.reveal?.lenses||{};for(let i=0;i<ST.meta.n;i++){let score=Number(ST.money[i]||0);for(const h of Object.values(ST.history||{}))if(h.winnerSeat===i){const v=Object.values(h.values).map(Number);score+=v.reduce((a,b)=>a+b,0)+2*Number(v[lenses[i]]||0)}result.push({seat:i,score})}return result.sort((a,b)=>b.score-a.score||a.seat-b.seat)}
 
-function renderHome(){const oldName=localStorage.getItem(NAME_KEY)||"";const name=node("input",{id:"name",maxlength:12,value:oldName,autocomplete:"nickname"});const code=node("input",{id:"roomCode",maxlength:6,placeholder:"6文字コード",autocomplete:"off"});code.addEventListener("input",()=>code.value=normalizeCode(code.value));app.replaceChildren(panel(node("h2",{},"オンラインで遊ぶ"),status(user?`匿名認証済み UID末尾: ${user.uid.slice(-6)}`:"匿名認証中…",user?"ok":""),node("div",{class:"grid"},node("label",{},"名前",name),node("label",{},"人数",node("select",{id:"players"},node("option",{value:3},"3人"),node("option",{value:4},"4人"))),node("label",{},"ルームコード",code)),node("div",{class:"row"},node("button",{class:"primary",onclick:createRoom,disabled:!user},"部屋を作る"),node("button",{onclick:()=>joinRoom(false),disabled:!user},"参加する"),node("button",{onclick:()=>joinRoom(true),disabled:!user},"観戦する")),status(ST.error,"error"),status(ST.notice,"ok")),panel(node("h2",{},"v2の信頼境界"),node("p",{class:"muted"},"プレイヤーは自分の秘匿情報だけを読めます。観戦者は共有情報のみを読みます。ホストは進行・採点のため全秘匿情報を扱う信頼主体です。")))}
+function renderHome(){const oldName=localStorage.getItem(NAME_KEY)||"";const name=node("input",{id:"name",maxlength:12,value:oldName,autocomplete:"nickname"});const code=node("input",{id:"roomCode",maxlength:6,placeholder:"6文字コード",autocomplete:"off"});code.addEventListener("input",()=>code.value=normalizeCode(code.value));const saved=readSolo();const soloButtons=node("div",{class:"row"},node("button",{class:"primary",onclick:startSolo},"solo・C1を始める"),saved?node("button",{onclick:resumeSolo},"前回のsoloを再開"):null,saved?node("button",{class:"danger",onclick:discardSolo},"前回の記録を破棄"):null);app.replaceChildren(panel(node("h2",{},"soloで遊ぶ"),node("p",{class:"muted"},"人間1人＋NPC3人のC1。Firebase認証とRealtime Databaseを使用しません。"),soloButtons),panel(node("h2",{},"オンラインで遊ぶ"),status(user?`匿名認証済み UID末尾: ${user.uid.slice(-6)}`:"匿名認証中（soloは開始できます）",user?"ok":""),node("div",{class:"grid"},node("label",{},"名前",name),node("label",{},"人数",node("select",{id:"players"},node("option",{value:3},"3人"),node("option",{value:4},"4人"))),node("label",{},"ルール",node("select",{id:"rule"},node("option",{value:"current"},"標準"),node("option",{value:"c1"},"C1盲点ルール"))),node("label",{},"ルームコード",code)),node("div",{class:"row"},node("button",{class:"primary",onclick:createRoom,disabled:!user},"部屋を作る"),node("button",{onclick:()=>joinRoom(false),disabled:!user},"参加する"),node("button",{onclick:()=>joinRoom(true),disabled:!user},"観戦する")),status(ST.error,"error"),status(ST.notice,"ok")),panel(node("h2",{},"v2の信頼境界"),node("p",{class:"muted"},"プレイヤーは自分の秘匿情報だけを読めます。観戦者は共有情報のみを読みます。ホストは進行・採点のため全秘匿情報を扱う信頼主体です。")))}
 function renderRoom(){
   const body=[];
   const role=ST.spectator?"観戦者":isHost()?"ホスト":`席${ST.seat+1}`;
@@ -89,7 +124,7 @@ function renderRoom(){
     node("span",{class:"code"},ST.room),
     node("button",{onclick:()=>navigator.clipboard?.writeText(ST.room)},"コードをコピー"),
     node("span",{class:"badge"},role));
-  const metaLine=ST.meta?node("p",{class:"muted"},`${ST.meta.n}人 ／ ${ST.meta.rounds}ラウンド ／ v${ST.meta.version}`):status("同期中…");
+  const metaLine=ST.meta?node("p",{class:"muted"},`${ST.meta.n}人 ／ ${ST.meta.rounds}ラウンド ／ ${ST.meta.rule==="c1"?"C1盲点ルール":"標準"} ／ v${ST.meta.version}`):status("同期中…");
   body.push(panel(headerRow,metaLine,hostWaiting()?status("進行役の再接続を待っています","error"):null,status(ST.error,"error"),status(ST.notice,"ok")));
   if(!ST.meta){app.replaceChildren(...body);return}
   if(ST.meta.phase==="lobby"){
@@ -100,9 +135,11 @@ function renderRoom(){
     if(!g){
       body.push(panel(status("ゲーム状態を同期中…")));
     }else{
-      const secret=ST.spectator
-        ?node("p",{class:"secret"},"観戦中：プレイ中の秘匿情報は表示されません")
-        :node("p",{class:"secret"},ST.privateData?`あなたが見える ${COMPONENTS[ST.privateData.lens]}：${ST.privateData.see[g.round]}`:"秘匿情報を同期中…");
+      let secret;
+      if(ST.spectator)secret=node("p",{class:"secret"},"観戦中：プレイ中の秘匿情報は表示されません");
+      else if(!ST.privateData)secret=node("p",{class:"secret"},"秘匿情報を同期中…");
+      else if(ST.meta.rule==="c1"){const values=decodeC1View(ST.privateData.see[g.round]);secret=node("div",{class:"secret"},node("p",{},`あなたの盲点：${COMPONENTS[ST.privateData.lens]}（この面は価値で3倍）`),node("p",{},values.map((v,i)=>`${COMPONENTS[i]}=${v==null?"？":v}`).join(" ／ ")))}
+      else secret=node("p",{class:"secret"},`あなたが見える ${COMPONENTS[ST.privateData.lens]}：${ST.privateData.see[g.round]}`);
       let action=status(g.phase==="reveal"?"ラウンド結果を確定しました":"他のプレイヤーの操作を待っています");
       if(g.phase==="auction"&&g.curSeat===ST.seat){
         action=node("div",{class:"row"},
@@ -121,7 +158,7 @@ function renderRoom(){
       result=node("div");
       for(const [i,x] of scores().entries()){
         const player=ST.seats[x.seat]?.name||`席${x.seat+1}`;
-        result.append(node("p",{class:i===0?"mine":""},`${i+1}位 ${player}：${x.score}点 ／ ${COMPONENTS[ST.reveal.lenses[x.seat]]}`));
+        result.append(node("p",{class:i===0?"mine":""},`${i+1}位 ${player}：${x.score}点 ／ ${ST.meta.rule==="c1"?"盲点":"目"} ${COMPONENTS[ST.reveal.lenses[x.seat]]}`));
       }
     }
     body.push(panel(node("h2",{},"ゲーム終了"),result,historyView()));
@@ -130,7 +167,7 @@ function renderRoom(){
   app.replaceChildren(...body);
 }
 function leave(){detach();clearSession();Object.assign(ST,{room:"",seat:null,spectator:false,meta:null,seats:{},game:null,money:{},history:{},privateData:null,allPrivate:{},reveal:null,error:"",notice:""});render()}
-function render(){if(!ST.room)renderHome();else renderRoom()}
+function render(){if(appMode==="solo")renderSolo();else if(!ST.room)renderHome();else renderRoom()}
 render();bootstrap();
 </script>
 </body>

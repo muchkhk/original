@@ -11,13 +11,14 @@
         "meta": {
           ".read": "auth != null && data.exists()",
           ".write": "auth != null && $code.matches(/^[A-HJ-NP-Z2-9]{6}$/) && ((!data.exists() && newData.child('hostUid').val() === auth.uid && newData.child('phase').val() === 'lobby') || (data.exists() && data.child('hostUid').val() === auth.uid && newData.child('hostUid').val() === auth.uid))",
-          ".validate": "newData.hasChildren(['hostUid','phase','n','rounds','money','nc','version','createdAt'])",
+          ".validate": "newData.hasChildren(['hostUid','phase','n','rounds','money','nc','rule','version','createdAt']) && ((newData.child('rule').val() === 'current' && newData.child('nc').val() === 3 && ((newData.child('n').val() === 3 && newData.child('rounds').val() === 6 && newData.child('money').val() === 30) || (newData.child('n').val() === 4 && newData.child('rounds').val() === 8 && newData.child('money').val() === 34))) || (newData.child('rule').val() === 'c1' && newData.child('nc').val() === newData.child('n').val() && ((newData.child('n').val() === 3 && newData.child('rounds').val() === 6 && newData.child('money').val() === 28) || (newData.child('n').val() === 4 && newData.child('rounds').val() === 8 && newData.child('money').val() === 34))))",
           "hostUid": { ".validate": "newData.isString() && newData.val().length >= 6 && newData.val().length <= 128" },
           "phase": { ".validate": "newData.isString() && (newData.val() === 'lobby' || newData.val() === 'playing' || newData.val() === 'ended')" },
           "n": { ".validate": "newData.isNumber() && newData.val() >= 3 && newData.val() <= 4 && newData.val() % 1 === 0" },
           "rounds": { ".validate": "newData.isNumber() && newData.val() >= 6 && newData.val() <= 8 && newData.val() % 1 === 0" },
           "money": { ".validate": "newData.isNumber() && newData.val() >= 20 && newData.val() <= 40 && newData.val() % 1 === 0" },
-          "nc": { ".validate": "newData.isNumber() && newData.val() === 3" },
+          "nc": { ".validate": "newData.isNumber() && newData.val() >= 3 && newData.val() <= 4 && newData.val() % 1 === 0" },
+          "rule": { ".validate": "newData.isString() && (newData.val() === 'current' || newData.val() === 'c1')" },
           "version": { ".validate": "newData.isString() && newData.val() === '2.0'" },
           "createdAt": { ".validate": "newData.isNumber() && newData.val() > 0" },
           "$other": { ".validate": false }
@@ -41,16 +42,16 @@
             ".validate": "newData.hasChildren(['ownerUid','seat','lens','see']) && newData.child('ownerUid').val() === $uid && ((newData.child('seat').val() === 0 && root.child('seriRoomsV2').child($code).child('seats').child('0').child('uid').val() === $uid) || (newData.child('seat').val() === 1 && root.child('seriRoomsV2').child($code).child('seats').child('1').child('uid').val() === $uid) || (newData.child('seat').val() === 2 && root.child('seriRoomsV2').child($code).child('seats').child('2').child('uid').val() === $uid) || (newData.child('seat').val() === 3 && root.child('seriRoomsV2').child($code).child('seats').child('3').child('uid').val() === $uid))",
             "ownerUid": { ".validate": "newData.isString() && newData.val() === $uid" },
             "seat": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3 && newData.val() % 1 === 0" },
-            "lens": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2 && newData.val() % 1 === 0" },
+            "lens": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < root.child('seriRoomsV2').child($code).child('meta').child('nc').val() && newData.val() % 1 === 0" },
             "see": {
               ".validate": "newData.hasChildren(['0','1','2','3','4','5']) && ((root.child('seriRoomsV2').child($code).child('meta').child('rounds').val() === 6 && !newData.child('6').exists() && !newData.child('7').exists()) || (root.child('seriRoomsV2').child($code).child('meta').child('rounds').val() === 8 && newData.hasChildren(['6','7'])))",
-              "$round": { ".validate": "$round.matches(/^[0-7]$/) && newData.isNumber() && newData.val() >= -2 && newData.val() <= 6 && newData.val() % 1 === 0" }
+              "$round": { ".validate": "$round.matches(/^[0-7]$/) && ((root.child('seriRoomsV2').child($code).child('meta').child('rule').val() === 'current' && newData.isNumber() && newData.val() >= -2 && newData.val() <= 6 && newData.val() % 1 === 0) || (root.child('seriRoomsV2').child($code).child('meta').child('rule').val() === 'c1' && newData.isString() && ((root.child('seriRoomsV2').child($code).child('meta').child('nc').val() === 3 && newData.val().matches(/^(x,(-2|-1|[0-6]),(-2|-1|[0-6])|(-2|-1|[0-6]),x,(-2|-1|[0-6])|(-2|-1|[0-6]),(-2|-1|[0-6]),x)$/)) || (root.child('seriRoomsV2').child($code).child('meta').child('nc').val() === 4 && newData.val().matches(/^(x,(-2|-1|[0-6]),(-2|-1|[0-6]),(-2|-1|[0-6])|(-2|-1|[0-6]),x,(-2|-1|[0-6]),(-2|-1|[0-6])|(-2|-1|[0-6]),(-2|-1|[0-6]),x,(-2|-1|[0-6])|(-2|-1|[0-6]),(-2|-1|[0-6]),(-2|-1|[0-6]),x)$/)))))" }
             },
             "lots": {
               ".validate": "!newData.exists() || ($uid === root.child('seriRoomsV2').child($code).child('meta').child('hostUid').val() && newData.hasChildren(['0','1','2','3','4','5']) && ((root.child('seriRoomsV2').child($code).child('meta').child('rounds').val() === 6 && !newData.child('6').exists() && !newData.child('7').exists()) || (root.child('seriRoomsV2').child($code).child('meta').child('rounds').val() === 8 && newData.hasChildren(['6','7']))))",
               "$round": {
-                ".validate": "$round.matches(/^[0-7]$/) && newData.hasChildren(['0','1','2'])",
-                "$component": { ".validate": "$component.matches(/^[0-2]$/) && newData.isNumber() && newData.val() >= -2 && newData.val() <= 6 && newData.val() % 1 === 0" }
+                ".validate": "$round.matches(/^[0-7]$/) && newData.hasChildren(['0','1','2']) && ((root.child('seriRoomsV2').child($code).child('meta').child('nc').val() === 3 && !newData.child('3').exists()) || (root.child('seriRoomsV2').child($code).child('meta').child('nc').val() === 4 && newData.child('3').exists()))",
+                "$component": { ".validate": "$component.matches(/^[0-3]$/) && newData.isNumber() && newData.val() >= -2 && newData.val() <= 6 && newData.val() % 1 === 0" }
               }
             },
             "$other": { ".validate": false }
@@ -98,8 +99,8 @@
             "winnerSeat": { ".validate": "newData.isNumber() && newData.val() >= -1 && newData.val() <= 3 && newData.val() % 1 === 0" },
             "price": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 40 && newData.val() % 1 === 0" },
             "values": {
-              ".validate": "newData.hasChildren(['0','1','2'])",
-              "$component": { ".validate": "$component.matches(/^[0-2]$/) && newData.isNumber() && newData.val() >= -2 && newData.val() <= 6 && newData.val() % 1 === 0" }
+              ".validate": "newData.hasChildren(['0','1','2']) && ((root.child('seriRoomsV2').child($code).child('meta').child('nc').val() === 3 && !newData.child('3').exists()) || (root.child('seriRoomsV2').child($code).child('meta').child('nc').val() === 4 && newData.child('3').exists()))",
+              "$component": { ".validate": "$component.matches(/^[0-3]$/) && newData.isNumber() && newData.val() >= -2 && newData.val() <= 6 && newData.val() % 1 === 0" }
             },
             "createdAt": { ".validate": "newData.isNumber() && newData.val() > 0" },
             "$other": { ".validate": false }
@@ -111,7 +112,7 @@
           ".validate": "newData.hasChildren(['lenses','createdAt'])",
           "lenses": {
             ".validate": "(root.child('seriRoomsV2').child($code).child('meta').child('n').val() === 3 && newData.hasChildren(['0','1','2']) && !newData.child('3').exists()) || (root.child('seriRoomsV2').child($code).child('meta').child('n').val() === 4 && newData.hasChildren(['0','1','2','3']))",
-            "$seat": { ".validate": "$seat.matches(/^[0-3]$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 2 && newData.val() % 1 === 0" }
+            "$seat": { ".validate": "$seat.matches(/^[0-3]$/) && newData.isNumber() && newData.val() >= 0 && newData.val() < root.child('seriRoomsV2').child($code).child('meta').child('nc').val() && newData.val() % 1 === 0" }
           },
           "createdAt": { ".validate": "newData.isNumber() && newData.val() > 0" },
           "$other": { ".validate": false }

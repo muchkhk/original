@@ -4,11 +4,12 @@
   "scripts": {
     "emulators:witch": "firebase emulators:start --only auth,database --project balance-simulator-firebase",
     "emulators:seri-lockdown": "firebase emulators:start --config firebase.seri.json --only database --project seri-lockdown-test",
-    "emulators:seri-v2": "firebase emulators:start --config firebase.seri-v2.json --only auth,database --project seri-v2-test",
+    "emulators:seri-v2": "firebase emulators:start --config firebase.seri-v2.json --only auth,database --project boadgame2",
     "test:seri-lockdown-static": "node --test tests/seri_lockdown_static.test.mjs",
     "test:seri-lockdown-rules": "firebase emulators:exec --config firebase.seri.json --only database --project seri-lockdown-test \"node --test tests/seri_lockdown.test.mjs\"",
     "test:seri-v2-static": "node --test tests/seri_v2_static.test.mjs",
     "test:seri-v2-rules": "firebase emulators:exec --config firebase.seri-v2.json --only auth,database --project seri-v2-test \"node --test tests/seri_v2_rules.test.mjs\"",
+    "test:seri-solo-c1": "node --test tests/seri_solo_c1.test.mjs",
     "test:witch-static": "node --test tests/witch_static.test.mjs",
     "test:witch-rules": "firebase emulators:exec --only database --project witch-rules-test \"node --test tests/witch_rules.test.mjs\""
   },

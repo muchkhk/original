@@ -31,6 +31,7 @@ function meta(phase = "playing") {
     rounds: 6,
     money: 30,
     nc: 3,
+    rule: "current",
     version: "2.0",
     createdAt: 1,
   };
@@ -233,4 +234,32 @@ test("4人・8ラウンドの正規初期化を許可する", async () => {
   }
   await assertSucceeds(room(db(HOST), "game").set({ ...game(), live: "0,1,2,3" }));
   await assertSucceeds(room(db(HOST), "meta/phase").set("playing"));
+});
+
+test("C1の3人・4人構成だけを許可する", async () => {
+  await env.clearDatabase();
+  await assertSucceeds(room(db(HOST), "meta").set({ ...meta("lobby"), n: 3, rounds: 6, money: 28, nc: 3, rule: "c1" }));
+  await assertFails(room(db(HOST), "meta/money").set(30));
+  await env.clearDatabase();
+  await assertSucceeds(room(db(HOST), "meta").set({ ...meta("lobby"), n: 4, rounds: 8, money: 34, nc: 4, rule: "c1" }));
+  await assertFails(room(db(HOST), "meta/nc").set(3));
+});
+
+test("C1の盲点表示、4面原石、4面履歴、revealを許可し不正形を拒否する", async () => {
+  await env.clearDatabase();
+  const players = [HOST, PLAYER2, PLAYER3, PLAYER4];
+  await env.withSecurityRulesDisabled(async context => {
+    await room(context.database()).set({
+      meta: { ...meta("playing"), n: 4, rounds: 8, money: 34, nc: 4, rule: "c1" },
+      seats: Object.fromEntries(players.map((uid, seat) => [seat, { uid, name: `P${seat + 1}`, lastSeen: 2 }])),
+    });
+  });
+  const see = Object.fromEntries(Array.from({ length: 8 }, (_, round) => [round, `${round % 2},x,2,3`]));
+  const lots = Object.fromEntries(Array.from({ length: 8 }, (_, round) => [round, { 0: round % 7, 1: 1, 2: 2, 3: 3 }]));
+  await assertSucceeds(room(db(HOST), `private/${HOST}`).set({ ownerUid: HOST, seat: 0, lens: 1, see, lots }));
+  await assertFails(room(db(HOST), `private/${PLAYER2}`).set({ ownerUid: PLAYER2, seat: 1, lens: 0, see: { ...see, 0: "1,2,3,4" } }));
+  await assertSucceeds(room(db(HOST), "history/0").set({ winnerSeat: 0, price: 1, values: { 0: 1, 1: 2, 2: 3, 3: 4 }, createdAt: 3 }));
+  await assertFails(room(db(HOST), "history/1").set({ winnerSeat: 0, price: 1, values: { 0: 1, 1: 2, 2: 3 }, createdAt: 3 }));
+  await env.withSecurityRulesDisabled(async context => room(context.database(), "meta/phase").set("ended"));
+  await assertSucceeds(room(db(HOST), "reveal").set({ lenses: { 0: 0, 1: 1, 2: 2, 3: 3 }, createdAt: 4 }));
 });
