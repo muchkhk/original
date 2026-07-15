@@ -1,0 +1,10 @@
+﻿disadvantaged_strategy,eventual_winrate,n_events
+S1_NeverPeek,0.2885,9368
+S2_AlwaysPeek,0.1812,10715
+S3_MarginalPeek,0.2941,9425
+S4_BluffReveal,0.2405,10462
+S5_HonestValue,0.2333,11255
+S6_ShortStackPush,0.3142,9229
+S7_SignalReader,0.2861,9300
+S8_SignalBlind,0.2965,9396
+S9_PotAwareBluff,0.1508,10850

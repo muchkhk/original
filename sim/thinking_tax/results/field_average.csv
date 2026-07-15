@@ -1,0 +1,9 @@
+﻿strategy,field_avg_winrate
+S6_ShortStackPush,0.5784
+S1_NeverPeek,0.5701
+S7_SignalReader,0.5631
+S8_SignalBlind,0.5593
+S3_MarginalPeek,0.5576
+S4_BluffReveal,0.4617
+S5_HonestValue,0.3547
+S2_AlwaysPeek,0.3541

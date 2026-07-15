@@ -1,0 +1,29 @@
+{
+  "base_seed": 20260715,
+  "games_per_pair": 2000,
+  "pair_count": 36,
+  "total_games": 72000,
+  "elapsed_sec": 49.34931397438049,
+  "knobs": {
+    "pool_start": 20,
+    "ante": 1,
+    "bet_amount": 2,
+    "raise_amount": 2,
+    "raise_cap": 4,
+    "peek_cost": 2,
+    "max_rounds": 30
+  },
+  "call_margin": 0.05,
+  "signal_adjust": 0.05,
+  "strategies": [
+    "S1_NeverPeek",
+    "S2_AlwaysPeek",
+    "S3_MarginalPeek",
+    "S4_BluffReveal",
+    "S5_HonestValue",
+    "S6_ShortStackPush",
+    "S7_SignalReader",
+    "S8_SignalBlind"
+  ],
+  "loop_guard_trigger_count": 0
+}

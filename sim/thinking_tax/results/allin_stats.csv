@@ -1,0 +1,9 @@
+﻿strategy,allin_count,decision_count,allin_rate,allin_round_winrate,avg_pool_share_at_allin
+S1_NeverPeek,22619,463930,0.0488,0.5426,0.0422
+S2_AlwaysPeek,33692,311024,0.1083,0.6100,0.0546
+S3_MarginalPeek,22777,463577,0.0491,0.5332,0.0421
+S4_BluffReveal,26579,433534,0.0613,0.5062,0.0418
+S5_HonestValue,23977,514354,0.0466,0.4458,0.0425
+S6_ShortStackPush,37831,435885,0.0868,0.5852,0.0969
+S7_SignalReader,23011,462965,0.0497,0.5384,0.0417
+S8_SignalBlind,23186,462057,0.0502,0.5330,0.0418

@@ -1,0 +1,10 @@
+﻿strategy,peek_exec_n
+S1_NeverPeek,0
+S2_AlwaysPeek,135633
+S3_MarginalPeek,13404
+S4_BluffReveal,0
+S5_HonestValue,0
+S6_ShortStackPush,11240
+S7_SignalReader,12965
+S8_SignalBlind,13071
+S9_PotAwareBluff,0

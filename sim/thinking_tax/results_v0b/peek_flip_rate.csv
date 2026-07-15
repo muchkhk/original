@@ -1,0 +1,5 @@
+﻿strategy,flip_count,peek_count,flip_rate
+S2_AlwaysPeek,29855,135633,0.2201
+S3_MarginalPeek,6616,13404,0.4936
+S7_SignalReader,6313,12965,0.4869
+S8_SignalBlind,6482,13071,0.4959
