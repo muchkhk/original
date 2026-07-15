@@ -1,0 +1,6 @@
+done in 6.8s, pairs=15, base_seed=20260716
+best_peek_strategy=S2
+K1_kill=True ci=(0.4926025020548958, 0.5121932577937828)
+K2_kill=False rate=0.18591701722843826 n=57289 n_ok=True
+K3_triggered=False
+overall=K1発動 -> kill(蘇生手続き全体を終了・埋葬)
