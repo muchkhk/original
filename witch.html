@@ -171,7 +171,7 @@
      ③ 古ければ「?v=新版」という別URLへ飛ぶ → キャッシュが原理的に効かない
    ============================================================ */
 (function(){
-  const PAGE_VER = "1.3";
+  const PAGE_VER = "1.5";
 
   // ① 残存 Service Worker を解除（過去の実験などで残っていると、強制リロードすら効かなくなる）
   if ("serviceWorker" in navigator) {
@@ -318,6 +318,301 @@ function seqChoose(pi,pl,ct){const n=pl.length;const o=[];for(let i=0;i<n;i++){c
 function rationalReach(band,pl,ct){const n=pl.length;let bA=null,bE=-1e9;for(const cs of cutSets(band.length,n-1)){const piles=toPiles(band,cs);const asg=seqChoose(piles,pl,ct);let e=0;for(let i=0;i<n;i++)e+=seenBy(ct,i,pl,asg[i].p);if(e>bE){bE=e;bA=asg;}}let a=0;for(let i=0;i<n;i++)a+=scorePile(pl[i],bA[i].p);return a;}
 function chooseOrder(cutter,n){const o=[];for(let i=0;i<n;i++){const idx=(cutter+1+i)%n;if(idx!==cutter)o.push(idx);}return o;}
 
+// ============ NPC方策・推定エンジン ============
+// proto/witch_solo_proto.html（sim/witch_solo_npc/proto/engine_draft.jsより流用・無改変）と同一。
+// Python版(solo_npc_sim.py + solo_npc_sim_v3.py)との同値性を9/9系列で検証済み。ロジックのフォーク厳禁。
+function combinations(arr, k) {
+  const res = [];
+  (function rec(start, cur) {
+    if (cur.length === k) { res.push(cur.slice()); return; }
+    for (let i = start; i < arr.length; i++) { cur.push(arr[i]); rec(i + 1, cur); cur.pop(); }
+  })(0, []);
+  return res;
+}
+const ALL_HAND_INDICES = combinations([...Array(18).keys()], 3);
+const N_HANDS = ALL_HAND_INDICES.length;
+const HAND_TO_ROW = new Map(ALL_HAND_INDICES.map((h, i) => [h.join(','), i]));
+function handKey(h) { return h.slice().sort((a, b) => a - b).join(','); }
+function handRow(h) { return HAND_TO_ROW.get(handKey(h)); }
+function recipeScoresVector(pile) {
+  const v = new Float64Array(18);
+  for (let i = 0; i < 18; i++) v[i] = scoreRecipe(POOL[i], pile);
+  return v;
+}
+function allHandScoresForPile(pile) {
+  const rv = recipeScoresVector(pile);
+  const out = new Float64Array(N_HANDS);
+  for (let h = 0; h < N_HANDS; h++) {
+    const idx = ALL_HAND_INDICES[h];
+    out[h] = rv[idx[0]] + rv[idx[1]] + rv[idx[2]];
+  }
+  return out;
+}
+function softmax1D(utilities, tau) {
+  const k = utilities.length;
+  const out = new Float64Array(k);
+  if (tau <= 1e-9) {
+    let bi = 0, bv = -Infinity;
+    for (let i = 0; i < k; i++) if (utilities[i] > bv) { bv = utilities[i]; bi = i; }
+    out[bi] = 1.0;
+    return out;
+  }
+  let mx = -Infinity;
+  for (let i = 0; i < k; i++) { const u = utilities[i] / tau; if (u > mx) mx = u; }
+  let sum = 0;
+  for (let i = 0; i < k; i++) { const e = Math.exp(utilities[i] / tau - mx); out[i] = e; sum += e; }
+  for (let i = 0; i < k; i++) out[i] /= sum;
+  return out;
+}
+function normalizedWeights(beliefLogW) {
+  let mx = -Infinity;
+  for (let i = 0; i < N_HANDS; i++) if (beliefLogW[i] > mx) mx = beliefLogW[i];
+  const w = new Float64Array(N_HANDS);
+  let sum = 0;
+  for (let i = 0; i < N_HANDS; i++) { const e = Math.exp(beliefLogW[i] - mx); w[i] = e; sum += e; }
+  for (let i = 0; i < N_HANDS; i++) w[i] /= sum;
+  return w;
+}
+function expectedValueVector(beliefLogW, pile) {
+  const w = normalizedWeights(beliefLogW);
+  const scores = allHandScoresForPile(pile);
+  let s = 0;
+  for (let i = 0; i < N_HANDS; i++) s += w[i] * scores[i];
+  return s;
+}
+const LOG_1_20 = Math.log(1 / 20);
+function candidateCount(beliefLogW) {
+  let mx = -Infinity;
+  for (let i = 0; i < N_HANDS; i++) if (beliefLogW[i] > mx) mx = beliefLogW[i];
+  let c = 0;
+  for (let i = 0; i < N_HANDS; i++) if (beliefLogW[i] >= mx + LOG_1_20) c++;
+  return c;
+}
+function permutations(arr) {
+  if (arr.length <= 1) return [arr];
+  const res = [];
+  arr.forEach((v, i) => {
+    const rest = arr.slice(0, i).concat(arr.slice(i + 1));
+    permutations(rest).forEach(p => res.push([v, ...p]));
+  });
+  return res;
+}
+const PERMS = { 3: permutations([0, 1, 2]), 4: permutations([0, 1, 2, 3]) };
+function bestAssignmentValue(pilesArrays, beliefs, selfIdx, selfHand) {
+  const n = pilesArrays.length;
+  const selfScores = pilesArrays.map(p => scorePile(selfHand.map(i => POOL[i]), p));
+  const otherScores = [];
+  for (let j = 0; j < n; j++) {
+    if (j === selfIdx) { otherScores.push(null); continue; }
+    otherScores.push(pilesArrays.map(p => expectedValueVector(beliefs[j], p)));
+  }
+  let best = -1e18;
+  for (const perm of PERMS[n]) {
+    let total = 0;
+    for (let pileI = 0; pileI < n; pileI++) {
+      const playerSlot = perm[pileI];
+      total += (playerSlot === selfIdx) ? selfScores[pileI] : otherScores[playerSlot][pileI];
+    }
+    if (total > best) best = total;
+  }
+  return best;
+}
+function bestAssignmentValueHypothesisVector(pilesArrays, beliefs, selfIdx) {
+  const n = pilesArrays.length;
+  const selfScoresPerPile = pilesArrays.map(p => allHandScoresForPile(p));
+  const otherScores = [];
+  for (let j = 0; j < n; j++) {
+    if (j === selfIdx) { otherScores.push(null); continue; }
+    otherScores.push(pilesArrays.map(p => expectedValueVector(beliefs[j], p)));
+  }
+  const best = new Float64Array(N_HANDS).fill(-1e18);
+  for (const perm of PERMS[n]) {
+    const total = new Float64Array(N_HANDS);
+    for (let pileI = 0; pileI < n; pileI++) {
+      const playerSlot = perm[pileI];
+      if (playerSlot === selfIdx) {
+        const sc = selfScoresPerPile[pileI];
+        for (let h = 0; h < N_HANDS; h++) total[h] += sc[h];
+      } else {
+        const v = otherScores[playerSlot][pileI];
+        for (let h = 0; h < N_HANDS; h++) total[h] += v;
+      }
+    }
+    for (let h = 0; h < N_HANDS; h++) if (total[h] > best[h]) best[h] = total[h];
+  }
+  return best;
+}
+function npcCutDecision(band, n, cutter, trueHands, beliefs, policy, rngNext) {
+  const candidates = cutSets(band.length, n - 1);
+  const ebas = new Float64Array(candidates.length);
+  for (let ci = 0; ci < candidates.length; ci++) {
+    const piles = toPiles(band, candidates[ci]);
+    ebas[ci] = bestAssignmentValue(piles, beliefs, cutter, trueHands[cutter]);
+  }
+  const probs = softmax1D(ebas, policy.tau);
+  const choice = rngNext(probs);
+  return { chosenCutset: candidates[choice], candidates };
+}
+function updateBeliefForCut(beliefs, cutter, band, n, chosenCutset, candidates, tau) {
+  const logLiksByCs = [];
+  for (const cs of candidates) {
+    const piles = toPiles(band, cs);
+    logLiksByCs.push(bestAssignmentValueHypothesisVector(piles, beliefs, cutter));
+  }
+  const T = candidates.length;
+  const chosenIdx = candidates.findIndex(cs => cs.length === chosenCutset.length && cs.every((v, i) => v === chosenCutset[i]));
+  for (let h = 0; h < N_HANDS; h++) {
+    const utilH = new Float64Array(T);
+    for (let ci = 0; ci < T; ci++) utilH[ci] = logLiksByCs[ci][h];
+    const probsH = softmax1D(utilH, tau);
+    const lik = Math.max(probsH[chosenIdx], 1e-300);
+    beliefs[cutter][h] += Math.log(lik);
+  }
+}
+function teamScoresForChoice(availablePiles, futurePlayers, beliefs) {
+  const k = availablePiles.length;
+  const teamScores = new Float64Array(k);
+  if (futurePlayers.length > 0 && k > 1) {
+    for (let takenI = 0; takenI < k; takenI++) {
+      const remaining = availablePiles.filter((_, i) => i !== takenI);
+      const m = remaining.length;
+      if (m === 0) continue;
+      let best = -1e18;
+      for (const perm of (PERMS[m] || permutations([...Array(m).keys()]))) {
+        let total = 0;
+        for (let pileI = 0; pileI < m; pileI++) {
+          const p = futurePlayers[perm[pileI]];
+          total += expectedValueVector(beliefs[p], remaining[pileI]);
+        }
+        if (total > best) best = total;
+      }
+      teamScores[takenI] = best;
+    }
+  }
+  return teamScores;
+}
+function whimBiasSelfScores(trueHand, whim, piles, w) {
+  return piles.map(p => {
+    const base = scorePile(trueHand.map(i => POOL[i]), p);
+    let whimScore = 0;
+    for (const c of whim) whimScore += scoreRecipe(POOL[c], p);
+    return base + w * whimScore;
+  });
+}
+function npcChooseDecisionWhim(availablePiles, trueHand, whim, w, futurePlayers, beliefs, policy, rngNext) {
+  const selfScores = whimBiasSelfScores(trueHand, whim, availablePiles, w);
+  const teamScores = teamScoresForChoice(availablePiles, futurePlayers, beliefs);
+  const k = availablePiles.length;
+  const utility = new Float64Array(k);
+  for (let i = 0; i < k; i++) utility[i] = policy.lam * selfScores[i] + (1 - policy.lam) * teamScores[i];
+  const probs = softmax1D(utility, policy.tau);
+  return rngNext(probs);
+}
+function updateBeliefForChoicePlain(beliefs, chooser, availablePiles, chosenIdx, futurePlayers, policy) {
+  const k = availablePiles.length;
+  const handScores = availablePiles.map(p => allHandScoresForPile(p));
+  const teamScores = teamScoresForChoice(availablePiles, futurePlayers, beliefs);
+  for (let h = 0; h < N_HANDS; h++) {
+    const utilH = new Float64Array(k);
+    for (let i = 0; i < k; i++) utilH[i] = policy.lam * handScores[i][h] + (1 - policy.lam) * teamScores[i];
+    const probsH = softmax1D(utilH, policy.tau);
+    const lik = Math.max(probsH[chosenIdx], 1e-300);
+    beliefs[chooser][h] += Math.log(lik);
+  }
+}
+const ALL_WHIM_TUPLES = { 1: combinations([...Array(18).keys()], 1), 2: combinations([...Array(18).keys()], 2) };
+function buildValidMask(q) {
+  const tuples = ALL_WHIM_TUPLES[q];
+  const mask = [];
+  for (let h = 0; h < N_HANDS; h++) {
+    const hs = new Set(ALL_HAND_INDICES[h]);
+    const row = new Uint8Array(tuples.length);
+    for (let ti = 0; ti < tuples.length; ti++) {
+      row[ti] = tuples[ti].every(c => !hs.has(c)) ? 1 : 0;
+    }
+    mask.push(row);
+  }
+  return mask;
+}
+const WHIM_VALID_MASK = { 1: buildValidMask(1), 2: buildValidMask(2) };
+function nChooseK(n, k) { let r = 1; for (let i = 0; i < k; i++) r = r * (n - i) / (i + 1); return Math.round(r); }
+const WHIM_VALID_COUNT = { 1: nChooseK(15, 1), 2: nChooseK(15, 2) };
+function marginalizedUpdateBeliefForChoice(beliefs, chooser, availablePiles, chosenIdx, futurePlayers, policy, whimParams) {
+  const { q, w } = whimParams;
+  const k = availablePiles.length;
+  const handScores = availablePiles.map(p => allHandScoresForPile(p));
+  const recipeScores = availablePiles.map(p => recipeScoresVector(p));
+  const tuples = ALL_WHIM_TUPLES[q];
+  const T = tuples.length;
+  const whimContrib = [];
+  for (let ti = 0; ti < T; ti++) {
+    const row = new Float64Array(k);
+    for (const c of tuples[ti]) for (let i = 0; i < k; i++) row[i] += recipeScores[i][c];
+    whimContrib.push(row);
+  }
+  const teamScores = teamScoresForChoice(availablePiles, futurePlayers, beliefs);
+  const validCount = WHIM_VALID_COUNT[q];
+  for (let h = 0; h < N_HANDS; h++) {
+    const maskRow = WHIM_VALID_MASK[q][h];
+    let Lsum = 0;
+    for (let ti = 0; ti < T; ti++) {
+      if (!maskRow[ti]) continue;
+      const utilHT = new Float64Array(k);
+      for (let i = 0; i < k; i++) {
+        utilHT[i] = policy.lam * (handScores[i][h] + w * whimContrib[ti][i]) + (1 - policy.lam) * teamScores[i];
+      }
+      const probs = softmax1D(utilHT, policy.tau);
+      Lsum += probs[chosenIdx];
+    }
+    const L = Lsum / validCount;
+    beliefs[chooser][h] += Math.log(Math.max(L, 1e-300));
+  }
+}
+function updateBeliefForTeamTotal(beliefs, n, pilesBySeat, teamTotal) {
+  const MAXSCORE = 40;
+  const scoreDists = [];
+  const allScoresByP = [];
+  for (let p = 0; p < n; p++) {
+    const scores = allHandScoresForPile(pilesBySeat[p]);
+    allScoresByP.push(scores);
+    const w = normalizedWeights(beliefs[p]);
+    const dist = new Float64Array(MAXSCORE + 1);
+    for (let h = 0; h < N_HANDS; h++) {
+      const s = Math.round(scores[h]);
+      if (s >= 0 && s <= MAXSCORE) dist[s] += w[h];
+    }
+    scoreDists.push(dist);
+  }
+  for (let target = 0; target < n; target++) {
+    let conv = new Float64Array([1.0]);
+    for (let q = 0; q < n; q++) {
+      if (q === target) continue;
+      conv = convolve(conv, scoreDists[q]);
+    }
+    const targetScores = allScoresByP[target];
+    for (let h = 0; h < N_HANDS; h++) {
+      const required = Math.round(teamTotal - targetScores[h]);
+      const lik = (required >= 0 && required < conv.length) ? conv[required] : 0;
+      beliefs[target][h] += Math.log(Math.max(lik, 1e-12));
+    }
+  }
+}
+function convolve(a, b) {
+  const out = new Float64Array(a.length + b.length - 1);
+  for (let i = 0; i < a.length; i++) for (let j = 0; j < b.length; j++) out[i + j] += a[i] * b[j];
+  return out;
+}
+/* 一様乱数によるソフトマックス確率からのサンプリング（ブラウザのMath.randomを使用） */
+function rngSample(probs) {
+  const r = Math.random();
+  let acc = 0;
+  for (let i = 0; i < probs.length; i++) {
+    acc += probs[i];
+    if (r <= acc) return i;
+  }
+  return probs.length - 1;
+}
+
 // ============ オンライン状態 ============
 const NAMES_FALLBACK=["魔女A","魔女B","魔女C","魔女D"];
 const PCOL=["#e5b45a","#79cbe4","#b183d6","#86c96f"];
@@ -337,6 +632,7 @@ let _roomRefs=[], _hbTimer=null, _serverOffset=0;
 // Firebaseの初期接続コールバックが即時にrender()してもTDZに入らない位置で、
 // render() が参照する再描画またぎの状態をすべて初期化する。
 let SOLO={active:false}, soloCuts=[];
+let NSOLO={active:false}, nsoloCuts=[];
 let _inJoin="", _lobbyRounds=null, _lobbyAdv=false;
 let localCuts=[];
 
@@ -419,7 +715,10 @@ function resumePlayerRoom(code,state,seat){
 }
 function subscribeSpectatorRoom(){
   clearSubs();
-  const onMeta=_db.ref(roomPath("meta")).on("value",s=>{ ST.meta=s.val(); touch(); });
+  const onMeta=_db.ref(roomPath("meta")).on("value",s=>{
+    if(s.val()===null && ST.room){ handleRoomGone(); return; }
+    ST.meta=s.val(); touch();
+  });
   const onSeats=_db.ref(roomPath("seats")).on("value",s=>{ ST.seats=s.val()||{}; touch(); });
   const onGame=_db.ref(roomPath("game")).on("value",s=>{ ST.game=s.val(); touch(); });
   const onReveal=_db.ref(roomPath("reveal")).on("value",s=>{ ST.allRecipes=s.val(); touch(); });
@@ -450,6 +749,26 @@ async function restoreSavedRoom(){
   }
 }
 
+// ============ 放置部屋のTTL掃除（起動時・失敗しても本体を止めない） ============
+const ROOM_TTL_MS=24*60*60*1000;
+async function cleanupExpiredRooms(){
+  if(!_fbReady)return;
+  try{
+    if(!(await ensureAuth()))return;
+    const snap=await withRetry(()=>_db.ref("roomIndex").get());
+    const idx=snap.val()||{};
+    for(const code of Object.keys(idx)){
+      if(!CODE_RE.test(code))continue;
+      const ts=idx[code];
+      if(typeof ts==="number" && (now()-ts)<ROOM_TTL_MS)continue; // まだ期限内
+      try{
+        await withRetry(()=>_db.ref("roomsV2/"+code).remove());
+        await withRetry(()=>_db.ref("roomIndex/"+code).remove());
+      }catch(e){ console.warn("witch: 期限切れ部屋の削除に失敗:",code,e); }
+    }
+  }catch(e){ console.warn("witch: 起動時の部屋掃除をスキップしました:",e); }
+}
+
 async function createRoom(){
   if(!requireFb()||!requireName())return;
   if(!(await ensureAuth()))return;
@@ -459,11 +778,14 @@ async function createRoom(){
       const cand=genCode();
       const res=await withRetry(()=>_db.ref("roomsV2/"+cand+"/meta").transaction(cur=>{
         if(cur!==null) return; // 既存の部屋→衝突→abort
-        return {host:myUid,phase:"lobby",createdAt:Date.now()};
+        return {host:myUid,phase:"lobby",createdAt:now()};
       }));
       if(res.committed){ code=cand; break; } // 作成成功
     }
     if(!code){ showError("部屋の作成に失敗しました。もう一度お試しください。"); return; }
+    // TTL掃除用の軽量インデックス（コードと作成時刻のみ。ゲーム内容は含まない）。
+    // 失敗しても部屋自体は使えるため、待たずに記録だけ試みる。
+    withRetry(()=>_db.ref("roomIndex/"+code).set(now())).catch(e=>console.warn("witch: roomIndex登録に失敗:",e));
     clearSubs(); ST.room=code; ST.spectator=false; ST.isHost=true;
     await claimSeat(0);
     rememberRoom("player",ST.mySeat);
@@ -511,12 +833,24 @@ async function claimSeat(s){
   if(res.committed){ ST.mySeat=s; }
 }
 
+// 購読中に部屋そのものが消えた（TTL掃除等）場合、ホームへ戻す。
+// 「同期中…」の無限表示（§4-5：反応しないより赤バナーの方がマシ）を避ける。
+function handleRoomGone(){
+  clearSubs(); forgetRoom();
+  ST={view:"home",room:null,mySeat:null,isHost:false,spectator:false,
+    meta:null,seats:null,game:null,myRecipes:null,allRecipes:null,
+    connected:ST.connected,lastUpdate:0,error:"この部屋は有効期限（24時間）切れのため終了しました。"};
+  render();
+}
 function subscribeRoom(){
   clearSubs();
   armPresence(ST.mySeat);
   startHeartbeat();
   // 共有情報の購読（meta/seats/game/reveal）— privateRecipes は含めない
-  const onMeta=_db.ref(roomPath("meta")).on("value",s=>{ ST.meta=s.val(); touch(); });
+  const onMeta=_db.ref(roomPath("meta")).on("value",s=>{
+    if(s.val()===null && ST.room){ handleRoomGone(); return; }
+    ST.meta=s.val(); touch();
+  });
   const onSeats=_db.ref(roomPath("seats")).on("value",s=>{ ST.seats=s.val()||{}; resyncMySeat(); touch(); });
   const onGame=_db.ref(roomPath("game")).on("value",s=>{ ST.game=s.val(); onGameUpdate(); touch(); });
   const onReveal=_db.ref(roomPath("reveal")).on("value",s=>{ ST.allRecipes=s.val(); touch(); });
@@ -1118,6 +1452,265 @@ function soloHTML(){
   return html;
 }
 
+// ============ ソロNPC対戦（タイプ開示・Firebase不要・3人固定） ============
+// witch ソロプロトタイプ実装 v1（proto/witch_solo_proto.html・human test済み）を本体へ移植。
+// NPCタイプ・パラメータはv3計測済み組から変更禁止。既存の「ソロで試す（検証用・全情報表示）」
+// (SOLO/soloXxx)とは別モードとして共存する（識別子衝突を避けるためNSOLO/nsoloXxxを使用）。
+const NPC_TYPES=[
+  {key:"mira",name:"ミラ",label:"世話焼き",lam:0.65,q:1,w:0.5,desc:"仲間の様子をよく見て、自分は後回しにしがち"},
+  {key:"zora",name:"ゾラ",label:"欲張り",lam:0.8,q:1,w:0.5,desc:"自分の欲しいものにまっすぐ。分かりやすい"},
+  {key:"lu",name:"ルゥ",label:"気分屋",lam:0.65,q:2,w:1.0,desc:"その日の気分で妙なものを欲しがることがある"},
+];
+const NSOLO_WHIM_TAU=0.3, NSOLO_N=3, NSOLO_ROUNDS=NSOLO_N*2, NSOLO_PLAYER_SEAT=0;
+const NSOLO_CONSISTENT_POLICY={lam:1.0,tau:NSOLO_WHIM_TAU}; // NPCが人間の手を推定する際に仮定する「一貫プレイヤー」モデル
+
+function openNsolo(){ NSOLO={active:true,phase:"setup",playerName:myName||"",npcKeys:["mira","zora"]}; nsoloCuts=[]; render(); }
+function exitNsolo(){ NSOLO={active:false}; nsoloCuts=[]; render(); }
+function nsoloDrawWhim(hand,q){
+  const pool=[...Array(18).keys()].filter(i=>!hand.includes(i));
+  const picked=[]; const copy=pool.slice();
+  for(let i=0;i<q;i++){ const idx=(Math.random()*copy.length)|0; picked.push(copy[idx]); copy.splice(idx,1); }
+  return picked.sort((a,b)=>a-b);
+}
+function nsoloOnStart(){
+  const nameEl=document.getElementById("nsoloName");
+  const name=((nameEl&&nameEl.value)||"").replace(/[<>&"'`]/g,"").trim().slice(0,12);
+  const k1=document.getElementById("nsoloNpc1").value, k2=document.getElementById("nsoloNpc2").value;
+  if(k1===k2){ showError("2体は異なるタイプを選んでください。"); return; }
+  NSOLO.playerName=name||"あなた";
+  if(name){ myName=name; localStorage.setItem("witch_name",name); }
+  NSOLO.npcKeys=[k1,k2];
+  nsoloStartGame();
+}
+function nsoloStartGame(){
+  const n=NSOLO_N;
+  const npcDefs=NSOLO.npcKeys.map(k=>NPC_TYPES.find(t=>t.key===k));
+  const idsBySeat=dealRecipeIds(n).map(ids=>ids.map(id=>POOL.findIndex(r=>r.id===id)));
+  const policies=[NSOLO_CONSISTENT_POLICY,{lam:npcDefs[0].lam,tau:NSOLO_WHIM_TAU},{lam:npcDefs[1].lam,tau:NSOLO_WHIM_TAU}];
+  const whimParams=[null,{q:npcDefs[0].q,w:npcDefs[0].w},{q:npcDefs[1].q,w:npcDefs[1].w}];
+  const whims=[null,nsoloDrawWhim(idsBySeat[1],npcDefs[0].q),nsoloDrawWhim(idsBySeat[2],npcDefs[1].q)];
+  const names=[NSOLO.playerName||"あなた",npcDefs[0].name,npcDefs[1].name];
+  const npcMeta=[null,npcDefs[0],npcDefs[1]];
+  NSOLO={active:true,phase:"cut",n,round:1,cutter:0,teamTotal:0,omniSum:0,ratSum:0,
+    playerName:NSOLO.playerName,npcKeys:NSOLO.npcKeys,
+    hands:idsBySeat,policies,whimParams,whims,names,npcMeta,
+    beliefs:Array.from({length:n},()=>new Float64Array(N_HANDS)),
+    band:makeBand(n),cuts:null,piles:null,assign:{},chooseIdx:0,chooseOrderArr:null,history:[],roundEval:null};
+  nsoloCuts=[];
+  render();
+  nsoloMaybeAutoAct();
+}
+function nsoloToggleCut(pos){ const i=nsoloCuts.indexOf(pos); if(i>=0)nsoloCuts.splice(i,1); else if(nsoloCuts.length<NSOLO.n-1){nsoloCuts.push(pos);ac();SFX.soft();} render(); }
+function nsoloConfirmPlayerCut(){
+  if(!NSOLO.active||NSOLO.phase!=="cut"||NSOLO.cutter!==NSOLO_PLAYER_SEAT)return;
+  if(nsoloCuts.length!==NSOLO.n-1)return;
+  const chosenCutset=nsoloCuts.slice().sort((a,b)=>a-b);
+  const candidates=cutSets(NSOLO.band.length,NSOLO.n-1);
+  updateBeliefForCut(NSOLO.beliefs,NSOLO_PLAYER_SEAT,NSOLO.band,NSOLO.n,chosenCutset,candidates,NSOLO_CONSISTENT_POLICY.tau);
+  ac();SFX.cut();
+  nsoloApplyCut(chosenCutset);
+}
+function nsoloNpcDoCut(){
+  if(!NSOLO.active||NSOLO.phase!=="cut"||NSOLO.cutter===NSOLO_PLAYER_SEAT)return;
+  const cutter=NSOLO.cutter;
+  const {chosenCutset,candidates}=npcCutDecision(NSOLO.band,NSOLO.n,cutter,NSOLO.hands,NSOLO.beliefs,NSOLO.policies[cutter],rngSample);
+  updateBeliefForCut(NSOLO.beliefs,cutter,NSOLO.band,NSOLO.n,chosenCutset,candidates,NSOLO.policies[cutter].tau);
+  ac();SFX.cut();
+  nsoloApplyCut(chosenCutset);
+}
+function nsoloApplyCut(chosenCutset){
+  NSOLO.cuts=chosenCutset;
+  NSOLO.piles=toPiles(NSOLO.band,chosenCutset);
+  NSOLO.assign={};
+  NSOLO.chooseOrderArr=chooseOrder(NSOLO.cutter,NSOLO.n);
+  NSOLO.chooseIdx=0;
+  NSOLO.phase="choose";
+  render();
+  nsoloMaybeAutoAct();
+}
+function nsoloAvailablePileIdxs(){
+  const n=NSOLO.piles.length; const taken=new Set(Object.keys(NSOLO.assign).map(Number));
+  return [...Array(n).keys()].filter(i=>!taken.has(i));
+}
+function nsoloPickPile(pileIdx){
+  if(!NSOLO.active||NSOLO.phase!=="choose")return;
+  const chooser=NSOLO.chooseOrderArr[NSOLO.chooseIdx];
+  if(chooser!==NSOLO_PLAYER_SEAT)return;
+  const available=nsoloAvailablePileIdxs(); const localIdx=available.indexOf(pileIdx);
+  if(localIdx<0)return;
+  const futurePlayers=[...NSOLO.chooseOrderArr.slice(NSOLO.chooseIdx+1),NSOLO.cutter];
+  const availCounts=available.map(i=>NSOLO.piles[i]);
+  updateBeliefForChoicePlain(NSOLO.beliefs,NSOLO_PLAYER_SEAT,availCounts,localIdx,futurePlayers,NSOLO_CONSISTENT_POLICY);
+  ac();SFX.pick();
+  nsoloFinishChoice(pileIdx);
+}
+function nsoloNpcDoChoice(){
+  if(!NSOLO.active||NSOLO.phase!=="choose")return;
+  const chooser=NSOLO.chooseOrderArr[NSOLO.chooseIdx];
+  if(chooser===NSOLO_PLAYER_SEAT)return;
+  const available=nsoloAvailablePileIdxs(); const availCounts=available.map(i=>NSOLO.piles[i]);
+  const futurePlayers=[...NSOLO.chooseOrderArr.slice(NSOLO.chooseIdx+1),NSOLO.cutter];
+  const wp=NSOLO.whimParams[chooser];
+  const localIdx=npcChooseDecisionWhim(availCounts,NSOLO.hands[chooser],NSOLO.whims[chooser],wp.w,futurePlayers,NSOLO.beliefs,NSOLO.policies[chooser],rngSample);
+  marginalizedUpdateBeliefForChoice(NSOLO.beliefs,chooser,availCounts,localIdx,futurePlayers,NSOLO.policies[chooser],wp);
+  ac();SFX.pick();
+  nsoloFinishChoice(available[localIdx]);
+}
+function nsoloFinishChoice(pileIdx){
+  const chooser=NSOLO.chooseOrderArr[NSOLO.chooseIdx];
+  NSOLO.assign[pileIdx]=chooser;
+  NSOLO.chooseIdx++;
+  if(NSOLO.chooseIdx>=NSOLO.n-1){
+    const remaining=nsoloAvailablePileIdxs();
+    NSOLO.assign[remaining[0]]=NSOLO.cutter;
+    nsoloResolveRound();
+    return;
+  }
+  render();
+  nsoloMaybeAutoAct();
+}
+function nsoloResolveRound(){
+  const g=NSOLO, n=g.n;
+  const players=g.hands.map(ids=>ids.map(i=>POOL[i]));
+  const seatPiles=new Array(n);
+  for(const [pi,seat] of Object.entries(g.assign)) seatPiles[seat]=g.piles[parseInt(pi)];
+  const totals=[]; for(let p=0;p<n;p++)totals.push(scorePile(players[p],seatPiles[p]));
+  const rs=totals.reduce((a,b)=>a+b,0);
+  g.teamTotal+=rs;
+  updateBeliefForTeamTotal(g.beliefs,n,seatPiles,rs);
+  const omni=omniMax(g.band,players), rat=rationalReach(g.band,players,g.cutter);
+  const pct=omni>0?Math.min(100,Math.round(rs/omni*100)):(rs>=0?100:0);
+  const bestCut=bestForCut(g.band,g.cuts,players);
+  const cutPct=omni>0?Math.min(100,Math.round(bestCut/omni*100)):100;
+  const contents={}; for(let pi=0;pi<n;pi++)contents[pi]=g.piles[pi];
+  const owners=[]; for(let pi=0;pi<n;pi++)owners.push(g.assign[pi]);
+  g.omniSum=(g.omniSum||0)+omni; g.ratSum=(g.ratSum||0)+rat;
+  g.roundEval={roundScore:rs,omni,rational:rat,pct,cutPct};
+  g.history=g.history||[];
+  g.history.push({round:g.round,cutter:g.cutter,contents,roundScore:rs,omni,rational:rat,pct,cutPct,
+    band:g.band.slice(),cuts:g.cuts.slice(),piles:g.piles.map(p=>p.slice()),owners});
+  g.phase="score";
+  ac();SFX.score(); if(pct>=80)setTimeout(()=>SFX.good(),350);
+  render();
+}
+function nsoloNextRound(){
+  if(!NSOLO.active||NSOLO.phase!=="score")return;
+  const g=NSOLO;
+  if(g.round>=NSOLO_ROUNDS){ g.phase="end"; render(); return; }
+  g.round++; g.cutter=(g.cutter+1)%g.n; g.band=makeBand(g.n);
+  g.cuts=null; g.piles=null; g.assign={}; g.chooseIdx=0; g.roundEval=null; g.phase="cut";
+  nsoloCuts=[];
+  render();
+  nsoloMaybeAutoAct();
+}
+function nsoloMaybeAutoAct(){
+  if(!NSOLO.active||NSOLO.phase==="end"||NSOLO.phase==="score"||NSOLO.phase==="setup")return;
+  if(NSOLO.phase==="cut"&&NSOLO.cutter!==NSOLO_PLAYER_SEAT){ setTimeout(nsoloNpcDoCut,550); return; }
+  if(NSOLO.phase==="choose"){
+    const chooser=NSOLO.chooseOrderArr[NSOLO.chooseIdx];
+    if(chooser!==NSOLO_PLAYER_SEAT) setTimeout(nsoloNpcDoChoice,550);
+  }
+}
+function nsoloNpcPanelHTML(seat){
+  const g=NSOLO, meta=g.npcMeta[seat];
+  const isTurn=(g.phase==="cut"&&g.cutter===seat)||(g.phase==="choose"&&g.chooseOrderArr&&g.chooseOrderArr[g.chooseIdx]===seat);
+  return `<div class="seat" style="${isTurn?'border-color:var(--candle)':''}">
+    <span class="dot on"></span>
+    <span><b style="color:${PCOL[seat]}">${g.names[seat]}</b>${g.cutter===seat?' 🔪':''}
+    <span class="kv"> ・ ${meta.label} — ${meta.desc}</span>${isTurn?' <span class="kv">（考え中…）</span>':''}</span>
+  </div>`;
+}
+function nsoloSetupHTML(){
+  const optHtml=sel=>NPC_TYPES.map(t=>`<option value="${t.key}" ${t.key===sel?'selected':''}>${t.name}（${t.label}）</option>`).join("");
+  return `<div class="panel"><div class="eyebrow">🎭 ひとりで遊ぶ（NPC対戦）</div>
+    <div class="kv" style="margin-bottom:12px">あなた＋NPC2体の3人で遊びます。NPCの性格タイプは対戦前から分かります。本番と同じくチーム合計のみ公開（B方式）。Firebase不要・オフラインで完結します。</div>
+    <div class="row" style="margin-bottom:10px"><label class="kv">あなたの名前：</label><input type="text" id="nsoloName" maxlength="12" placeholder="なまえ" value="${(myName||'').replace(/"/g,'')}"></div>
+    <div class="kv" style="margin-bottom:6px">NPCタイプを2体選んでください（同じタイプは選べません）：</div>
+    <div class="row" style="margin-bottom:10px">
+      <label class="kv">1体目：<select id="nsoloNpc1">${optHtml("mira")}</select></label>
+      <label class="kv">2体目：<select id="nsoloNpc2">${optHtml("zora")}</select></label>
+    </div>
+    <div class="row"><button class="primary" onclick="nsoloOnStart()">✦ 開始</button><button class="ghost" onclick="exitNsolo()">戻る</button></div>
+  </div>
+  <div class="panel"><div class="eyebrow">NPCタイプ一覧</div>
+    ${NPC_TYPES.map(t=>`<div class="spellbook"><span><b style="color:var(--candle-soft)">${t.name}</b>（${t.label}） ― ${t.desc}</span></div>`).join("")}
+  </div>`;
+}
+function nsoloHTML(){
+  if(NSOLO.phase==="setup")return nsoloSetupHTML();
+  const g=NSOLO, n=g.n;
+  let html=`<div class="status"><span class="conn">🎭 ソロ（NPC対戦）</span><button class="ghost" onclick="exitNsolo()">終了</button></div>`;
+  if(g.phase==="end"){
+    const keen=g.omniSum>0?Math.min(100,Math.round(g.teamTotal/g.omniSum*100)):(g.teamTotal>=0?100:0);
+    const ratP=g.omniSum>0?Math.round((g.ratSum||0)/g.omniSum*100):100;
+    const rank=rankFor(keen);
+    html+=`<div class="panel" style="text-align:center;border-color:var(--candle)"><div style="font-size:40px">${rank.i}</div>
+      <div style="font-family:var(--grimoire);font-size:22px;color:var(--candle-soft)">${rank.t}</div>
+      <div class="meterwrap" style="max-width:400px;margin:12px auto 4px"><div class="meter" style="width:${Math.max(0,Math.min(100,keen))}%"></div></div>
+      <div style="font-family:var(--grimoire);color:var(--candle)">通算の冴え ${keen}%（合理目安 ${ratP}%）</div></div>`;
+    html+=`<div class="panel"><div class="eyebrow">🎭 対戦したNPC</div>`;
+    for(let p=1;p<n;p++){ const meta=g.npcMeta[p];
+      html+=`<div class="kv" style="margin-top:6px"><b style="color:${PCOL[p]}">${g.names[p]}</b>（${meta.label}） ― ${meta.desc}</div>`; }
+    html+=`</div>`;
+    html+=recordPanel(g.history,n,false);
+    html+=`<div class="row"><button class="primary" onclick="nsoloStartGame()">↻ もう一度</button><button class="ghost" onclick="exitNsolo()">終了</button></div>`;
+    return html;
+  }
+  const order=g.chooseOrderArr||[]; const curChooser=(g.phase==="choose")?order[g.chooseIdx]:null;
+  const myTurnCut=(g.phase==="cut"&&g.cutter===NSOLO_PLAYER_SEAT);
+  const myTurnPick=(g.phase==="choose"&&curChooser===NSOLO_PLAYER_SEAT);
+  html+=`<div class="panel"><div class="row spread"><div><span class="phase">🕯️ 儀式 ${g.round}/${NSOLO_ROUNDS}</span> 調合師 <b style="color:${PCOL[g.cutter]}">${g.names[g.cutter]}</b></div>
+    <div class="kv" style="text-align:right">総魔力<br><span class="big" style="font-size:22px">${g.teamTotal}</span></div></div>`;
+  let turnWho="",isMine=false;
+  if(g.phase==="cut"){ turnWho=`<b style="color:${PCOL[g.cutter]}">${g.names[g.cutter]}</b> が素材を分けています`; isMine=myTurnCut; }
+  else if(g.phase==="choose"){ turnWho=`<b style="color:${PCOL[curChooser]}">${g.names[curChooser]}</b> が坩堝を選んでいます`; isMine=myTurnPick; }
+  if(turnWho) html+=`<div class="turnbar ${isMine?'active':''}" style="margin-top:10px"><span>${isMine?'✨':'⏳'}</span><span class="who">${isMine?'<span class="yourturn">あなたの番です</span>':turnWho}</span></div>`;
+  html+=`</div>`;
+  html+=`<div class="panel"><div class="eyebrow">🎭 仲間</div>`;
+  for(let p=1;p<n;p++){ html+=nsoloNpcPanelHTML(p); }
+  html+=`</div>`;
+  html+=`<div class="panel"><div class="eyebrow">📖 あなたの好み</div>`+bookList(g.hands[NSOLO_PLAYER_SEAT].map(i=>POOL[i]),null)+`</div>`;
+  html+=`<div class="panel"><div class="eyebrow">🪵 作業台の素材</div>`;
+  const cuts=(g.phase==="cut"&&myTurnCut)?nsoloCuts:(g.cuts||[]);
+  html+=`<div class="bench">`;
+  for(let i=0;i<g.band.length;i++){ html+=`<div class="slot">${matChip(g.band[i])}</div>`;
+    if(i<g.band.length-1){ const pos=i+1; const isCut=cuts.includes(pos); const dis=!myTurnCut;
+      html+=`<div class="gap ${isCut?'cut':''} ${dis?'disabled':''}" ${dis?'':`onclick="nsoloToggleCut(${pos})"`}></div>`; } }
+  html+=`</div>`;
+  if(g.phase==="cut"&&myTurnCut){
+    if(nsoloCuts.length>0){ const pv=toPiles(g.band,nsoloCuts.slice().sort((a,b)=>a-b));
+      html+=`<div style="margin-top:12px"><div class="kv" style="margin-bottom:5px">分かれ方（プレビュー）：</div><div class="miniRow">`;
+      for(const pl of pv)html+=`<div class="miniPile"><div class="miniMats">${pl.map(m=>`<span class="miniGem" style="background:${MAT[m].color}">${MAT[m].icon}</span>`).join("")}</div><div class="miniOwner"><span class="kv">${pl.length}個</span></div></div>`;
+      html+=`</div></div>`; }
+    html+=`<div class="row" style="margin-top:12px"><span class="yourturn">あなたが分けます</span>
+      <button class="primary" ${nsoloCuts.length!==n-1?'disabled':''} onclick="nsoloConfirmPlayerCut()">🔪 この位置で分ける（${nsoloCuts.length}/${n-1}）</button>
+      <button class="ghost" ${nsoloCuts.length===0?'disabled':''} onclick="nsoloCuts=[];render()">刃を戻す</button></div>`;
+  } else if(g.phase==="cut"){
+    html+=`<div class="hint" style="margin-top:10px"><span class="hi">⏳</span><span><b style="color:${PCOL[g.cutter]}">${g.names[g.cutter]}</b> が素材を分けています…（考え中）</span></div>`;
+  }
+  html+=`</div>`;
+  if(g.cuts){ const piles=g.piles;
+    html+=`<div class="panel"><div class="eyebrow">⚗️ ${n}つの坩堝</div>`;
+    if(g.phase==="choose")html+=`<div class="kv" style="margin-bottom:8px">${myTurnPick?'<span class="yourturn">あなたが受け取る番です</span>':`<b style="color:${PCOL[curChooser]}">${g.names[curChooser]}</b> が選んでいます…（考え中）`}</div>`;
+    html+=`<div class="row" style="align-items:stretch">`;
+    for(let pi=0;pi<n;pi++){ const taken=g.assign[pi]!=null; const pickable=myTurnPick&&!taken;
+      html+=`<div class="crucible ${pickable?'pickable':''} ${taken&&g.phase==='choose'?'taken':''}" ${pickable?`onclick="nsoloPickPile(${pi})"`:''}>
+        <div class="cHead"><span>坩堝 ${["一","二","三"][pi]}</span>${taken?`<span style="color:${PCOL[g.assign[pi]]}">${g.names[g.assign[pi]]}</span>`:''}</div>
+        <div class="mats">${piles[pi].map(m=>matChip(m,true)).join("")}</div></div>`; }
+    html+=`</div></div>`;
+  }
+  if(g.phase==="score"&&g.roundEval){ const e=g.roundEval;
+    html+=`<div class="panel"><div class="eyebrow">🌟 調合の結果</div>
+      <div class="row spread"><div class="kv">この儀式でチームが得た魔力</div><div class="big" style="color:${e.roundScore<0?'var(--bad)':'var(--good)'}">${e.roundScore>0?'+':''}${e.roundScore}</div></div>
+      <div class="kv" style="margin-top:6px">完璧（全知最大）${e.omni}　冴え <b style="color:var(--candle)">${e.pct}%</b></div>
+      <div class="meterwrap"><div class="meter" style="width:${Math.max(0,Math.min(100,e.pct))}%"></div></div>
+      <div class="hint"><span class="hi">✎</span><span>公開されるのは<b>チーム合計だけ</b>。仲間がどう切り、どう選んだかから好みを読む。</span></div>
+      <div class="row" style="margin-top:14px"><button class="primary" onclick="nsoloNextRound()">${g.round>=NSOLO_ROUNDS?'✦ 儀式を終える':'次の儀式へ →'}</button></div></div>`;
+  }
+  html+=recordPanel(g.history,g.n,false);
+  return html;
+}
+
 // ============ 描画 ============
 // 夕暮れの魔女工房のイラスト（ヒーロー画像）
 function heroSVG(){
@@ -1220,7 +1813,7 @@ function matChip(i,small){return `<span class="mat" style="background:${MAT[i].c
 function bookList(recipes,pile){return recipes.map(r=>{const fired=pile?scoreRecipe(r,pile)!==0:null;const cls=r.pt<0?"rpt neg":"rpt";let mark="";if(pile)mark=fired?` <span class="fire">✦叶</span>`:` <span class="nofire">·</span>`;
   return `<div class="spellbook"><span><span class="tag ${r.type}">${TYPE[r.type].icon} ${TYPE[r.type].jp}</span> ${recipeText(r)}</span><span class="${cls}">${r.pt>0?"+":""}${r.pt}${mark}</span></div>`;}).join("");}
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
-function nameOf(s){ return esc((ST.seats&&ST.seats[s]&&ST.seats[s].name)||NAMES_FALLBACK[s]); }
+function nameOf(s){ if(NSOLO.active&&NSOLO.names)return esc(NSOLO.names[s]||NAMES_FALLBACK[s]); return esc((ST.seats&&ST.seats[s]&&ST.seats[s].name)||NAMES_FALLBACK[s]); }
 function pill(s){ return `<b style="color:${PCOL[s]}">${nameOf(s)}</b>`; }
 
 function renderBanner(){ document.getElementById("banner").innerHTML = ST.error ? `<div class="banner">⚠️ ${ST.error} <button class="ghost" onclick="ST.error='';renderBanner()" style="float:right">×</button></div>` : ""; }
@@ -1257,6 +1850,7 @@ function render(){
   renderBanner();
   const app=document.getElementById("app");
   if(SOLO.active){ app.innerHTML=soloHTML(); return; }
+  if(NSOLO.active){ app.innerHTML=nsoloHTML(); return; }
   if(!ST.room){ app.innerHTML=homeHTML(); return; }
   let html=statusBar();
   const phase=ST.meta&&ST.meta.phase;
@@ -1280,7 +1874,8 @@ function homeHTML(){
       <button onclick="joinRoom()">参加する</button>
     </div>
     <div class="row" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
-      <button onclick="openSolo()">🧪 ソロで試す（1人で全員・検証用）</button>
+      <button onclick="openNsolo()">🎭 ひとりで遊ぶ（NPC対戦）</button>
+      <button class="ghost" onclick="openSolo()">🧪 ソロで試す（1人で全員・検証用）</button>
       <button class="ghost" onclick="spectate()">👁 観戦する（合言コードで監視）</button>
     </div>
     ${!_fbReady?`<div class="hint" style="margin-top:12px"><span class="hi">⚙</span><span>${_fbError} 上部の &lt;script&gt; 内 FIREBASE_CONFIG を自分のFirebaseプロジェクトの値に差し替えてください（手順はハンドオフ資料参照）。</span></div>`:''}
@@ -1458,9 +2053,10 @@ const emulatorBadge=document.getElementById("emulatorBadge");
 if(emulatorBadge)emulatorBadge.hidden=!_emulatorMode;
 render();
 restoreSavedRoom();
+cleanupExpiredRooms();
 </script>
 <a id="homelink" href="index.html" title="ゲーム一覧へ戻る">🏠 ゲーム一覧</a>
-<div id="verbadge">魔女の調合 v1.3</div>
+<div id="verbadge">魔女の調合 v1.5</div>
 <style>
 #homelink{position:fixed;left:8px;bottom:6px;z-index:9999;
  font:11px/1.5 system-ui,sans-serif;letter-spacing:.04em;text-decoration:none;

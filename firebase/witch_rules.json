@@ -5,6 +5,8 @@
 
     "roomsV2": {
       "$code": {
+        ".write": "auth != null && $code.matches(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/) && !newData.exists() && (!data.child('meta').child('createdAt').exists() || data.child('meta').child('createdAt').val() < (now - 86400000))",
+
         "meta": {
           ".read": "auth != null && $code.matches(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/)",
           ".write": "auth != null && $code.matches(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/) && ((!data.exists() && newData.child('host').val() === auth.uid) || data.child('host').val() === auth.uid)",
@@ -14,7 +16,7 @@
             ".write": "auth != null && (root.child('roomsV2').child($code).child('seats').child('0').child('uid').val() === auth.uid || root.child('roomsV2').child($code).child('seats').child('1').child('uid').val() === auth.uid || root.child('roomsV2').child($code).child('seats').child('2').child('uid').val() === auth.uid || root.child('roomsV2').child($code).child('seats').child('3').child('uid').val() === auth.uid)",
             ".validate": "newData.isString() && (newData.val() === 'lobby' || newData.val() === 'playing' || newData.val() === 'ended')"
           },
-          "createdAt": { ".validate": "newData.isNumber()" },
+          "createdAt": { ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())" },
           "$other": { ".validate": false }
         },
 
@@ -107,6 +109,14 @@
         },
 
         "$other": { ".validate": false }
+      }
+    },
+
+    "roomIndex": {
+      ".read": "auth != null",
+      "$code": {
+        ".write": "auth != null && $code.matches(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/) && ((!data.exists() && newData.isNumber() && root.child('roomsV2').child($code).child('meta').child('host').val() === auth.uid) || (!newData.exists() && (!data.exists() || data.val() < (now - 86400000))))",
+        ".validate": "newData.isNumber()"
       }
     }
   }

@@ -153,3 +153,67 @@ test("不正な好みID・余分なフィールド・範囲外数値を拒否す
   await assertFails(room(db(PLAYER2), "game/n").set(99));
   await assertFails(room(db(PLAYER2), "game/totals").set([1, 2, 3]));
 });
+
+// ============ TTL放置部屋掃除（v1.4） ============
+const DAY_MS = 86400000;
+
+test("createdAtは初回作成後に変更できない", async () => {
+  await assertFails(room(db(HOST), "meta/createdAt").set(999999));
+});
+
+test("24時間以上経過した部屋は誰でも削除できる", async () => {
+  // beforeEachのcreatedAt:1は十分に古い
+  await assertSucceeds(room(db(SPECTATOR)).remove());
+});
+
+test("createdAtを持たない部屋（旧仕様のゴミ）は誰でも削除できる", async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await room(context.database(), "meta/createdAt").remove();
+  });
+  await assertSucceeds(room(db(SPECTATOR)).remove());
+});
+
+test("期限内の部屋は他人はもちろんホストもまるごと削除できない", async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await room(context.database(), "meta/createdAt").set(Date.now());
+  });
+  await assertFails(room(db(SPECTATOR)).remove());
+  await assertFails(room(db(HOST)).remove());
+});
+
+test("未認証では期限切れ部屋も削除できない", async () => {
+  await assertFails(room(db()).remove());
+});
+
+const INDEX_CODE = "XYZ789";
+function index(database, code = INDEX_CODE) {
+  return database.ref(`roomIndex/${code}`);
+}
+
+test("roomIndexは認証済みなら誰でも読める", async () => {
+  await assertSucceeds(index(db(SPECTATOR)).get());
+});
+
+test("未認証ではroomIndexを読めない", async () => {
+  await assertFails(index(db()).get());
+});
+
+test("roomIndexの新規登録は対応する部屋のホストだけが行える", async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await context.database().ref(`roomsV2/${INDEX_CODE}/meta`).set({ host: HOST, phase: "lobby", createdAt: Date.now() });
+  });
+  await assertFails(index(db(PLAYER2)).set(Date.now()));
+  await assertSucceeds(index(db(HOST)).set(Date.now()));
+});
+
+test("roomIndexの期限切れエントリは誰でも削除できるが、期限内は削除できない", async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await index(context.database()).set(Date.now() - DAY_MS - 1000);
+  });
+  await assertSucceeds(index(db(SPECTATOR)).remove());
+
+  await env.withSecurityRulesDisabled(async context => {
+    await index(context.database()).set(Date.now());
+  });
+  await assertFails(index(db(SPECTATOR)).remove());
+});
