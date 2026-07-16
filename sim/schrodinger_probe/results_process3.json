@@ -1,0 +1,217 @@
+{
+  "meta": {
+    "seed_base": 20260716,
+    "n": 100000,
+    "n_boot": 10000,
+    "runtime_sec": 1487.2389469146729
+  },
+  "b_star": {
+    "S-imm/M-fix": "S-blind/M-rand",
+    "S-imm/M-seek": "S-blind/M-rand",
+    "S-imm/M-value": "S-blind/M-rand",
+    "S-marg/M-fix": "S-blind/M-fix",
+    "S-marg/M-seek": "S-blind/M-fix",
+    "S-marg/M-value": "S-blind/M-fix",
+    "S-prop/M-fix": "S-blind/M-fix"
+  },
+  "point_estimates_at_own_bstar_c0.5": {
+    "S-imm/M-fix": 0.7245525,
+    "S-imm/M-seek": 0.7245525,
+    "S-imm/M-value": 0.7245525,
+    "S-marg/M-fix": 0.84996,
+    "S-marg/M-seek": 0.84996,
+    "S-marg/M-value": 0.84996,
+    "S-prop/M-fix": 0.49857
+  },
+  "kill_conditions": {
+    "K-E0_instrument_check": {
+      "fires": false,
+      "kd1_equivalent_terms": {
+        "S-imm/M-fix": {
+          "process3_ci": [
+            0.723535,
+            0.72767
+          ],
+          "process2_ci": [
+            0.72358,
+            0.727685
+          ],
+          "overlap": true
+        },
+        "S-marg/M-fix": {
+          "process3_ci": [
+            0.84771,
+            0.85214
+          ],
+          "process2_ci": [
+            0.8477,
+            0.85212
+          ],
+          "overlap": true
+        },
+        "S-prop/M-fix": {
+          "process3_ci": [
+            0.49549,
+            0.50165
+          ],
+          "process2_ci": [
+            0.4955,
+            0.50167
+          ],
+          "overlap": true
+        }
+      },
+      "kd4_equivalent": {
+        "x_star_process2_rule": "S-marg/M-fix",
+        "exc_A": 0.34996000000000005,
+        "exc_C": 0.31371000000000004,
+        "process3_ci": [
+          0.03350500000000001,
+          0.039090000000000014
+        ],
+        "process2_ci": [
+          0.03340500000000002,
+          0.03898499999999999
+        ],
+        "overlap": true
+      },
+      "f0d_prop_zero_check": {
+        "point": 0.0,
+        "ok": true
+      }
+    },
+    "K-E1_market_death_by_unfired_tax": {
+      "fires": false,
+      "terms": {
+        "S-imm/M-fix": {
+          "b_star": "S-blind/M-rand",
+          "point": 0.7245525,
+          "ci_lower": 0.7217750447985876,
+          "ci_upper": 0.7273127036804861
+        },
+        "S-imm/M-seek": {
+          "b_star": "S-blind/M-rand",
+          "point": 0.7245525,
+          "ci_lower": 0.7217750447985876,
+          "ci_upper": 0.7273127036804861
+        },
+        "S-imm/M-value": {
+          "b_star": "S-blind/M-rand",
+          "point": 0.7245525,
+          "ci_lower": 0.7217750447985876,
+          "ci_upper": 0.7273127036804861
+        },
+        "S-marg/M-fix": {
+          "b_star": "S-blind/M-fix",
+          "point": 0.84996,
+          "ci_lower": 0.847733204721265,
+          "ci_upper": 0.852159909172976
+        },
+        "S-marg/M-seek": {
+          "b_star": "S-blind/M-fix",
+          "point": 0.84996,
+          "ci_lower": 0.847733204721265,
+          "ci_upper": 0.852159909172976
+        },
+        "S-marg/M-value": {
+          "b_star": "S-blind/M-fix",
+          "point": 0.84996,
+          "ci_lower": 0.847733204721265,
+          "ci_upper": 0.852159909172976
+        }
+      }
+    },
+    "K-E4_deduction_contribution_death": {
+      "fires": false,
+      "x_star": "S-marg/M-fix",
+      "y_star": "S-imm/M-fix",
+      "b_star_x": "S-blind/M-fix",
+      "b_star_y": "S-blind/M-rand",
+      "chosen": {
+        "b_align": "S-blind/M-fix",
+        "lo": 0.12273499999999993,
+        "hi": 0.12602500000000005,
+        "point": 0.12434500000000004
+      },
+      "alternatives": [
+        {
+          "b_align": "S-blind/M-fix",
+          "lo": 0.12273499999999993,
+          "hi": 0.12602500000000005,
+          "point": 0.12434500000000004
+        },
+        {
+          "b_align": "S-blind/M-rand",
+          "lo": 0.12437000000000009,
+          "hi": 0.1268125,
+          "point": 0.1255925
+        }
+      ],
+      "process2_baseline_0.0334": 0.0334
+    },
+    "K-E2_movement_is_decorative": {
+      "fires": true,
+      "z_star_m": "S-marg/M-seek",
+      "z_star_f": "S-marg/M-fix",
+      "b_star_m": "S-blind/M-fix",
+      "b_star_f": "S-blind/M-fix",
+      "chosen": {
+        "b_align": "S-blind/M-fix",
+        "lo": 0.0,
+        "hi": 0.0,
+        "point": 0.0
+      },
+      "alternatives": [
+        {
+          "b_align": "S-blind/M-fix",
+          "lo": 0.0,
+          "hi": 0.0,
+          "point": 0.0
+        }
+      ],
+      "blind_side_movement_value_reference": 0.0
+    }
+  },
+  "overall_pass": true,
+  "reference_not_for_judgment": {
+    "unfired_rate_by_strategy_c0.5": {
+      "S-imm/M-fix": 0.0,
+      "S-imm/M-seek": 0.0,
+      "S-imm/M-value": 0.0,
+      "S-marg/M-fix": 0.0,
+      "S-marg/M-seek": 0.0,
+      "S-marg/M-value": 0.0,
+      "S-prop/M-fix": 1.0
+    },
+    "price_grid_c0_025_1.0": {
+      "0": {
+        "S-imm/M-fix": 0.9497775,
+        "S-imm/M-seek": 0.9497775,
+        "S-imm/M-value": 0.9497775,
+        "S-marg/M-fix": 0.92498,
+        "S-marg/M-seek": 0.92498,
+        "S-marg/M-value": 0.92498
+      },
+      "0.25": {
+        "S-imm/M-fix": 0.899555,
+        "S-imm/M-seek": 0.899555,
+        "S-imm/M-value": 0.899555,
+        "S-marg/M-fix": 0.84996,
+        "S-marg/M-seek": 0.84996,
+        "S-marg/M-value": 0.84996
+      },
+      "1.0": {
+        "S-imm/M-fix": 0.349805,
+        "S-imm/M-seek": 0.349805,
+        "S-imm/M-value": 0.349805,
+        "S-marg/M-fix": 0.45144,
+        "S-marg/M-seek": 0.45144,
+        "S-marg/M-value": 0.45144
+      }
+    },
+    "structural_findings": {
+      "M_seek_equals_M_value_equals_M_fix_for_imm_and_marginal": true,
+      "note": "imm/marginal never bank cross-round private knowledge (each peek is immediately consumed the same round), so their movement choice when controlling always reduces to lowest-remaining-index -- identical to M-fix. Verified byte-identical per-game in simulator self-check."
+    }
+  }
+}
