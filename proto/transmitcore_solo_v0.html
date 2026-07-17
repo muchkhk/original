@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>伝達核v0.1 ― ソロ切片プロトタイプ</title>
+<style>
+  :root{
+    --bg:#101418; --panel:#1a2027; --panel2:#212934; --line:#2e3742;
+    --text:#e7edf3; --muted:#8fa0b3; --accent:#4fb2e8; --good:#4fd18a;
+    --bad:#e85f5f; --warn:#e8b34f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,system-ui,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+  }
+  #app{ max-width:1000px; margin:0 auto; padding:16px 16px 80px; }
+  h1{ font-size:1.15rem; margin:8px 0 4px; }
+  h2{ font-size:1rem; margin:0 0 8px; color:var(--accent); }
+  .sub{ color:var(--muted); font-size:0.85rem; margin-bottom:16px; }
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:12px; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .btn{
+    background:var(--panel2); color:var(--text); border:1px solid var(--line);
+    border-radius:8px; padding:10px 16px; font-size:0.95rem; cursor:pointer;
+  }
+  .btn:hover{ border-color:var(--accent); }
+  .btn:disabled{ opacity:0.4; cursor:not-allowed; }
+  .btn.primary{ background:#1d4a63; border-color:var(--accent); }
+  .btn.danger{ background:#4a1d1d; border-color:var(--bad); }
+  .btn.danger.armed{ background:var(--bad); color:#1a0000; font-weight:bold; }
+  input[type=text]{
+    background:#0b0e12; color:var(--text); border:1px solid var(--line); border-radius:6px;
+    padding:8px 10px; font-size:0.9rem; font-family:ui-monospace,Consolas,monospace;
+  }
+  .statbar{ display:flex; gap:18px; flex-wrap:wrap; font-size:0.9rem; margin-bottom:8px; }
+  .stat{ background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:6px 12px; }
+  .stat b{ color:var(--accent); }
+  .symrow{ display:flex; gap:10px; flex-wrap:wrap; margin:10px 0; }
+  .sym{
+    width:52px; height:52px; border-radius:8px; background:var(--panel2);
+    border:2px solid var(--line); display:flex; align-items:center; justify-content:center;
+    font-size:1.7rem; cursor:pointer; user-select:none;
+  }
+  .sym.disabled{ cursor:not-allowed; opacity:0.35; }
+  .sym.static{ cursor:default; }
+  .sym.static:hover{ border-color:var(--line); transform:none; }
+  .sym:hover:not(.disabled):not(.static){ border-color:var(--accent); transform:translateY(-2px); }
+  .sym.mini{ width:34px; height:34px; font-size:1.1rem; }
+  table{ width:100%; border-collapse:collapse; font-size:0.85rem; }
+  th,td{ text-align:center; padding:4px 6px; border-bottom:1px solid var(--line); }
+  th{ color:var(--muted); font-weight:normal; }
+  #log{
+    background:#0b0e12; border:1px solid var(--line); border-radius:8px; padding:8px 10px;
+    max-height:180px; overflow-y:auto; font-family:ui-monospace,Consolas,monospace; font-size:0.78rem;
+    white-space:pre-wrap; line-height:1.5;
+  }
+  #errorBanner{
+    position:fixed; top:0; left:0; right:0; background:var(--bad); color:#1a0000;
+    padding:10px 16px; font-weight:bold; z-index:100; text-align:center;
+  }
+  #toast{
+    position:fixed; bottom:56px; left:50%; transform:translateX(-50%);
+    background:var(--good); color:#062; padding:8px 16px; border-radius:8px; font-weight:bold; z-index:100;
+  }
+  #verBadge{
+    position:fixed; right:10px; bottom:10px; background:var(--panel2); border:1px solid var(--line);
+    color:var(--muted); font-size:0.72rem; padding:4px 8px; border-radius:6px; z-index:50;
+  }
+  .memo-grid{ border-collapse:collapse; font-size:0.85rem; }
+  .memo-grid th, .memo-grid td{ border:1px solid var(--line); width:34px; height:34px; text-align:center; padding:0; }
+  .memo-cell{ cursor:pointer; user-select:none; font-weight:bold; width:100%; height:100%; min-height:34px; display:flex; align-items:center; justify-content:center; }
+  .memo-cell.x{ color:var(--bad); }
+  .memo-cell.o{ color:var(--good); }
+  .hintline{ font-size:0.85rem; margin:2px 0; }
+  .hintline .tag{ display:inline-block; padding:1px 6px; border-radius:8px; font-size:0.72rem; margin-right:6px; }
+  .tag.mine{ background:#1d4a63; }
+  .tag.theirs{ background:#4a2f1d; }
+  .result-big{ font-size:1.3rem; font-weight:bold; margin:10px 0; }
+  #selftestResult{ font-size:0.85rem; white-space:pre-wrap; font-family:ui-monospace,Consolas,monospace; }
+</style>
+</head>
+<body>
+<div id="errorBanner" hidden></div>
+<div id="toast" hidden></div>
+<div id="app"></div>
+<div id="verBadge"></div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   伝達核v0.1 ソロ切片プロトタイプ
+   典拠: proto/核定義_伝達核v0.1_ソロ切片_凍結_2026-07-17.md（§0,3,4,5-1 凍結）
+   ============================================================ */
+
+const VER = "v0.1.0";
+
+/* ---------------- 定数 ---------------- */
+// 記号8種：強弱の手がかりを持たない幾何学記号（実装裁量。採用理由は報告書参照）
+const SYMBOLS = ['○','△','□','◇','▽','◁','▷','✚'];
+const N_SYM = 8;
+const BET_OPTIONS = [1,2,3,5];
+const MAX_RAISES = 3;
+const INITIAL_CHIPS = 30;
+const ROUNDS_TOTAL = 8;
+
+/* ---------------- シード付き乱数（再現性） ---------------- */
+function xmur3(str){
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function(){
+    h = Math.imul(h ^ (h>>>16), 2246822507);
+    h = Math.imul(h ^ (h>>>13), 3266489909);
+    h ^= h>>>16;
+    return h >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a>>>15), 1 | a);
+    t = (t + Math.imul(t ^ (t>>>7), 61 | t)) ^ t;
+    return ((t ^ (t>>>14)) >>> 0) / 4294967296;
+  };
+}
+function makeRng(seedStr){
+  const seedFn = xmur3(String(seedStr));
+  return mulberry32(seedFn());
+}
+function randomSeedString(){
+  const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+  let out = '';
+  for (let i=0;i<10;i++) out += chars[Math.floor(Math.random()*chars.length)];
+  return out;
+}
+function shuffleWithRng(arr, rng){
+  const a = arr.slice();
+  for (let i=a.length-1;i>0;i--){
+    const j = Math.floor(rng()*(i+1));
+    const t=a[i]; a[i]=a[j]; a[j]=t;
+  }
+  return a;
+}
+
+/* ---------------- 順列（写像候補）全列挙 ---------------- */
+let ALL_PERMS = null;
+function getAllPerms(){
+  if (ALL_PERMS) return ALL_PERMS;
+  const results = [];
+  const used = new Array(N_SYM).fill(false);
+  const current = new Array(N_SYM);
+  (function rec(depth){
+    if (depth===N_SYM){ results.push(current.slice()); return; }
+    for (let v=0; v<N_SYM; v++){
+      if (used[v]) continue;
+      used[v]=true; current[depth]=v+1;
+      rec(depth+1);
+      used[v]=false;
+    }
+  })(0);
+  ALL_PERMS = results;
+  return results;
+}
+
+/* ---------------- ヒント述語・列挙 ---------------- */
+function hintTrue(hint, perm){
+  if (hint.type==='COMPARE') return perm[hint.x] > perm[hint.y];
+  if (hint.type==='MAX3'){
+    const vals = hint.trio.map(i=>perm[i]);
+    return perm[hint.target] === Math.max(vals[0],vals[1],vals[2]);
+  }
+  if (hint.type==='BAND') return hint.band==='upper' ? perm[hint.x]>=5 : perm[hint.x]<=4;
+  throw new Error('未知のヒント種別: '+hint.type);
+}
+function hintKey(hint){
+  if (hint.type==='COMPARE') return `CMP:${hint.x}:${hint.y}`;
+  if (hint.type==='MAX3') return `MX3:${hint.trio.slice().sort((a,b)=>a-b).join(',')}:${hint.target}`;
+  return `BND:${hint.x}:${hint.band}`;
+}
+function describeHint(hint){
+  if (hint.type==='COMPARE') return `${SYMBOLS[hint.x]} は ${SYMBOLS[hint.y]} より強い`;
+  if (hint.type==='MAX3') return `{${hint.trio.map(i=>SYMBOLS[i]).join(',')}} のうち最強は ${SYMBOLS[hint.target]}`;
+  return `${SYMBOLS[hint.x]} は ${hint.band==='upper' ? '上位半分(5〜8)' : '下位半分(1〜4)'}`;
+}
+function enumerateAllTrueHints(trueMapping){
+  const hints = [];
+  for (let x=0;x<N_SYM;x++) for (let y=0;y<N_SYM;y++){
+    if (x===y) continue;
+    if (trueMapping[x] > trueMapping[y]) hints.push({type:'COMPARE', x, y});
+  }
+  for (let a=0;a<N_SYM;a++) for (let b=a+1;b<N_SYM;b++) for (let c=b+1;c<N_SYM;c++){
+    const trio=[a,b,c];
+    let target = trio[0];
+    for (const s of trio) if (trueMapping[s] > trueMapping[target]) target = s;
+    hints.push({type:'MAX3', trio, target});
+  }
+  for (let x=0;x<N_SYM;x++){
+    hints.push({type:'BAND', x, band: trueMapping[x]>=5 ? 'upper' : 'lower'});
+  }
+  return hints;
+}
+function countMatching(set, hint){
+  let n=0;
+  for (const p of set) if (hintTrue(hint,p)) n++;
+  return n;
+}
+function refine(set, hint){ return set.filter(p=>hintTrue(hint,p)); }
+function setContainsPerm(set, perm){
+  return set.some(p=>{
+    for (let i=0;i<N_SYM;i++) if (p[i]!==perm[i]) return false;
+    return true;
+  });
+}
+
+/* ==================== マッチ設定 ==================== */
+function newMatch(seedStr){
+  const rng = makeRng(seedStr);
+  const mappingVals = shuffleWithRng([1,2,3,4,5,6,7,8], rng);
+  const mapping = mappingVals; // mapping[symIdx] = 強さ
+  const symOrder = shuffleWithRng([0,1,2,3,4,5,6,7], rng);
+  const anchorsA = [symOrder[0], symOrder[1]].map(s=>({sym:s, val:mapping[s]}));
+  const anchorsB = [symOrder[2], symOrder[3]].map(s=>({sym:s, val:mapping[s]}));
+  const allTrueHints = enumerateAllTrueHints(mapping);
+  const fullPerms = getAllPerms();
+  const candidateSetA = fullPerms.filter(p=>anchorsA.every(a=>p[a.sym]===a.val));
+  const candidateSetB = fullPerms.filter(p=>anchorsB.every(a=>p[a.sym]===a.val));
+  return {
+    seed: seedStr, rng, mapping, anchorsA, anchorsB, allTrueHints,
+    usedHintKeys: new Set(),
+    publicHints: [], publicConstraints: [], roundHistory: [],
+    usedSymbols: { human:[], npc:[] },
+    hand: { human:[0,1,2,3,4,5,6,7], npc:[0,1,2,3,4,5,6,7] },
+    chips: { human: INITIAL_CHIPS, npc: INITIAL_CHIPS },
+    pot: 0,
+    roundNum: 0,
+    globalRoundIndex: 0,
+    candidateSetA, candidateSetB,
+    matchLog: [], matchOver: false, result: null,
+    round: null,
+    seatTypes: null, // {human:'HUMAN'|'NPC_AUTO', npc:'NPC_AUTO'}
+  };
+}
+function log(m, text){ m.matchLog.push(text); }
+function nameOf(seat){ return seat==='human' ? 'あなた' : 'NPC'; }
+
+/* ---------------- 伝達者スクリプト（§5-2） ---------------- */
+function transmitterChooseHint(side, m){
+  const anchors = side==='A' ? m.anchorsA : m.anchorsB;
+  const candidateSet = side==='A' ? m.candidateSetA : m.candidateSetB;
+  let pool = m.allTrueHints.filter(h => !m.usedHintKeys.has(hintKey(h)));
+  if (m.roundNum <= 2){
+    const ownAnchorSyms = new Set(anchors.map(a=>a.sym));
+    const restricted = pool.filter(h => h.type==='COMPARE' && (ownAnchorSyms.has(h.x) || ownAnchorSyms.has(h.y)));
+    // 防御的フォールバック：理論上13候補あるため通常枯渇しないが、枯渇時は制限を外す（実装裁量・報告対象）
+    pool = restricted.length ? restricted : pool;
+  }
+  const scored = pool.map(h => {
+    const remain = countMatching(candidateSet, h);
+    const shrink = 1 - remain/candidateSet.length;
+    return {hint:h, shrink};
+  });
+  scored.sort((a,b)=> b.shrink - a.shrink);
+  const topN = m.roundNum <= 2 ? 3 : 5;
+  const top = scored.slice(0, Math.min(topN, scored.length));
+  const pick = top[Math.floor(m.rng()*top.length)];
+  return pick.hint;
+}
+function commitHint(m, side, hint){
+  m.usedHintKeys.add(hintKey(hint));
+  m.publicHints.push({side, round:m.roundNum, hint});
+  m.candidateSetA = refine(m.candidateSetA, hint);
+  m.candidateSetB = refine(m.candidateSetB, hint);
+  log(m, `[R${m.roundNum}] ヒント(${side==='A'?'味方':'敵'}): ${describeHint(hint)}`);
+}
+function commitConstraint(m, winnerSym, loserSym){
+  const c = {winner:winnerSym, loser:loserSym, round:m.roundNum};
+  m.publicConstraints.push(c);
+  m.candidateSetA = m.candidateSetA.filter(p=>p[winnerSym]>p[loserSym]);
+  m.candidateSetB = m.candidateSetB.filter(p=>p[winnerSym]>p[loserSym]);
+}
+
+/* ---------------- NPC思考ロジック（自席・敵席どちらにも汎用。§8前文に基づき人間席の自動代行にも使う） ---------------- */
+const NPC_MIX_RATE = 0.15; // 実装裁量：機械的単調回避のためのランダム混合率
+function autoChooseCard(m, seat){
+  const isHuman = seat==='human';
+  const remaining = m.hand[seat];
+  const oppRemaining = m.hand[isHuman ? 'npc' : 'human'];
+  const candidateSet = isHuman ? m.candidateSetA : m.candidateSetB;
+  if (remaining.length===1 || m.rng() < NPC_MIX_RATE){
+    return remaining[Math.floor(m.rng()*remaining.length)];
+  }
+  let best = remaining[0], bestScore = -1;
+  for (const s of remaining){
+    let winSum = 0;
+    for (const p of candidateSet){
+      let wc = 0;
+      for (const t of oppRemaining) if (p[s] > p[t]) wc++;
+      winSum += wc / oppRemaining.length;
+    }
+    const score = winSum / candidateSet.length;
+    if (score > bestScore){ bestScore = score; best = s; }
+  }
+  return best;
+}
+function autoConfidence(m, seat, sym){
+  const isHuman = seat==='human';
+  const oppRemaining = m.hand[isHuman ? 'npc' : 'human'];
+  const candidateSet = isHuman ? m.candidateSetA : m.candidateSetB;
+  let winSum = 0;
+  for (const p of candidateSet){
+    let wc = 0;
+    for (const t of oppRemaining) if (p[sym] > p[t]) wc++;
+    winSum += wc / oppRemaining.length;
+  }
+  return winSum / candidateSet.length;
+}
+function nearestAvailable(desired, list){
+  return list.slice().sort((a,b)=>Math.abs(a-desired)-Math.abs(b-desired))[0];
+}
+// 確信度→行動の写像しきい値（実装裁量・報告対象）
+function autoDecideAction(m, seat, opts){
+  const sym = m.round.symbolsPlayed[seat];
+  const conf = autoConfidence(m, seat, sym);
+  if (opts.kind==='open'){
+    const bets = extractValues(opts.options,'bet');
+    if (conf<0.30 || !bets.length) return {action:'check'};
+    const desired = conf<0.45 ? 1 : (conf<0.60 ? 2 : (conf<0.75 ? 3 : 5));
+    return {action:'bet', amount: nearestAvailable(desired, bets)};
+  }
+  const raises = extractValues(opts.options,'raise');
+  if (conf<0.25) return {action:'fold'};
+  if (conf<0.55 || !raises.length) return {action:'call'};
+  const desired = conf<0.70 ? 1 : (conf<0.85 ? 3 : 5);
+  return {action:'raise', amount: nearestAvailable(desired, raises)};
+}
+
+/* ==================== ラウンド進行エンジン ==================== */
+function beginRound(m){
+  m.roundNum += 1;
+  m.globalRoundIndex += 1;
+  const firstMover = (m.globalRoundIndex % 2 === 1) ? 'human' : 'npc';
+
+  const hintA = transmitterChooseHint('A', m); commitHint(m, 'A', hintA);
+  const hintB = transmitterChooseHint('B', m); commitHint(m, 'B', hintB);
+
+  m.chips.human -= 1; m.chips.npc -= 1; m.pot += 2;
+  log(m, `[R${m.roundNum}] アンティ 各1（ポット${m.pot}）。先手=${nameOf(firstMover)}`);
+  if (m.chips.human<=0 || m.chips.npc<=0){
+    finalizeByElimination(m);
+    return;
+  }
+
+  m.round = {
+    firstMover, toAct:null, currentBet:0, contributions:{human:0,npc:0},
+    raiseCount:0, history:[], symbolsPlayed:{human:null,npc:null}, phase:'select_cards',
+  };
+  ['human','npc'].forEach(seat=>{
+    if (m.seatTypes[seat] !== 'HUMAN'){
+      const sym = autoChooseCard(m, seat);
+      const idx = m.hand[seat].indexOf(sym);
+      m.hand[seat].splice(idx,1);
+      m.round.symbolsPlayed[seat] = sym;
+    }
+  });
+  if (m.round.symbolsPlayed.human!==null && m.round.symbolsPlayed.npc!==null){
+    startBetting(m);
+  }
+}
+
+function submitHumanCard(m, sym){
+  const idx = m.hand.human.indexOf(sym);
+  if (idx<0) throw new Error('手札にない記号です');
+  m.hand.human.splice(idx,1);
+  m.round.symbolsPlayed.human = sym;
+  if (m.round.symbolsPlayed.human!==null && m.round.symbolsPlayed.npc!==null){
+    startBetting(m);
+  }
+}
+
+function startBetting(m){
+  const r = m.round;
+  r.phase = 'betting';
+  r.toAct = r.firstMover;
+  log(m, `[R${m.roundNum}] 両者提示完了。ベット開始（先手=${nameOf(r.firstMover)}）`);
+}
+
+function extractValues(options, prefix){
+  return options.filter(o=>o.startsWith(prefix+':')).map(o=>Number(o.split(':')[1]));
+}
+function computeOptions(m){
+  const r = m.round;
+  const actor = r.toAct;
+  const remaining = m.chips[actor];
+  if (r.currentBet === 0){
+    const bets = BET_OPTIONS.filter(v=>v<=remaining);
+    return { kind:'open', options:['check', ...bets.map(v=>'bet:'+v)] };
+  }
+  const toCall = r.currentBet - r.contributions[actor];
+  const canRaise = r.raiseCount < MAX_RAISES;
+  const raises = canRaise ? BET_OPTIONS.filter(rv => (toCall+rv) <= remaining) : [];
+  return { kind:'facing', options:['fold','call', ...raises.map(v=>'raise:'+v)], toCall };
+}
+
+function submitAction(m, action, amount){
+  const r = m.round;
+  if (!r || r.phase!=='betting') throw new Error('ベットフェーズではありません');
+  const actor = r.toAct; const other = actor==='human' ? 'npc' : 'human';
+  const remaining = m.chips[actor];
+
+  if (action==='check'){
+    if (r.currentBet !== 0) throw new Error('ベットが存在するためチェックできません');
+    r.history.push({player:actor, action:'check'});
+    log(m, `[R${m.roundNum}] ${nameOf(actor)}: チェック`);
+    const priorChecks = r.history.filter(h=>h.action==='check').length;
+    if (priorChecks>=2){
+      finishRound(m, 'showdown');
+    } else {
+      r.toAct = other;
+    }
+  } else if (action==='bet'){
+    const v = amount;
+    if (r.currentBet!==0) throw new Error('既にベットが存在します');
+    if (!BET_OPTIONS.includes(v) || v>remaining) throw new Error('不正なベット額です');
+    r.contributions[actor]+=v; m.chips[actor]-=v; m.pot+=v; r.currentBet=v;
+    r.history.push({player:actor, action:'bet', amount:v});
+    log(m, `[R${m.roundNum}] ${nameOf(actor)}: ベット ${v}`);
+    r.toAct = other;
+  } else if (action==='call'){
+    if (r.currentBet===0) throw new Error('コール対象がありません');
+    const toCall = r.currentBet - r.contributions[actor];
+    const pay = Math.min(toCall, remaining);
+    r.contributions[actor]+=pay; m.chips[actor]-=pay; m.pot+=pay;
+    const allIn = pay < toCall;
+    r.history.push({player:actor, action:'call', amount:pay, allIn});
+    log(m, `[R${m.roundNum}] ${nameOf(actor)}: コール ${pay}${allIn?'（オールイン）':''}`);
+    finishRound(m, 'showdown');
+  } else if (action==='raise'){
+    if (r.currentBet===0) throw new Error('レイズ対象がありません');
+    if (r.raiseCount>=MAX_RAISES) throw new Error('レイズ上限に達しています');
+    const rv = amount;
+    const toCall = r.currentBet - r.contributions[actor];
+    const total = toCall+rv;
+    if (!BET_OPTIONS.includes(rv) || total>remaining) throw new Error('不正なレイズ額です');
+    r.contributions[actor]+=total; m.chips[actor]-=total; m.pot+=total;
+    r.currentBet = r.contributions[actor];
+    r.raiseCount+=1;
+    r.history.push({player:actor, action:'raise', amount:rv, totalPaid:total});
+    log(m, `[R${m.roundNum}] ${nameOf(actor)}: レイズ +${rv}（支払${total}）`);
+    r.toAct = other;
+  } else if (action==='fold'){
+    r.history.push({player:actor, action:'fold'});
+    log(m, `[R${m.roundNum}] ${nameOf(actor)}: フォールド`);
+    finishRound(m, 'fold', other);
+  } else {
+    throw new Error('不明なアクション: '+action);
+  }
+}
+
+function finishRound(m, method, winnerOverride){
+  const r = m.round;
+  const hs = r.symbolsPlayed.human, ns = r.symbolsPlayed.npc;
+  let winner = null, tie = false;
+
+  if (method==='fold'){
+    winner = winnerOverride;
+  } else if (hs === ns){
+    tie = true;
+  } else {
+    winner = (m.mapping[hs] > m.mapping[ns]) ? 'human' : 'npc';
+  }
+
+  m.usedSymbols.human.push(hs);
+  m.usedSymbols.npc.push(ns);
+
+  if (tie){
+    log(m, `[R${m.roundNum}] 決着(ショーダウン・引き分け)：あなた=${SYMBOLS[hs]} / NPC=${SYMBOLS[ns]} → 同一記号。ポット${m.pot}は持ち越し`);
+    m.roundHistory.push({round:m.roundNum, humanSym:hs, npcSym:ns, method:'showdown', tie:true, winner:null});
+  } else {
+    if (method!=='fold'){
+      const winnerSym = winner==='human' ? hs : ns;
+      const loserSym = winner==='human' ? ns : hs;
+      commitConstraint(m, winnerSym, loserSym);
+    }
+    m.chips[winner] += m.pot;
+    log(m, `[R${m.roundNum}] 決着(${method==='fold'?'フォールド':'ショーダウン'})：あなた=${SYMBOLS[hs]} / NPC=${SYMBOLS[ns]} → ${nameOf(winner)}の勝ち（ポット${m.pot}獲得）`);
+    m.roundHistory.push({round:m.roundNum, humanSym:hs, npcSym:ns, method, tie:false, winner});
+    m.pot = 0;
+  }
+
+  r.phase = 'resolved';
+  if (m.chips.human<=0 || m.chips.npc<=0){
+    finalizeByElimination(m);
+  }
+}
+
+function finalizeByElimination(m){
+  const humanOut = m.chips.human<=0, npcOut = m.chips.npc<=0;
+  if (humanOut && npcOut){
+    m.result='draw';
+    log(m, '両者同時にチップ枯渇（保存則上通常は発生しない防御分岐）。引き分けとする。');
+  } else if (humanOut){
+    m.result='npc_win';
+    log(m, 'あなたのチップが尽きた。NPCの勝ち。');
+  } else {
+    m.result='human_win';
+    log(m, 'NPCのチップが尽きた。あなたの勝ち。');
+  }
+  m.matchOver = true;
+}
+function finalizeByChips(m){
+  if (m.chips.human>m.chips.npc) m.result='human_win';
+  else if (m.chips.npc>m.chips.human) m.result='npc_win';
+  else m.result='draw';
+  m.matchOver = true;
+  log(m, `8ラウンド終了。最終チップ：あなた=${m.chips.human} / NPC=${m.chips.npc} → ${m.result==='draw'?'引き分け':(nameOf(m.result==='human_win'?'human':'npc')+'の勝ち')}`);
+}
+function advanceAfterResolution(m){
+  if (m.matchOver) return;
+  if (m.roundNum >= ROUNDS_TOTAL){
+    finalizeByChips(m);
+    return;
+  }
+  beginRound(m);
+}
+
+/* ---------------- 自動テスト ---------------- */
+function conservationTotal(m){ return m.chips.human + m.chips.npc + m.pot; }
+function checkInvariants(m, summary){
+  const total = conservationTotal(m);
+  if (total !== INITIAL_CHIPS*2) summary.conservationViolations.push({total});
+  if (!setContainsPerm(m.candidateSetA, m.mapping)) summary.invariantViolations.push({side:'A', round:m.roundNum});
+  if (!setContainsPerm(m.candidateSetB, m.mapping)) summary.invariantViolations.push({side:'B', round:m.roundNum});
+}
+function autoPlayOneMatch(index, summary){
+  const seed = 'selftest-'+index+'-'+Math.floor(Math.random()*1e9);
+  const m = newMatch(seed);
+  m.seatTypes = { human:'NPC_AUTO', npc:'NPC_AUTO' };
+  beginRound(m);
+  checkInvariants(m, summary);
+  let guard = 0;
+  while (!m.matchOver){
+    guard++;
+    if (guard>20000) throw new Error('ガード上限到達（無限ループ疑い）');
+    if (m.round && m.round.phase==='betting'){
+      const opts = computeOptions(m);
+      const decision = autoDecideAction(m, m.round.toAct, opts);
+      submitAction(m, decision.action, decision.amount);
+      checkInvariants(m, summary);
+    } else {
+      advanceAfterResolution(m);
+      if (!m.matchOver) checkInvariants(m, summary);
+    }
+  }
+  for (const ph of m.publicHints){
+    if (!hintTrue(ph.hint, m.mapping)) summary.hintTruthViolations.push({match:index, round:ph.round, hint:ph.hint});
+  }
+  return m.result;
+}
+function runSelfTest(n){
+  const summary = {
+    requested:n, completed:0, errorCount:0, errorSamples:[],
+    conservationViolations:[], hintTruthViolations:[], invariantViolations:[],
+    results:{human_win:0, npc_win:0, draw:0},
+  };
+  for (let i=0;i<n;i++){
+    try{
+      const result = autoPlayOneMatch(i, summary);
+      summary.completed++;
+      summary.results[result] = (summary.results[result]||0)+1;
+    } catch(e){
+      summary.errorCount++;
+      if (summary.errorSamples.length<5) summary.errorSamples.push(String(e && e.message || e));
+    }
+  }
+  return summary;
+}
+
+/* ==================== UI ==================== */
+
+let M = null;
+let GEN = 0;
+let abortArmed = false;
+let abortTimer = null;
+let MEMO = null; // 8x8 手動メモ（0=空白 1=× 2=○）。ゲームロジックとは無関係
+
+function showError(msg){
+  const el2 = document.getElementById('errorBanner');
+  el2.textContent = 'エラー: '+msg;
+  el2.hidden = false;
+  clearTimeout(showError._t);
+  showError._t = setTimeout(()=>{ el2.hidden = true; }, 6000);
+}
+function showToast(msg){
+  const el2 = document.getElementById('toast');
+  el2.textContent = msg;
+  el2.hidden = false;
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=>{ el2.hidden = true; }, 2000);
+}
+function safe(fn){
+  return function(...args){
+    try { fn(...args); } catch(e){ showError(e && e.message ? e.message : String(e)); }
+  };
+}
+
+function afterStateChange(){
+  render();
+  if (!M.matchOver && M.round && M.round.phase==='betting' && M.round.toAct==='npc'){
+    scheduleNpcMove();
+  }
+}
+function scheduleNpcMove(){
+  const gen = GEN;
+  setTimeout(()=>{
+    if (gen !== GEN) return; // 非同期ガード（マッチ切替・中断後は何もしない）
+    if (!M || M.matchOver || !M.round || M.round.phase!=='betting' || M.round.toAct!=='npc') return;
+    try{
+      const opts = computeOptions(M);
+      const decision = autoDecideAction(M, 'npc', opts);
+      submitAction(M, decision.action, decision.amount);
+    } catch(e){
+      showError(e && e.message ? e.message : String(e));
+    }
+    afterStateChange();
+  }, 380);
+}
+
+function startNewMatch(seedStr){
+  GEN++;
+  M = newMatch(seedStr);
+  M.seatTypes = { human:'HUMAN', npc:'NPC_AUTO' };
+  MEMO = Array.from({length:N_SYM}, ()=>Array(N_SYM).fill(0));
+  beginRound(M);
+  abortArmed = false;
+  afterStateChange();
+}
+function backToSetup(){
+  GEN++;
+  M = null;
+  abortArmed = false;
+  render();
+}
+
+/* ---------- DOM helper ---------- */
+function el(tag, attrs, children){
+  const e = document.createElement(tag);
+  if (attrs) Object.keys(attrs).forEach(k=>{
+    if (k==='class') e.className = attrs[k];
+    else if (k==='html') e.innerHTML = attrs[k];
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  });
+  (children||[]).forEach(c=>{ if (c!=null) e.appendChild(typeof c==='string' ? document.createTextNode(c) : c); });
+  return e;
+}
+
+/* ---------- レンダリング ---------- */
+function render(){
+  document.getElementById('verBadge').textContent = '伝達核v0.1 ソロ切片 '+VER;
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  if (!M){ app.appendChild(renderSetupScreen()); return; }
+  if (M.matchOver){ app.appendChild(renderEndScreen()); return; }
+  app.appendChild(renderGameScreen());
+}
+
+function renderSetupScreen(){
+  const wrap = el('div', {});
+  wrap.appendChild(el('h1', {}, ['伝達核v0.1 ― ソロ切片プロトタイプ']));
+  wrap.appendChild(el('div', {class:'sub'}, ['8種の記号への強さ1〜8の写像を、公開ヒントとアンカーの断片から読み解く。あなた（チームA）vs NPC（チームB）、8ラウンド1マッチ。']));
+
+  const seedPanel = el('div', {class:'panel'});
+  seedPanel.appendChild(el('h2', {}, ['シード（再現用）']));
+  seedPanel.appendChild(el('p', {class:'sub'}, ['同じシードなら写像・アンカー配布・スクリプトの乱数まで再現されます。空欄なら自動生成します。']));
+  const seedInput = el('input', {type:'text', id:'seedInput', value: randomSeedString(), style:'width:220px;'});
+  seedPanel.appendChild(el('div', {class:'row'}, [
+    seedInput,
+    el('button', {class:'btn primary', onclick:safe(()=>{
+      const v = document.getElementById('seedInput').value.trim();
+      startNewMatch(v || randomSeedString());
+    })}, ['対戦開始（NPC＝正直伝達陣営）']),
+  ]));
+  wrap.appendChild(seedPanel);
+
+  const dev = el('div', {class:'panel'});
+  dev.appendChild(el('h2', {}, ['開発者検証：自動テスト']));
+  dev.appendChild(el('p', {class:'sub'}, ['人間席もNPCロジックで代行し、無人対戦を100マッチ実行します。完走数・チップ保存則・ヒント真実性・整合性不変条件・勝敗内訳を検査します。']));
+  dev.appendChild(el('button', {class:'btn', onclick:safe(()=>{
+    const res = runSelfTest(100);
+    document.getElementById('selftestResult').textContent = formatSelfTestResult(res);
+  })}, ['自動テストを実行（100マッチ）']));
+  dev.appendChild(el('div', {id:'selftestResult'}));
+  wrap.appendChild(dev);
+
+  return wrap;
+}
+
+function formatSelfTestResult(res){
+  const lines = [];
+  lines.push(`完走: ${res.completed} / ${res.requested}`);
+  lines.push(`エラー発生: ${res.errorCount}`);
+  if (res.errorSamples.length) lines.push('エラー例: '+res.errorSamples.join(' | '));
+  lines.push(`チップ保存則違反: ${res.conservationViolations.length}件`);
+  lines.push(`ヒント真実性違反: ${res.hintTruthViolations.length}件`);
+  lines.push(`整合性不変条件違反: ${res.invariantViolations.length}件`);
+  lines.push(`勝敗内訳: human_win=${res.results.human_win||0} / npc_win=${res.results.npc_win||0} / draw=${res.results.draw||0}`);
+  return lines.join('\n');
+}
+
+function renderGameScreen(){
+  const wrap = el('div', {});
+  const r = M.round;
+
+  wrap.appendChild(el('div', {class:'row'}, [
+    el('span', {class:'sub'}, [`シード: ${M.seed}`]),
+  ]));
+
+  const stat = el('div', {class:'statbar'});
+  stat.appendChild(el('div', {class:'stat'}, ['あなたのチップ: ', el('b',{},[String(M.chips.human)])]));
+  stat.appendChild(el('div', {class:'stat'}, ['NPCのチップ: ', el('b',{},[String(M.chips.npc)])]));
+  stat.appendChild(el('div', {class:'stat'}, ['ポット: ', el('b',{},[String(M.pot)])]));
+  stat.appendChild(el('div', {class:'stat'}, [`ラウンド ${M.roundNum}/${ROUNDS_TOTAL}`]));
+  wrap.appendChild(stat);
+
+  const infoPanel = el('div', {class:'panel'});
+  const infoRow = el('div', {class:'row'});
+  const anchorBox = el('div', {});
+  anchorBox.appendChild(el('h2', {}, ['自分のアンカー']));
+  const anchorRow = el('div', {class:'symrow'});
+  M.anchorsA.forEach(a=>{
+    anchorRow.appendChild(el('div', {class:'sym static'}, [SYMBOLS[a.sym]+'='+a.val]));
+  });
+  anchorBox.appendChild(anchorRow);
+  infoRow.appendChild(anchorBox);
+
+  const oppBox = el('div', {});
+  oppBox.appendChild(el('h2', {}, ['敵の残記号（公開情報）']));
+  const oppRow = el('div', {class:'symrow'});
+  SYMBOLS.forEach((s,i)=>{ if (M.hand.npc.includes(i)) oppRow.appendChild(el('div', {class:'sym mini static'}, [s])); });
+  oppBox.appendChild(oppRow);
+  infoRow.appendChild(oppBox);
+  infoPanel.appendChild(infoRow);
+  wrap.appendChild(infoPanel);
+
+  const hintPanel = el('div', {class:'panel'});
+  hintPanel.appendChild(el('h2', {}, ['ヒントログ']));
+  if (!M.publicHints.length) hintPanel.appendChild(el('p', {class:'sub'}, ['まだヒントはありません。']));
+  M.publicHints.forEach(ph=>{
+    const line = el('div', {class:'hintline'});
+    line.appendChild(el('span', {class:'tag '+(ph.side==='A'?'mine':'theirs')}, [ph.side==='A'?'味方':'敵']));
+    line.appendChild(document.createTextNode(`R${ph.round}: ${describeHint(ph.hint)}`));
+    hintPanel.appendChild(line);
+  });
+  wrap.appendChild(hintPanel);
+
+  const constraintPanel = el('div', {class:'panel'});
+  constraintPanel.appendChild(el('h2', {}, ['公開制約ログ']));
+  if (!M.publicConstraints.length) constraintPanel.appendChild(el('p', {class:'sub'}, ['まだ制約はありません。']));
+  M.publicConstraints.forEach(c=>{
+    constraintPanel.appendChild(el('div', {class:'hintline'}, [`R${c.round}: ${SYMBOLS[c.winner]} > ${SYMBOLS[c.loser]}`]));
+  });
+  wrap.appendChild(constraintPanel);
+
+  const histPanel = el('div', {class:'panel'});
+  histPanel.appendChild(el('h2', {}, ['ラウンド履歴']));
+  if (M.roundHistory.length){
+    const tbl = el('table');
+    tbl.appendChild(el('tr', {}, [el('th',{},['R']), el('th',{},['あなた']), el('th',{},['NPC']), el('th',{},['決着']), el('th',{},['結果'])]));
+    M.roundHistory.forEach(h=>{
+      const resultText = h.tie ? '引き分け（持ち越し）' : `${nameOf(h.winner)}の勝ち`;
+      tbl.appendChild(el('tr', {}, [
+        el('td',{},[String(h.round)]),
+        el('td',{},[SYMBOLS[h.humanSym]]),
+        el('td',{},[SYMBOLS[h.npcSym]]),
+        el('td',{},[h.method==='fold'?'フォールド':'ショーダウン']),
+        el('td',{},[resultText]),
+      ]));
+    });
+    histPanel.appendChild(tbl);
+  } else {
+    histPanel.appendChild(el('p', {class:'sub'}, ['まだ決着したラウンドはありません。']));
+  }
+  wrap.appendChild(histPanel);
+
+  const roundPanel = el('div', {class:'panel'});
+  if (r.phase==='select_cards'){
+    roundPanel.appendChild(el('h2', {}, ['記号を1つ選んで伏せて出してください']));
+    const row = el('div', {class:'symrow'});
+    M.hand.human.forEach(i=>{
+      row.appendChild(el('div', {class:'sym', onclick:safe(()=>{ submitHumanCard(M, i); afterStateChange(); })}, [SYMBOLS[i]]));
+    });
+    roundPanel.appendChild(row);
+  } else if (r.phase==='betting'){
+    roundPanel.appendChild(el('h2', {}, ['ベット応酬']));
+    roundPanel.appendChild(el('p', {class:'sub'}, [`あなたの手番: ${r.toAct==='human' ? 'あなた' : 'NPC（考え中…）'}`]));
+    roundPanel.appendChild(renderBetLog(r));
+    if (r.toAct==='human') roundPanel.appendChild(renderActionButtons());
+  } else if (r.phase==='resolved'){
+    const last = M.roundHistory[M.roundHistory.length-1];
+    const resultText = last.tie ? '同一記号・引き分け（ポット持ち越し）' : `${nameOf(last.winner)}の勝ち（${last.method==='fold'?'フォールド':'ショーダウン'}）`;
+    roundPanel.appendChild(el('h2', {}, ['決着']));
+    roundPanel.appendChild(el('div', {class:'result-big'}, [`あなた=${SYMBOLS[last.humanSym]} ／ NPC=${SYMBOLS[last.npcSym]}　→　${resultText}`]));
+    roundPanel.appendChild(renderBetLog(r));
+    const nextLabel = (M.roundNum>=ROUNDS_TOTAL) ? '結果を見る' : '次のラウンドへ';
+    roundPanel.appendChild(el('button', {class:'btn primary', onclick:safe(()=>{ advanceAfterResolution(M); afterStateChange(); })}, [nextLabel]));
+  }
+  wrap.appendChild(roundPanel);
+
+  wrap.appendChild(renderMemoGrid());
+
+  const toolsPanel = el('div', {class:'panel'});
+  toolsPanel.appendChild(el('h2', {}, ['行動ログ']));
+  toolsPanel.appendChild(el('div', {id:'log'}, [M.matchLog.join('\n')]));
+  const toolsRow = el('div', {class:'row', style:'margin-top:10px;'});
+  toolsRow.appendChild(el('button', {class:'btn', onclick:safe(copyLog)}, ['ログコピー']));
+  toolsRow.appendChild(el('button', {class:'btn danger'+(abortArmed?' armed':''), onclick:safe(onAbortClick)}, [abortArmed ? '本当に中断？（4秒以内に再クリック）' : 'マッチを中断してシード画面に戻る']));
+  toolsPanel.appendChild(toolsRow);
+  wrap.appendChild(toolsPanel);
+
+  return wrap;
+}
+
+function renderBetLog(r){
+  const box = el('div', {class:'panel', style:'background:#161c22;'});
+  box.appendChild(el('h2', {}, ['このラウンドのベット経過']));
+  if (!r.history.length){ box.appendChild(el('p', {class:'sub'}, ['まだアクションはありません。'])); return box; }
+  const lines = r.history.map(h=>{
+    if (h.action==='check') return `${nameOf(h.player)}: チェック`;
+    if (h.action==='bet') return `${nameOf(h.player)}: ベット ${h.amount}`;
+    if (h.action==='call') return `${nameOf(h.player)}: コール ${h.amount}${h.allIn?'（オールイン）':''}`;
+    if (h.action==='raise') return `${nameOf(h.player)}: レイズ +${h.amount}（支払${h.totalPaid}）`;
+    if (h.action==='fold') return `${nameOf(h.player)}: フォールド`;
+    return JSON.stringify(h);
+  });
+  box.appendChild(el('div', {style:'font-size:0.85rem; line-height:1.6;'}, [lines.join(' → ')]));
+  return box;
+}
+
+function renderActionButtons(){
+  const opts = computeOptions(M);
+  const box = el('div', {class:'row', style:'margin-top:10px;'});
+  if (opts.kind==='open'){
+    box.appendChild(el('button', {class:'btn', onclick:safe(()=>{ submitAction(M,'check'); afterStateChange(); })}, ['チェック']));
+    extractValues(opts.options,'bet').forEach(v=>{
+      box.appendChild(el('button', {class:'btn primary', onclick:safe(()=>{ submitAction(M,'bet',v); afterStateChange(); })}, ['ベット '+v]));
+    });
+  } else {
+    box.appendChild(el('button', {class:'btn danger', onclick:safe(()=>{ submitAction(M,'fold'); afterStateChange(); })}, ['フォールド']));
+    const callLabel = opts.toCall > M.chips.human ? `コール（オールイン ${M.chips.human}）` : `コール ${opts.toCall}`;
+    box.appendChild(el('button', {class:'btn primary', onclick:safe(()=>{ submitAction(M,'call'); afterStateChange(); })}, [callLabel]));
+    extractValues(opts.options,'raise').forEach(v=>{
+      box.appendChild(el('button', {class:'btn', onclick:safe(()=>{ submitAction(M,'raise',v); afterStateChange(); })}, ['レイズ +'+v]));
+    });
+  }
+  return box;
+}
+
+function renderMemoGrid(){
+  const box = el('div', {class:'panel'});
+  box.appendChild(el('h2', {}, ['推理メモグリッド（手動・自動推論なし）']));
+  const table = el('table', {class:'memo-grid'});
+  const headRow = el('tr', {}, [el('th',{},[''])]);
+  for (let v=1; v<=N_SYM; v++) headRow.appendChild(el('th', {}, [String(v)]));
+  table.appendChild(headRow);
+  for (let s=0; s<N_SYM; s++){
+    const row = el('tr', {}, [el('th', {}, [SYMBOLS[s]])]);
+    for (let v=0; v<N_SYM; v++){
+      const state = MEMO[s][v];
+      const label = state===0 ? '' : (state===1 ? '×' : '○');
+      const cls = 'memo-cell' + (state===1?' x':(state===2?' o':''));
+      row.appendChild(el('td', {}, [
+        el('div', {class:cls, onclick:safe(()=>{
+          MEMO[s][v] = (MEMO[s][v]+1)%3;
+          render();
+        })}, [label])
+      ]));
+    }
+    table.appendChild(row);
+  }
+  box.appendChild(table);
+  return box;
+}
+
+function renderEndScreen(){
+  const wrap = el('div', {});
+  wrap.appendChild(el('h1', {}, ['マッチ終了']));
+  const msg = M.result==='draw' ? '引き分け' : (M.result==='human_win' ? 'あなたの勝ち！' : 'NPCの勝ち');
+  const panel = el('div', {class:'panel'});
+  panel.appendChild(el('div', {class:'result-big'}, [msg]));
+  panel.appendChild(el('p', {}, [`最終チップ：あなた=${M.chips.human} ／ NPC=${M.chips.npc}`]));
+  panel.appendChild(el('p', {class:'sub'}, [`シード: ${M.seed}（同一シードで再現可能）`]));
+  panel.appendChild(el('button', {class:'btn primary', onclick:safe(()=>{ GEN++; M=null; render(); })}, ['シード画面に戻る']));
+  wrap.appendChild(panel);
+
+  const logPanel = el('div', {class:'panel'});
+  logPanel.appendChild(el('h2', {}, ['行動ログ（このマッチ全文）']));
+  logPanel.appendChild(el('div', {id:'log'}, [M.matchLog.join('\n')]));
+  logPanel.appendChild(el('button', {class:'btn', style:'margin-top:10px;', onclick:safe(copyLog)}, ['ログコピー']));
+  wrap.appendChild(logPanel);
+  return wrap;
+}
+
+function copyLog(){
+  const text = (M ? M.matchLog.join('\n') : '');
+  const done = ()=> showToast('ログをコピーしました');
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=> fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+function fallbackCopy(text, done){
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try{ document.execCommand('copy'); done(); }
+  catch(e){ showError('ログのコピーに失敗しました: '+e.message); }
+  document.body.removeChild(ta);
+}
+
+function onAbortClick(){
+  if (!abortArmed){
+    abortArmed = true;
+    render();
+    clearTimeout(abortTimer);
+    abortTimer = setTimeout(()=>{ abortArmed=false; render(); }, 4000);
+  } else {
+    clearTimeout(abortTimer);
+    backToSetup();
+  }
+}
+
+render();
+</script>
+</body>
+</html>
