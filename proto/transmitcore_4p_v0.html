@@ -87,6 +87,9 @@
   .tablewrap{ overflow-x:auto; }
   .anchor-dim{ opacity:0.45; }
   .anchor-badge{ margin-left:6px; font-size:0.68rem; background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:1px 5px; color:var(--muted); vertical-align:middle; }
+  .term{ border-bottom:1px dotted var(--muted); cursor:help; position:relative; }
+  .term-tip{ display:none; position:absolute; left:0; top:100%; margin-top:4px; background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:0.78rem; color:var(--text); width:220px; max-width:70vw; white-space:normal; z-index:60; }
+  .term:hover .term-tip, .term.term-open .term-tip{ display:block; }
 </style>
 </head>
 <body>
@@ -121,7 +124,7 @@
    本書に明記のない要素はすべて上記凍結定義（ソロ版）を踏襲する。
    ============================================================ */
 
-const VER = "4p-v0.3.2";
+const VER = "4p-v0.3.3";
 const ROOT = "transmit4pRoomsV0";
 // 版番号比較（4p-v0.3.0：バナー文言をどちらが古いかで出し分けるために追加）。
 // "4p-vMAJOR.MINOR.PATCH" 形式以外（旧形式の版文字列等）はnull＝比較不能を返す。
@@ -192,6 +195,10 @@ const HINT_TABLE = [
   {axis:'群れ', tier:'直', text:'群れが大きい順', interp:['群れ']},
 ];
 const HINT_SCHEDULE = { 1:'遠', 2:'遠', 3:'中', 4:'直' }; // 4人版差分：両陣営が毎回並行して同じ等級を送る
+// ルール説明用の例文（4p-v0.3.3 §3-1）。わざと平凡な一例。フィルタ通過と凍結32件との非重複を
+// 静的テストで検証する。design chatの承認なしに文言を変更しないこと。
+const HINT_EXAMPLE_AXIS = '速さ';
+const HINT_EXAMPLE_TEXT = '追いかけっこで勝てなさそうな順';
 const ANCHOR_K = 2; // 凍結定義の値（v1.0ソロ版のアンカー枚数を踏襲）
 
 const BET_OPTIONS = [1,2,3,5];
@@ -1177,10 +1184,14 @@ function statusLine(g, team, role, isMyTurn){
   if (g.phase === 'resolved') return '決着。まもなく次のラウンドへ自動進行します';
   return '';
 }
+const PHASE_LABEL = { hint:'ヒント', select_cards:'カード選択', betting:'ベット応酬', resolved:'決着' };
+const PHASE_TERM_KEY = { hint:'ヒントフェーズ', select_cards:'カード選択フェーズ', betting:'ベット応酬フェーズ', resolved:'決着' };
 function renderStatusBar(g, team, role, isMyTurn){
-  const phaseNames = { hint:'ヒント', select_cards:'カード選択', betting:'ベット応酬', resolved:'決着' };
   const bar = el('div', {class:'statusbar' + (isMyTurn ? ' my-turn' : '')});
-  bar.appendChild(el('div', {}, [`フェーズ: ${phaseNames[g.phase] || g.phase}`]));
+  const phaseDiv = el('div', {}, ['フェーズ: ']);
+  const termKey = PHASE_TERM_KEY[g.phase];
+  phaseDiv.appendChild(termKey ? term(PHASE_LABEL[g.phase] || g.phase, termKey) : document.createTextNode(PHASE_LABEL[g.phase] || g.phase));
+  bar.appendChild(phaseDiv);
   bar.appendChild(el('div', {class:'who'}, [statusLine(g, team, role, isMyTurn)]));
   bar.appendChild(el('div', {}, [`${role==='observer' ? '📡 観測員' : '🤿 潜水士'}（チーム${team==='A'?'A(味方)':'B(敵)'}）`]));
   return bar;
@@ -1204,10 +1215,10 @@ function renderGameScreen(){
   lsPanel.appendChild(el('h2', {}, ['命／得点（別勘定）']));
   const lsRow = el('div', {class:'row'});
   const mineBox = el('div', {});
-  mineBox.appendChild(el('div', {}, [`🫧 味方 命=${g.chips[team]} ／ 得点=${g.score[team]}`]));
+  mineBox.appendChild(el('div', {}, ['🫧 味方 ', term('命', '酸素'), `=${g.chips[team]} ／ 得点=${g.score[team]}`]));
   mineBox.appendChild(gaugeEl(g.chips[team], INITIAL_LIFE));
   const oppBox = el('div', {});
-  oppBox.appendChild(el('div', {}, [`🫧 敵 命=${g.chips[opp]} ／ 得点=${g.score[opp]}`]));
+  oppBox.appendChild(el('div', {}, ['🫧 敵 ', term('命', '酸素'), `=${g.chips[opp]} ／ 得点=${g.score[opp]}`]));
   oppBox.appendChild(gaugeEl(g.chips[opp], INITIAL_LIFE));
   lsRow.appendChild(mineBox); lsRow.appendChild(oppBox);
   lsPanel.appendChild(lsRow);
@@ -1352,7 +1363,11 @@ function renderAxisReferenceTable(anchorAxes){
   AXES.forEach(axis=>{
     const isAnchor = anchors.includes(axis);
     const th = el('th', {}, [axis]);
-    if (isAnchor) th.appendChild(el('span', {class:'anchor-badge'}, ['アンカー']));
+    if (isAnchor){
+      const badge = term('アンカー', 'アンカー');
+      badge.classList.add('anchor-badge');
+      th.appendChild(badge);
+    }
     const row = el('tr', {class: isAnchor ? 'anchor-dim' : ''}, [th]);
     AXIS_ORDER[axis].forEach(animal=> row.appendChild(el('td', {}, [animal])));
     tbl.appendChild(row);
@@ -1386,6 +1401,10 @@ function betActionLabel(action, amount, opts, g){
   if (action==='raise') return 'レイズ +'+amount;
   return action;
 }
+// ベット5動詞のボタンは既に確定前プレビュー(1タップ目)を経由するため、タップでの用語説明は
+// そのプレビュー内に表示する（ボタン自体のクリックは賭けアクションの選択に使うため、term()の
+// クリック開閉とは競合させない）。titleはデスクトップのホバー用（4p-v0.3.3 §4）。
+const BET_ACTION_TERM_KEY = { check:'チェック', bet:'ベット', call:'コール', raise:'レイズ', fold:'フォールド' };
 function renderActionButtons(g){
   const opts = computeBetOptions(g.betting, g.chips);
   const box = el('div', {class:'row', style:'margin-top:10px;'});
@@ -1394,6 +1413,7 @@ function renderActionButtons(g){
     const previewBox = el('div', {class:'preview-box'});
     previewBox.appendChild(el('div', {}, ['このアクションを確定しますか？']));
     previewBox.appendChild(el('div', {style:'font-weight:bold; margin:6px 0;'}, [betActionLabel(betPreview.action, betPreview.amount, opts, g)]));
+    previewBox.appendChild(el('div', {class:'sub'}, [TERM_DEFS[BET_ACTION_TERM_KEY[betPreview.action]] || '']));
     const row = el('div', {class:'row'});
     row.appendChild(el('button', {class:'btn primary', onclick:safe(async ()=>{ const p=betPreview; betPreview=null; await submitBettingAction(p.action, p.amount); })}, ['確定']));
     row.appendChild(el('button', {class:'btn', onclick:safe(()=>{ betPreview=null; render(); })}, ['取り消し']));
@@ -1402,17 +1422,17 @@ function renderActionButtons(g){
     return box;
   }
   if (opts.kind==='open'){
-    box.appendChild(el('button', {class:'btn', onclick:safe(()=>{ betPreview={action:'check'}; render(); })}, ['チェック']));
+    box.appendChild(el('button', {class:'btn', title:TERM_DEFS['チェック'], onclick:safe(()=>{ betPreview={action:'check'}; render(); })}, ['チェック']));
     extractValues(opts.options,'bet').forEach(v=>{
-      box.appendChild(el('button', {class:'btn primary', onclick:safe(()=>{ betPreview={action:'bet', amount:v}; render(); })}, ['ベット '+v]));
+      box.appendChild(el('button', {class:'btn primary', title:TERM_DEFS['ベット'], onclick:safe(()=>{ betPreview={action:'bet', amount:v}; render(); })}, ['ベット '+v]));
     });
   } else {
-    box.appendChild(el('button', {class:'btn danger', onclick:safe(()=>{ betPreview={action:'fold'}; render(); })}, ['フォールド']));
+    box.appendChild(el('button', {class:'btn danger', title:TERM_DEFS['フォールド'], onclick:safe(()=>{ betPreview={action:'fold'}; render(); })}, ['フォールド']));
     const myChips = g.chips[myTeam()];
     const callLabel = opts.toCall > myChips ? `コール（オールイン ${myChips}）` : `コール ${opts.toCall}`;
-    box.appendChild(el('button', {class:'btn primary', onclick:safe(()=>{ betPreview={action:'call'}; render(); })}, [callLabel]));
+    box.appendChild(el('button', {class:'btn primary', title:TERM_DEFS['コール'], onclick:safe(()=>{ betPreview={action:'call'}; render(); })}, [callLabel]));
     extractValues(opts.options,'raise').forEach(v=>{
-      box.appendChild(el('button', {class:'btn', onclick:safe(()=>{ betPreview={action:'raise', amount:v}; render(); })}, ['レイズ +'+v]));
+      box.appendChild(el('button', {class:'btn', title:TERM_DEFS['レイズ'], onclick:safe(()=>{ betPreview={action:'raise', amount:v}; render(); })}, ['レイズ +'+v]));
     });
   }
   return box;
@@ -1442,6 +1462,10 @@ function renderEndScreen(){
     document.getElementById('app').appendChild(revealPanel);
   }).catch(()=>{});
 
+  // ルール参照ログ（4p-v0.3.3 §6）：Phase 1の記録者向けの1行表示。演出なし。ローカル集計のみ。
+  const refCounts = loadRuleRefCounts();
+  wrap.appendChild(el('p', {class:'sub'}, [`ルール参照：概要${refCounts.overview||0}回／観測員${refCounts.observer||0}回／潜水士${refCounts.diver||0}回／用語集${refCounts.glossary||0}回`]));
+
   return wrap;
 }
 
@@ -1450,13 +1474,65 @@ function renderEndScreen(){
    毎回の全再構築の影響を受けず、モーダルを開いたまま操作してもスクロール位置が壊れない
    （seri教訓・CLAUDE.md §4-3）。
    記述は実装済みの挙動のみ。軸名の発話は自由（禁止していない）— 存在しない規則を書かないこと。 */
+// 用語集本文とツールチップ本文の単一の出所（4p-v0.3.3 §4）。数値は既存の単一ソース定数から。
+const TERM_DEFS = {
+  '軸': `動物を並び替える基準。${AXES.length}種類のうち、各チームに1つずつ、別々に割り当てられます。`,
+  'アンカー': '潜水士だけが知る、自チームの軸でも相手チームの軸でもないと確定している消去情報（二重の消去情報）。2つ配られます。',
+  'ドレイン': '時間経過による酸素の消費。カード選択中は両チームの潜水士が同時に考えているため両チームの酸素が同時に減り、ベット応酬中はその時点で手番があるチームだけ酸素が減ります。ヒントフェーズ中は、設定が「等額」なら両チームの酸素が同時に・同じ速さで微かに減ります（アンビエントドレイン。観測員の書く速さでは差がつきません）。いずれも「オフ」に設定した場面では減りません。判定や演出などシステムの処理中は減りません（速度は部屋作成時に設定できます）。',
+  '酸素': 'チームの残りチップ。ベットで賭けた酸素はポットに入り、そのラウンドの勝者チームの得点に加算されます（酸素そのものが相手に移るわけではありません）。酸素が先に0になったチームは即座に敗北します。',
+  '得点': 'ポットを獲得した回数の積み上げ。酸素が両チームとも残っている（または同時に尽きた）まま8ラウンドを終えたときは、得点が多い方の勝ちです。',
+  'アンティ': `各ラウンド開始時に両チームから自動で徴収される参加料（酸素${ANTE_PER_TEAM}）。ポットに入ります。`,
+  'ポット': 'そのラウンドに賭けられた酸素の合計。勝ったチームの得点になります。',
+  'チェック': '追加で賭けずに相手に手番を渡すこと。',
+  'ベット': `酸素を賭けること（${BET_OPTIONS.join('・')}から選択）。`,
+  'コール': '相手のベットと同額を出して勝負を受けること。',
+  'レイズ': `相手のベットにさらに上乗せすること（1ラウンドに${MAX_RAISES}回まで）。`,
+  'ショーダウン': '両チームのカードを突き合わせて勝敗を決める瞬間。それぞれ自分のチームの軸での順位を比べ、順位値が大きい方の勝ちです。',
+  '無線': '観測員から送られるヒントのテキストのこと。',
+  'ロック': 'ヒントの送信を確定すること。ロック後は編集・取消不可。',
+  'フォールド': 'ベット応酬を降りること。相手チームがそのラウンドの勝ちになります。',
+  'ヒントフェーズ': '観測員がヒントを書いて送る時間（R1〜4のみ）。',
+  'カード選択フェーズ': '潜水士が動物を1体選んで伏せて出す時間。',
+  'ベット応酬フェーズ': '手番のチームがチェック／ベット／コール／レイズ／フォールドを選ぶ時間。',
+  '決着': '勝敗が確定し、まもなく次のラウンドへ進む短い区間。',
+};
 function ruleP(text){ return el('p', {}, [text]); }
 function ruleUl(items){ return el('ul', {style:'margin:4px 0; padding-left:20px;'}, items.map(i=> el('li', {style:'margin:3px 0;'}, [i]))); }
+// 用語ツールチップ：ホバー（デスクトップ）＋タップ（モバイル）の両方で開く（4p-v0.3.3 §4・知見§6-9）。
+// 定義文はTERM_DEFS（用語集と同一の出所）から取得する。
+function term(label, key){
+  const wrap = el('span', {class:'term', tabindex:'0'}, [label]);
+  wrap.appendChild(el('span', {class:'term-tip'}, [TERM_DEFS[key] || '']));
+  wrap.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const wasOpen = wrap.classList.contains('term-open');
+    document.querySelectorAll('.term.term-open').forEach(t=> t.classList.remove('term-open'));
+    if (!wasOpen) wrap.classList.add('term-open');
+  });
+  return wrap;
+}
+document.addEventListener('click', ()=>{ document.querySelectorAll('.term.term-open').forEach(t=> t.classList.remove('term-open')); });
 function ruleOverview(){
   const box = el('div', {});
-  box.appendChild(ruleP('2チーム対抗の伝達ゲームです。各チームは観測員1名と潜水士1名に分かれ、観測員だけが自チームの「軸」（動物の並び順の基準）を知っています。各チームは別々の軸を持ちます（同じ軸を共有しているわけではありません）。'));
+  // 1. ファンタジー＋ゴール（専門用語ゼロ・2〜3文。4p-v0.3.3 §1）
+  box.appendChild(ruleP('あなたたちは深海サルベージの2チーム。潜水士は海の底、観測員は船の上。頼りは無線だけ――そして無線は、敵チームの船にも聞こえています。'));
+  // 2. 骨格（粗い地図）
+  box.appendChild(ruleP('全8ラウンド。各ラウンドは【ヒント無線（ラウンド1〜4のみ）→ カード提出 → ベット応酬 → ショーダウン】の順に進みます。'));
+  // 3. 2軸制の明示・勝敗条件（v0.3.1/v0.3.2で確定した文言をそのまま流用）
+  box.appendChild(ruleP('各チームは観測員1名と潜水士1名に分かれ、観測員だけが自チームの「軸」（動物の並び順の基準）を知っています。各チームは別々の軸を持ちます（同じ軸を共有しているわけではありません）。'));
   box.appendChild(ruleP('潜水士は、観測員がテキストで送るヒント（無線）だけを頼りに、8匹の動物図鑑から1匹を選んで対戦相手と勝負します。'));
   box.appendChild(ruleP('選んだ動物の順位を、それぞれ自分のチームの軸で比較し、勝った方がそのラウンドのポット（酸素）を得点にします。どちらかのチームの酸素が先に0になるとそのチームは得点に関わらず即座に敗北し、そうでなければ8ラウンド終了時に得点が多い方の勝ちです。'));
+  // 「誰が何を知っているか」見取り図（4p-v0.3.3 §2。実装と突合済み）
+  box.appendChild(el('h3', {}, ['誰が何を知っているか']));
+  const infoTbl = el('table');
+  infoTbl.appendChild(el('tr', {}, [el('th',{},['情報']), el('th',{},['自チーム観測員']), el('th',{},['自チーム潜水士']), el('th',{},['敵チーム'])]));
+  [
+    ['自チームの軸', '○知っている', '×（ヒントで推理）', '×（傍受で推理）'],
+    ['敵チームの軸', '×', '×（アンカーで絞れる）', '敵観測員のみ○'],
+    ['あなたのアンカー', '×', '○本人のみ', '×'],
+    ['ヒント（無線）', '○全員に聞こえる', '○', '○全員に聞こえる'],
+  ].forEach(row=> infoTbl.appendChild(el('tr', {}, row.map(c=> el('td', {}, [c])))));
+  box.appendChild(el('div', {class:'tablewrap'}, [infoTbl]));
   return box;
 }
 function ruleObserverTab(){
@@ -1467,6 +1543,7 @@ function ruleObserverTab(){
     'ラウンド1〜4の各ラウンドでヒントを1通送れます。内容も、どこまで露骨に言うかも毎回自由です。鋭いヒントは味方に確実に届きますが、敵チームにも同じだけ聞こえます（NPCチームの観測員は、決まった段階〔遠回し→遠回し→中間→直接的〕で送ります）。',
     'R5以降はヒントなしで直接カード選択に進みます。',
     `ヒントは${HINT_TEXT_MAX_LEN}字以内の自由なテキストです。相手チームの観測員も同時に（並行して）ヒントを書いており、両方が送信ロックするか${HINT_LOCK_TIMEOUT_MS/1000}秒経過すると同時に公開されます。`,
+    `例：軸が「${HINT_EXAMPLE_AXIS}」なら――「${HINT_EXAMPLE_TEXT}」（あくまで平凡な一例です。もっと遠回しでも、もっと直接的でも構いません）`,
     '送信ロック後は取り消せません。ロック前に確認画面が一度出ます。',
     '締切までロックしなかった場合は「無線沈黙」として全員に表示されます。',
     '軸の名前そのものを言うことは自由です（禁止されていません）。ただし、数字（算用数字・漢数字含む）や「1位」「最大」「一番」等の順位を直接示す語句は自動フィルタでブロックされます。',
@@ -1488,26 +1565,33 @@ function ruleDiverTab(){
   ]));
   return box;
 }
+// 用語集の表示順・見出し表記（読み仮名等）。定義本文はTERM_DEFS（ツールチップと同一の出所）を参照する。4p-v0.3.3 §4。
+const GLOSSARY_ORDER = [
+  ['軸（じく）', '軸'], ['アンカー', 'アンカー'], ['ドレイン', 'ドレイン'], ['酸素', '酸素'], ['得点', '得点'],
+  ['アンティ', 'アンティ'], ['ポット', 'ポット'], ['チェック', 'チェック'], ['ベット', 'ベット'], ['コール', 'コール'],
+  ['レイズ', 'レイズ'], ['ショーダウン', 'ショーダウン'], ['無線', '無線'], ['ロック', 'ロック'], ['フォールド', 'フォールド'],
+];
+// ショーダウンの作例（4p-v0.3.3 §3-2）：軸・動物の組は固定でよいが、順位値と勝敗はRANK_OF/resolveShowdown()
+// から動的に導出する（転記ミスの構造的防止）。design chatの承認なしに組を変更しないこと。
+const SHOWDOWN_EXAMPLE_A = { axis: '体重', animal: 'ゾウ' };
+const SHOWDOWN_EXAMPLE_B = { axis: '速さ', animal: 'ネコ' };
+function ruleShowdownExampleText(){
+  const rankA = RANK_OF[SHOWDOWN_EXAMPLE_A.axis][SHOWDOWN_EXAMPLE_A.animal];
+  const rankB = RANK_OF[SHOWDOWN_EXAMPLE_B.axis][SHOWDOWN_EXAMPLE_B.animal];
+  const result = resolveShowdown(SHOWDOWN_EXAMPLE_A.animal, SHOWDOWN_EXAMPLE_B.animal, SHOWDOWN_EXAMPLE_A.axis, SHOWDOWN_EXAMPLE_B.axis);
+  const winnerLabel = result.tie ? '引き分け' : (result.winnerTeam === 'A' ? 'Aチームの勝ち' : 'Bチームの勝ち');
+  return `例：Aチームの軸が「${SHOWDOWN_EXAMPLE_A.axis}」で${SHOWDOWN_EXAMPLE_A.animal}（順位値${rankA}）、Bチームの軸が「${SHOWDOWN_EXAMPLE_B.axis}」で${SHOWDOWN_EXAMPLE_B.animal}（順位値${rankB}）を出した場合 → 順位値が大きい方の勝ちなので、${winnerLabel}です。`;
+}
 function ruleGlossaryTab(){
   const box = el('div', {});
   box.appendChild(el('h3', {}, ['用語集']));
-  box.appendChild(ruleUl([
-    `軸（じく）：動物を並び替える基準。${AXES.length}種類のうち、各チームに1つずつ、別々に割り当てられます。`,
-    'アンカー：潜水士だけが知る、自チームの軸でも相手チームの軸でもないと確定している消去情報（二重の消去情報）。2つ配られます。',
-    'ドレイン：時間経過による酸素の消費。カード選択中は両チームの潜水士が同時に考えているため両チームの酸素が同時に減り、ベット応酬中はその時点で手番があるチームだけ酸素が減ります。ヒントフェーズ中は、設定が「等額」なら両チームの酸素が同時に・同じ速さで微かに減ります（アンビエントドレイン。観測員の書く速さでは差がつきません）。いずれも「オフ」に設定した場面では減りません。判定や演出などシステムの処理中は減りません（速度は部屋作成時に設定できます）。',
-    '酸素：チームの残りチップ。ベットで賭けた酸素はポットに入り、そのラウンドの勝者チームの得点に加算されます（酸素そのものが相手に移るわけではありません）。酸素が先に0になったチームは即座に敗北します。',
-    '得点：ポットを獲得した回数の積み上げ。酸素が両チームとも残っている（または同時に尽きた）まま8ラウンドを終えたときは、得点が多い方の勝ちです。',
-    `アンティ：各ラウンド開始時に両チームから自動で徴収される参加料（酸素${ANTE_PER_TEAM}）。ポットに入ります。`,
-    'ポット：そのラウンドに賭けられた酸素の合計。勝ったチームの得点になります。',
-    'チェック：追加で賭けずに相手に手番を渡すこと。',
-    `ベット：酸素を賭けること（${BET_OPTIONS.join('・')}から選択）。`,
-    'コール：相手のベットと同額を出して勝負を受けること。',
-    `レイズ：相手のベットにさらに上乗せすること（1ラウンドに${MAX_RAISES}回まで）。`,
-    'ショーダウン：両チームのカードを突き合わせて勝敗を決める瞬間。それぞれ自分のチームの軸での順位で比べます。',
-    '無線：観測員から送られるヒントのテキストのこと。',
-    'ロック：ヒントの送信を確定すること。ロック後は編集・取消不可。',
-    'フォールド：ベット応酬を降りること。相手チームがそのラウンドの勝ちになります。',
-  ]));
+  const showdownIdx = GLOSSARY_ORDER.findIndex(([,key])=> key === 'ショーダウン');
+  const before = GLOSSARY_ORDER.slice(0, showdownIdx+1);
+  const after = GLOSSARY_ORDER.slice(showdownIdx+1);
+  box.appendChild(ruleUl(before.map(([label,key])=> `${label}：${TERM_DEFS[key]}`)));
+  // ショーダウンの作例は用語集のショーダウン項の直下に置く（4p-v0.3.3 §3-2）
+  box.appendChild(ruleP(ruleShowdownExampleText()));
+  box.appendChild(ruleUl(after.map(([label,key])=> `${label}：${TERM_DEFS[key]}`)));
   box.appendChild(el('h3', {}, ['数値の目安']));
   const tbl = el('table');
   tbl.appendChild(el('tr', {}, [el('th',{},['項目']), el('th',{},['値'])]));
@@ -1524,11 +1608,23 @@ function ruleGlossaryTab(){
   box.appendChild(el('div', {class:'tablewrap'}, [tbl]));
   return box;
 }
+// ルール参照ログ（4p-v0.3.3 §6）：ローカルのみでタブ表示回数を数える。DBへは送らない。
+// Phase 1の記録者向けに、終了画面へ1行だけ表示する（演出なし）。
+const RULE_REF_KEY = 'transmit4p_rule_ref_counts';
+function loadRuleRefCounts(){
+  try{ return JSON.parse(localStorage.getItem(RULE_REF_KEY) || '{}'); } catch(_){ return {}; }
+}
+function bumpRuleRefCount(tabKey){
+  const counts = loadRuleRefCounts();
+  counts[tabKey] = (counts[tabKey]||0) + 1;
+  try{ localStorage.setItem(RULE_REF_KEY, JSON.stringify(counts)); } catch(_){}
+}
 function openRuleModal(){
   const modal = document.getElementById('ruleModal');
   const body = document.getElementById('ruleModalBody');
   body.innerHTML = '';
   body.appendChild(ruleOverview());
+  bumpRuleRefCount('overview');
 
   const tabsRow = el('div', {class:'modal-tabs'});
   const panes = {};
@@ -1547,6 +1643,7 @@ function openRuleModal(){
   function selectTab(key){
     defs.forEach(([k])=>{ panes[k].hidden = (k!==key); });
     [...tabsRow.children].forEach(btn=> btn.classList.toggle('active', btn.dataset.tab===key));
+    bumpRuleRefCount(key);
   }
   defs.forEach(([key,label])=>{
     const btn = el('button', {class:'modal-tab', type:'button', onclick:()=>selectTab(key)}, [label]);
