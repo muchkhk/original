@@ -221,3 +221,118 @@ test("rule modal describes anchors as double-elimination (neither team's axis) a
 test("rule modal's tie description covers both same-animal and same-rank-different-axis ties (4p-v0.3.1 §2-1)", () => {
   assert.match(HTML, /異なる動物でも両陣営の軸上の順位が同じ数値になった場合は、引き分け/);
 });
+
+test("rule modal's glossary explains drain, and the betting/showdown vocabulary for poker-unfamiliar players (4p-v0.3.2 §1; definitions moved into TERM_DEFS as of 4p-v0.3.3 §4)", () => {
+  assert.match(SCRIPT, /'ドレイン': '時間経過による酸素の消費/);
+  assert.match(SCRIPT, /'アンティ': `各ラウンド開始時に両チームから自動で徴収される参加料/);
+  assert.match(SCRIPT, /'ポット': 'そのラウンドに賭けられた酸素の合計/);
+  assert.match(SCRIPT, /'チェック': '追加で賭けずに相手に手番を渡すこと。'/);
+  assert.match(SCRIPT, /'ベット': `酸素を賭けること/);
+  assert.match(SCRIPT, /'コール': '相手のベットと同額を出して勝負を受けること。'/);
+  assert.match(SCRIPT, /'レイズ': `相手のベットにさらに上乗せすること/);
+  assert.match(SCRIPT, /'ショーダウン': '両チームのカードを突き合わせて勝敗を決める瞬間。/);
+  // GLOSSARY_ORDERがTERM_DEFSの同じキーを参照して用語集を組み立てていること
+  assert.match(SCRIPT, /const GLOSSARY_ORDER = \[/);
+  assert.match(SCRIPT, /\.map\(\(\[label,key\]\)=> `\$\{label\}：\$\{TERM_DEFS\[key\]\}`\)/);
+});
+
+test("rule modal overview explicitly states each team holds a separate axis (4p-v0.3.2 §1-c-1)", () => {
+  assert.match(HTML, /各チームは別々の軸を持ちます（同じ軸を共有しているわけではありません）/);
+});
+
+test("rule modal's R5 sentence applies to everyone, not scoped inside the NPC parenthetical (4p-v0.3.2 §1-c-2)", () => {
+  const observerSrc = SCRIPT.match(/function ruleObserverTab\(\)\{[\s\S]*?\n\}/)[0];
+  assert.doesNotMatch(observerSrc, /R5以降はヒントなしで直接カード選択に進みます）。/, "R5 sentence must not be inside the NPC-only parenthetical");
+  assert.match(observerSrc, /'R5以降はヒントなしで直接カード選択に進みます。'/);
+});
+
+test("anchor dimming in the axis reference table is diver-only and sourced only from the viewer's own private data (4p-v0.3.2 §2)", () => {
+  assert.match(HTML, /\.anchor-dim\{/);
+  assert.match(HTML, /anchor-badge/);
+  const fnSrc = SCRIPT.match(/function renderAxisReferenceTable\(anchorAxes\)\{[\s\S]*?\n\}/)[0];
+  assert.match(fnSrc, /anchors\.includes\(axis\)/);
+  const callSiteSrc = SCRIPT.match(/const myAnchors = [\s\S]*?;/)[0];
+  assert.match(callSiteSrc, /role==='diver'/);
+  assert.match(callSiteSrc, /ST\.myPrivate\.anchors/);
+  // must not read any other seat's private data, or an opponent-team field, when building the anchor list
+  assert.doesNotMatch(callSiteSrc, /allPrivate|seats\[/);
+});
+
+test("4p-v0.3.3 §7-a: the hint example passes the human hint filter and does not duplicate any of the frozen 32 hint texts", () => {
+  const axisMatch = SCRIPT.match(/const HINT_EXAMPLE_AXIS = '([^']+)';/);
+  const textMatch = SCRIPT.match(/const HINT_EXAMPLE_TEXT = '([^']+)';/);
+  assert.ok(axisMatch && textMatch, "HINT_EXAMPLE_AXIS/HINT_EXAMPLE_TEXT constants must exist");
+  const { hintFilterViolation } = extractHintFilterFns();
+  assert.equal(hintFilterViolation(textMatch[1]), null, `example hint text must pass the filter, got violation for "${textMatch[1]}"`);
+
+  const defMd = fs.readFileSync("proto/核定義_伝達核v1.0_動物軸版_凍結_2026-07-17.md", "utf8");
+  const frozenTexts = [...defMd.matchAll(/^\| (?:体重|速さ|寿命|危険度|かわいさ|人気|五十音|群れ) \| (?:遠|中|直) \| ([^|]+) \|/gm)].map(m=>m[1].trim());
+  assert.equal(frozenTexts.length, 32);
+  assert.ok(!frozenTexts.includes(textMatch[1]), `example hint text must not duplicate a frozen hint: "${textMatch[1]}"`);
+  // the example must actually be shown in the observer tab
+  const observerSrc = SCRIPT.match(/function ruleObserverTab\(\)\{[\s\S]*?\n\}/)[0];
+  assert.match(observerSrc, /HINT_EXAMPLE_AXIS/);
+  assert.match(observerSrc, /HINT_EXAMPLE_TEXT/);
+});
+
+test("4p-v0.3.3 §7-b: the showdown worked example is derived from RANK_OF/resolveShowdown, not a hand-typed rank value", () => {
+  const fnSrc = SCRIPT.match(/function ruleShowdownExampleText\(\)\{[\s\S]*?\n\}/)[0];
+  assert.match(fnSrc, /RANK_OF\[SHOWDOWN_EXAMPLE_A\.axis\]\[SHOWDOWN_EXAMPLE_A\.animal\]/);
+  assert.match(fnSrc, /RANK_OF\[SHOWDOWN_EXAMPLE_B\.axis\]\[SHOWDOWN_EXAMPLE_B\.animal\]/);
+  assert.match(fnSrc, /resolveShowdown\(SHOWDOWN_EXAMPLE_A\.animal, SHOWDOWN_EXAMPLE_B\.animal, SHOWDOWN_EXAMPLE_A\.axis, SHOWDOWN_EXAMPLE_B\.axis\)/);
+  // must not contain a hardcoded numeric rank literal like "順位値8" baked into the template string
+  assert.doesNotMatch(fnSrc, /順位値\d/);
+  assert.match(fnSrc, /順位値が大きい方の勝ち/, "must explicitly state which direction wins, since prior rule text never did");
+  // must be placed directly under the ショーダウン glossary entry, not at the end of the whole list
+  const glossaryFnSrc = SCRIPT.match(/function ruleGlossaryTab\(\)\{[\s\S]*?\n\}/)[0];
+  assert.match(glossaryFnSrc, /showdownIdx\+1/);
+});
+
+test("4p-v0.3.3 §7-c: every game term used in the teaching parts (overview/role tabs) also exists in the glossary (anti pattern: term used before defined)", () => {
+  const glossaryLabels = GLOSSARY_ORDER_LABELS();
+  const teachingTerms = ['軸', 'アンカー', '酸素', '得点', '無線', 'ロック', 'フォールド', 'ドレイン'];
+  for (const t of teachingTerms) {
+    assert.ok(glossaryLabels.some(l => l.includes(t)), `term "${t}" used in teaching parts must have a glossary entry`);
+  }
+  function GLOSSARY_ORDER_LABELS(){
+    const m = SCRIPT.match(/const GLOSSARY_ORDER = (\[[\s\S]*?\]);/)[1];
+    const order = new Function(`return ${m};`)();
+    return order.map(([label]) => label);
+  }
+});
+
+test("4p-v0.3.3 §4: term() tooltips (phase name, anchor badge, oxygen) read from the same TERM_DEFS map as the glossary", () => {
+  assert.match(SCRIPT, /function term\(label, key\)\{/);
+  assert.match(SCRIPT, /TERM_DEFS\[key\] \|\| ''/);
+  assert.match(SCRIPT, /PHASE_TERM_KEY\[g\.phase\]/);
+  assert.match(SCRIPT, /term\('命', '酸素'\)/);
+  assert.match(SCRIPT, /term\('アンカー', 'アンカー'\)/);
+});
+
+test("4p-v0.3.3 §1: overview leads with fantasy+goal, then the round skeleton, before the 2-axis/win-condition text", () => {
+  const overviewSrc = SCRIPT.match(/function ruleOverview\(\)\{[\s\S]*?\n\}/)[0];
+  const fantasyIdx = overviewSrc.indexOf('深海サルベージ');
+  const skeletonIdx = overviewSrc.indexOf('【ヒント無線');
+  const axisIdx = overviewSrc.indexOf('各チームは観測員1名と潜水士1名');
+  assert.ok(fantasyIdx > -1 && skeletonIdx > -1 && axisIdx > -1, "all three overview sections must be present");
+  assert.ok(fantasyIdx < skeletonIdx && skeletonIdx < axisIdx, "overview must be ordered fantasy+goal -> skeleton -> 2-axis/win-condition");
+});
+
+test("4p-v0.3.3 §2: overview includes the 'who knows what' asymmetry table matching the implemented private-data boundaries", () => {
+  const overviewSrc = SCRIPT.match(/function ruleOverview\(\)\{[\s\S]*?\n\}/)[0];
+  assert.match(overviewSrc, /自チームの軸/);
+  assert.match(overviewSrc, /あなたのアンカー/);
+  assert.match(overviewSrc, /敵観測員のみ○/);
+  assert.match(overviewSrc, /○本人のみ/);
+});
+
+test("4p-v0.3.3 §6: rule-modal tab views are counted locally (localStorage only, never sent to the DB) and shown on the end screen", () => {
+  assert.match(SCRIPT, /const RULE_REF_KEY = 'transmit4p_rule_ref_counts'/);
+  assert.match(SCRIPT, /bumpRuleRefCount\('overview'\)/);
+  assert.match(SCRIPT, /bumpRuleRefCount\(key\)/);
+  const endScreenSrc = SCRIPT.match(/function renderEndScreen\(\)\{[\s\S]*?\n\}/)[0];
+  assert.match(endScreenSrc, /ルール参照：概要/);
+  assert.match(endScreenSrc, /loadRuleRefCounts\(\)/);
+  // must never write the counter to Firebase
+  assert.doesNotMatch(SCRIPT.match(/function bumpRuleRefCount[\s\S]*?\n\}/)[0], /roomRef|db\.ref/);
+});
