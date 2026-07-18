@@ -80,7 +80,7 @@
    本書に明記のない要素はすべて上記凍結定義（ソロ版）を踏襲する。
    ============================================================ */
 
-const VER = "4p-v0.2.1";
+const VER = "4p-v0.2.2";
 const ROOT = "transmit4pRoomsV0";
 // 本番Firebaseプロジェクト未設定（実装者の権限外・§9-e）。空のままだと下記が「未設定」動作になる。
 const FIREBASE_CONFIG = {};
@@ -389,6 +389,27 @@ async function createRoom(mode, drainSpeed, hintDrainToggle, name){
   ST.room = code; ST.seat = 0; saveSession(); attach();
 }
 
+// 空席選択（純関数）：サーバー同期済みスナップショットから、未試行かつ空いている
+// 最初の候補席を返す。候補を尽くしても空席がなければnull（＝満席）を返す。
+// 4p-v0.2.2：ローカル未同期キャッシュ（＝空）を根拠に選ぶことが事故の原因だったため、
+// 呼び出し側は必ずサーバー読み取り直後のsnapshotだけをここへ渡す。
+function pickNextOpenSeat(seatsSnapshot, candidates, tried){
+  const snap = seatsSnapshot || {};
+  for (const i of candidates){
+    if (TEAM_OF_SEAT[i] === undefined) continue;
+    if (tried && tried.has(i)) continue;
+    if (!snap[i]) return i;
+  }
+  return null;
+}
+
+function isRecoverableSeatClaimError(e){
+  // 未同期ローカルキャッシュを根拠にした書き込みが、実際には占有済みの席へ
+  // 衝突してpermission_deniedになるケース（4p-v0.2.2で特定）。次候補への
+  // 再試行で回復可能なため、エラーバナーへは昇格させない。
+  return !!(e && (e.code === 'PERMISSION_DENIED' || /permission_denied/i.test((e && e.message) || '')));
+}
+
 async function joinRoom(codeInput, seatChoice, name){
   const code = normalizeCode(codeInput);
   if (code.length !== 6) throw new Error('部屋コードは6文字です');
@@ -396,11 +417,22 @@ async function joinRoom(codeInput, seatChoice, name){
   const meta = (await r.child('meta').get()).val();
   if (!meta) throw new Error('その部屋は見つかりません');
   const candidates = seatChoice!=null ? [seatChoice] : [0,1,2,3];
+  const tried = new Set();
   let seatNo = null;
-  for (const i of candidates){
-    if (TEAM_OF_SEAT[i]===undefined) continue;
-    const result = await r.child(`seats/${i}`).transaction(cur => cur || { uid:user.uid, name, lastSeen: nowMs(), isNpc:false }, undefined, false);
-    if (result.committed && result.snapshot.val() && result.snapshot.val().uid === user.uid){ seatNo = i; break; }
+  for (let attempt=0; attempt<candidates.length; attempt++){
+    // サーバーの最新値を都度読み直してから選ぶ（.get()はローカルキャッシュではなくサーバーへ問い合わせる）
+    const seatsSnapshot = (await r.child('seats').get()).val();
+    const candidate = pickNextOpenSeat(seatsSnapshot, candidates, tried);
+    if (candidate === null) break;
+    tried.add(candidate);
+    try{
+      const result = await r.child(`seats/${candidate}`).transaction(cur => cur || { uid:user.uid, name, lastSeen: nowMs(), isNpc:false }, undefined, false);
+      if (result.committed && result.snapshot.val() && result.snapshot.val().uid === user.uid){ seatNo = candidate; break; }
+      // committed===falseは他クライアントとの競合で先に占有された、という回復可能なケース。次候補へ。
+    } catch(e){
+      if (!isRecoverableSeatClaimError(e)) throw e;
+      // 回復可能な競合。エラーバナーを出さず、次の候補席で再試行する。
+    }
   }
   if (seatNo===null) throw new Error('その部屋には空席がありません');
   ST.room = code; ST.seat = seatNo; saveSession(); attach();

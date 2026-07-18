@@ -104,6 +104,24 @@ test("hint filter whitelist-subtraction unit cases (4p-v0.2.1)", () => {
   assert.equal(hintFilterViolation("壱の獣"), 'digit', "kanji numeral variant must still block");
 });
 
+test("pickNextOpenSeat: returns the first untried open seat from a synced snapshot, or null when full (4p-v0.2.2)", () => {
+  const teamSrc = SCRIPT.match(/const TEAM_OF_SEAT = (\{[\s\S]*?\});/)[1];
+  const fnSrc = SCRIPT.match(/function pickNextOpenSeat\(seatsSnapshot, candidates, tried\)\{[\s\S]*?\n\}/)[0];
+  const pickNextOpenSeat = new Function(`const TEAM_OF_SEAT = ${teamSrc}; ${fnSrc}; return pickNextOpenSeat;`)();
+
+  const candidates = [0, 1, 2, 3];
+  // 同期済みスナップショット：席0のみ占有 → 未試行の最初の空席(1)を返す
+  assert.equal(pickNextOpenSeat({ 0: { uid: 'host' } }, candidates, new Set()), 1);
+  // 空のスナップショット（部屋が本当に無人）→ 最初の候補(0)を返す
+  assert.equal(pickNextOpenSeat({}, candidates, new Set()), 0);
+  // 席0は空いて見えるが直前の試行で既に失敗（tried）済み → スキップして次の空席(1)
+  assert.equal(pickNextOpenSeat({}, candidates, new Set([0])), 1);
+  // 全席占有 → 満席（null）
+  assert.equal(pickNextOpenSeat({ 0: {}, 1: {}, 2: {}, 3: {} }, candidates, new Set()), null);
+  // 全席「試行済み」（実際は空いていても）→ 満席（null）扱いで打ち切り
+  assert.equal(pickNextOpenSeat({}, candidates, new Set([0, 1, 2, 3])), null);
+});
+
 test("all 8 axis rank tables match the frozen definition exactly", () => {
   const defMd = fs.readFileSync("proto/核定義_伝達核v1.0_動物軸版_凍結_2026-07-17.md", "utf8");
   const rows = [...defMd.matchAll(/^\| (体重|速さ|寿命|危険度|かわいさ|人気|五十音|群れ) \| (ゾウ|ウマ|ライオン|オオカミ|サル|ネコ|ウサギ|ネズミ) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|$/gm)];
