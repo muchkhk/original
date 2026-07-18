@@ -80,7 +80,7 @@
    本書に明記のない要素はすべて上記凍結定義（ソロ版）を踏襲する。
    ============================================================ */
 
-const VER = "4p-v0.1.0";
+const VER = "4p-v0.2.0";
 const ROOT = "transmit4pRoomsV0";
 // 本番Firebaseプロジェクト未設定（実装者の権限外・§9-e）。空のままだと下記が「未設定」動作になる。
 const FIREBASE_CONFIG = {};
@@ -149,9 +149,17 @@ const HINT_LOCK_TIMEOUT_MS = 60000;
 const HINT_AMBIENT_REFERENCE_MS = 15000; // 「基準ドレイン速度」= standard固定。1/4で使用（暫定選択・報告書参照）
 const HINT_TEXT_MAX_LEN = 40;
 
-/* ---------------- ヒント入力フィルタ（§3。全文を報告書に記載） ---------------- */
-const FILTER_DIGIT_REGEX = /[0-9０-９一二三四五六七八九十]/;
-const FILTER_RANK_WORDS = ["番目","順位","ランク","ランキング","最大","最小","最強","最弱","一番","トップ","ビリ","びり","最下位","首位","上位","下位","ワースト","ベスト"];
+/* ---------------- ヒント入力フィルタ（§3。全文を報告書に記載） ----------------
+   フィルタは摩擦装置であって完全防壁ではない。迂回表現の最終検証は試合終了時の
+   軸公開＋全ヒント再掲（事後検証）が担う。今後の語彙追加は「高頻度の抜け道」に
+   限定し、網羅を目指さない（v0.1差分指示書§1-d）。
+   検討済み・意図的に不採用（v0.1差分指示書§1-c）：
+   「とお」（「遠い／とおく」に誤爆）、「ワン」（擬音・カタカナ語に誤爆）、
+   「位」単独（「位置」に誤爆。複合語は下記リストでカバー）。 */
+const FILTER_DIGIT_REGEX = /[0-9０-９〇零壱弐参一二三四五六七八九十百千万①-⑳⑴-⒇⒈-⒛Ⅰ-Ⅻⅰ-ⅻ㈠-㈩㊀-㊉]/;
+const FILTER_RANK_WORDS = ["番目","順位","ランク","ランキング","最大","最小","最強","最弱","一番","トップ","ビリ","びり","最下位","首位","上位","下位","ワースト","ベスト",
+  "最も","もっとも","最高","最低","最速","最遅","いちばん","ばんめ","真ん中","まんなか","中間","中央",
+  "先頭","末尾","ナンバー","ゼロ","ひとつ","ふたつ","みっつ","よっつ","いつつ","むっつ","ななつ","やっつ","ここのつ"];
 function hintFilterViolation(text){
   if (typeof text !== 'string') return 'invalid';
   if (text.length === 0) return 'empty';
@@ -985,11 +993,8 @@ function renderGameScreen(){
   });
   wrap.appendChild(hintPanel);
 
-  const constraintPanel = el('div', {class:'panel'});
-  constraintPanel.appendChild(el('h2', {}, ['公開制約ログ']));
-  if (!g.publicConstraints.length) constraintPanel.appendChild(el('p', {class:'sub'}, ['まだ制約はありません。']));
-  g.publicConstraints.forEach(c=> constraintPanel.appendChild(el('div', {class:'hintline'}, [`R${c.round}: ${c.winner} > ${c.loser}`])));
-  wrap.appendChild(constraintPanel);
+  // 公開制約ログUIは削除済み（v0.1差分指示書§3）。derived不等式（勝者動物>敗者動物）を
+  // UI上に文章表示すると推理の肩代わりになるため。DBへの記録（g.publicConstraints）自体は継続。
 
   const histPanel = el('div', {class:'panel'});
   histPanel.appendChild(el('h2', {}, ['ラウンド履歴']));

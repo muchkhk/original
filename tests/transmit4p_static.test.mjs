@@ -57,6 +57,28 @@ test("all 32 frozen hint texts from the definition file are present verbatim", (
   }
 });
 
+test("cross-check: frozen 32 hint texts against the v0.1-expanded human hint filter (informational, does not block — NPC hints are exempt from the filter per spec)", () => {
+  const defMd = fs.readFileSync("proto/核定義_伝達核v1.0_動物軸版_凍結_2026-07-17.md", "utf8");
+  const rows = [...defMd.matchAll(/^\| (体重|速さ|寿命|危険度|かわいさ|人気|五十音|群れ) \| (遠|中|直) \| ([^|]+) \|/gm)];
+  assert.equal(rows.length, 32, "expected 32 hint rows in the frozen definition");
+  const digitSrc = SCRIPT.match(/const FILTER_DIGIT_REGEX = (\/[\s\S]*?\/);/)[1];
+  const wordsSrc = SCRIPT.match(/const FILTER_RANK_WORDS = (\[[\s\S]*?\]);/)[1];
+  const FILTER_DIGIT_REGEX = new Function(`return ${digitSrc};`)();
+  const FILTER_RANK_WORDS = new Function(`return ${wordsSrc};`)();
+  const violations = [];
+  for (const [, axis, tier, textRaw] of rows) {
+    const text = textRaw.trim();
+    if (FILTER_DIGIT_REGEX.test(text)) { violations.push({ axis, tier, text, reason: 'digit' }); continue; }
+    const hitWord = FILTER_RANK_WORDS.find(w => text.includes(w));
+    if (hitWord) violations.push({ axis, tier, text, reason: `rank_word:${hitWord}` });
+  }
+  if (violations.length) {
+    console.log(`[informational] ${violations.length} frozen hint text(s) would trip the human-facing filter (NPC-exempt, listed in the report):`);
+    for (const v of violations) console.log(`  axis=${v.axis} tier=${v.tier} text="${v.text}" reason=${v.reason}`);
+  }
+  assert.ok(true);
+});
+
 test("all 8 axis rank tables match the frozen definition exactly", () => {
   const defMd = fs.readFileSync("proto/核定義_伝達核v1.0_動物軸版_凍結_2026-07-17.md", "utf8");
   const rows = [...defMd.matchAll(/^\| (体重|速さ|寿命|危険度|かわいさ|人気|五十音|群れ) \| (ゾウ|ウマ|ライオン|オオカミ|サル|ネコ|ウサギ|ネズミ) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|$/gm)];
