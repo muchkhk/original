@@ -160,3 +160,64 @@ test("no confirm/alert/prompt usage", () => {
 test("spectator/observation mode is not implemented (explicitly out of scope per instruction)", () => {
   assert.doesNotMatch(HTML, /spectator/i);
 });
+
+test("rule explanation modal exists and is placed outside #app (4p-v0.3.0 §1)", () => {
+  assert.match(HTML, /<div id="ruleModal" class="modal-overlay" hidden>/);
+  assert.match(HTML, /<button id="ruleOpenBtn"/);
+  assert.match(HTML, /function openRuleModal\(\)/);
+  assert.match(HTML, /function ruleObserverTab\(\)/);
+  assert.match(HTML, /function ruleDiverTab\(\)/);
+  assert.match(HTML, /function ruleGlossaryTab\(\)/);
+  // #ruleModal must be a sibling of #app in <body>, not nested inside it, so that main render()'s
+  // full rebuild of #app never touches (and never resets the scroll position of) an open modal.
+  const appIdx = HTML.indexOf('<div id="app"></div>');
+  const modalIdx = HTML.indexOf('<div id="ruleModal"');
+  assert.ok(appIdx > -1 && modalIdx > -1 && modalIdx > appIdx, "#ruleModal must appear as a sibling after #app, not nested inside it");
+});
+
+test("mute toggle exists, defaults visible, and gates all synthesized sound through a single muted flag (4p-v0.3.0 §3)", () => {
+  assert.match(HTML, /<button id="muteBtn"/);
+  assert.match(HTML, /function setMuted\(v\)/);
+  assert.match(HTML, /if \(muted\) return;/);
+  assert.match(HTML, /localStorage\.getItem\('transmit4p_mute'\)/);
+});
+
+test("web audio: only synthesized tones, no external audio file or CDN references (4p-v0.3.0 §3)", () => {
+  assert.match(HTML, /AudioContext/);
+  assert.doesNotMatch(HTML, /\.mp3|\.wav|\.ogg/i);
+  assert.match(HTML, /function playTurnNotify\(\)/);
+  assert.match(HTML, /function playHintReveal\(\)/);
+  assert.match(HTML, /function playShowdownResult\(won\)/);
+});
+
+test("rule modal's axis list and numeric reference table are sourced from code constants, not re-typed prose (4p-v0.3.1 §3, single-source-of-truth)", () => {
+  const observerSrc = SCRIPT.match(/function ruleObserverTab\(\)\{[\s\S]*?\n\}/)[0];
+  assert.match(observerSrc, /AXES\.join\(/, "observer tab must build the axis list from the AXES array, not a hardcoded list");
+  const glossarySrc = SCRIPT.match(/function ruleGlossaryTab\(\)\{[\s\S]*?\n\}/)[0];
+  for (const ref of ['INITIAL_LIFE', 'ANTE_PER_TEAM', 'BET_OPTIONS.join', 'MAX_RAISES', 'HINT_TEXT_MAX_LEN', 'HINT_LOCK_TIMEOUT_MS']) {
+    assert.ok(glossarySrc.includes(ref), `numeric reference table must read ${ref} from code, not a re-typed literal`);
+  }
+  // 数値の再手打ちが紛れ込んでいないか（項目名の中の数字は許容: 例えば見出し文字列そのもの）
+  assert.doesNotMatch(glossarySrc, /\['初期酸素[^\]]*',\s*'\d+'\]/, "initial oxygen value must not be a re-typed literal");
+});
+
+test("ante is a single named constant used by both game logic and the rule modal (4p-v0.3.1)", () => {
+  assert.match(SCRIPT, /const ANTE_PER_TEAM = 1/);
+  assert.match(SCRIPT, /g\.chips\.A -= ANTE_PER_TEAM; g\.chips\.B -= ANTE_PER_TEAM/);
+});
+
+test("rule modal states the human observer has no mandatory hint-tier progression, only NPC does (4p-v0.3.1 §1-a)", () => {
+  assert.doesNotMatch(HTML, /遠いヒント→遠いヒント→中位のヒント→直接的なヒント/, "must not claim humans are obligated to follow the tier scaffold");
+  assert.match(HTML, /内容も、どこまで露骨に言うかも毎回自由/);
+  assert.match(HTML, /NPCチームの観測員は、決まった段階/);
+});
+
+test("rule modal describes anchors as double-elimination (neither team's axis) and states the lying-forbidden + post-game verification rule (4p-v0.3.1 §1-b/§1-c)", () => {
+  assert.match(HTML, /あなたのチームの軸でも、相手チームの軸でもないと確定している軸/);
+  assert.match(HTML, /嘘をつくことは禁止/);
+  assert.match(HTML, /試合終了時に両チームの軸と全ヒントが公開/);
+});
+
+test("rule modal's tie description covers both same-animal and same-rank-different-axis ties (4p-v0.3.1 §2-1)", () => {
+  assert.match(HTML, /異なる動物でも両陣営の軸上の順位が同じ数値になった場合は、引き分け/);
+});

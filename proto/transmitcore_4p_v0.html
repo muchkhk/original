@@ -10,9 +10,10 @@
     --bg:#101418; --panel:#1a2027; --panel2:#212934; --line:#2e3742;
     --text:#e7edf3; --muted:#8fa0b3; --accent:#4fb2e8; --good:#4fd18a;
     --bad:#e85f5f; --warn:#e8b34f;
+    --teamA:#4fb2e8; --teamB:#e8956b;
   }
   *{box-sizing:border-box;}
-  body{ margin:0; font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  body{ margin:0; font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; overflow-x:hidden; }
   #app{ max-width:1080px; margin:0 auto; padding:16px 16px 80px; }
   h1{ font-size:1.15rem; margin:8px 0 4px; }
   h2{ font-size:1rem; margin:0 0 8px; color:var(--accent); }
@@ -48,8 +49,8 @@
   #verBadge{ position:fixed; right:10px; bottom:10px; background:var(--panel2); border:1px solid var(--line); color:var(--muted); font-size:0.72rem; padding:4px 8px; border-radius:6px; z-index:50; }
   .hintline{ font-size:0.85rem; margin:2px 0; }
   .hintline .tag{ display:inline-block; padding:1px 6px; border-radius:8px; font-size:0.72rem; margin-right:6px; }
-  .tag.mine{ background:#1d4a63; }
-  .tag.theirs{ background:#4a2f1d; }
+  .tag.mine{ background:#1d4a63; border:1px solid var(--teamA); }
+  .tag.theirs{ background:#4a2f1d; border:1px solid var(--teamB); }
   .result-big{ font-size:1.3rem; font-weight:bold; margin:10px 0; }
   .gauge{ width:100%; max-width:240px; height:14px; background:#0b0e12; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
   .gauge-fill{ height:100%; background:var(--good); transition:width 0.2s linear; }
@@ -57,6 +58,33 @@
   .gauge-fill.bad{ background:var(--bad); }
   .charcount{ font-size:0.78rem; color:var(--muted); }
   .charcount.over{ color:var(--bad); }
+
+  /* ---- 4p-v0.3.0: 状態バー・確定前プレビュー ---- */
+  .statusbar{ display:flex; gap:12px; flex-wrap:wrap; align-items:center; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-bottom:12px; font-size:0.92rem; }
+  .statusbar .who{ font-weight:bold; }
+  .statusbar.my-turn{ animation: turnPulse 0.9s ease-out; border-color:var(--good); }
+  @keyframes turnPulse{ 0%{ box-shadow:0 0 0 0 rgba(79,209,138,0.65); } 100%{ box-shadow:0 0 0 14px rgba(79,209,138,0); } }
+  .preview-box{ background:#161c22; border:1px dashed var(--accent); border-radius:8px; padding:10px 12px; margin-top:8px; }
+
+  /* ---- 4p-v0.3.0: 意味のある2アニメーションのみ（他は追加しない） ---- */
+  .hint-reveal-in{ animation: hintRevealIn 0.4s ease-out; }
+  @keyframes hintRevealIn{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:translateY(0); } }
+  .showdown-reveal-in{ animation: showdownRevealIn 0.5s cubic-bezier(.2,.9,.3,1.2); }
+  @keyframes showdownRevealIn{ from{ opacity:0; transform:scale(0.9); } to{ opacity:1; transform:scale(1); } }
+
+  /* ---- 4p-v0.3.0: ❓/🔇/🔊 常設ボタンとルール説明モーダル ---- */
+  .fab{ position:fixed; z-index:80; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:20px; padding:8px 14px; font-size:0.85rem; cursor:pointer; }
+  .fab:hover{ border-color:var(--accent); }
+  #ruleOpenBtn{ left:10px; bottom:10px; }
+  #muteBtn{ left:10px; bottom:52px; }
+  .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:200; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .modal-overlay[hidden]{ display:none; }
+  .modal-box{ background:var(--panel); border:1px solid var(--line); border-radius:12px; max-width:640px; width:100%; max-height:88vh; overflow-y:auto; padding:16px; }
+  .modal-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .modal-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .modal-tab{ background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:6px 12px; cursor:pointer; font-size:0.88rem; }
+  .modal-tab.active{ background:#1d4a63; border-color:var(--accent); }
+  .tablewrap{ overflow-x:auto; }
 </style>
 </head>
 <body>
@@ -65,6 +93,17 @@
 <div id="toast" hidden></div>
 <div id="app"></div>
 <div id="verBadge"></div>
+<button id="ruleOpenBtn" class="fab" type="button">❓ ルール</button>
+<button id="muteBtn" class="fab" type="button">🔊 音声オン</button>
+<div id="ruleModal" class="modal-overlay" hidden>
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 style="margin:0;">ルール説明</h2>
+      <button id="ruleCloseBtn" class="btn" type="button">閉じる</button>
+    </div>
+    <div id="ruleModalBody"></div>
+  </div>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -80,8 +119,21 @@
    本書に明記のない要素はすべて上記凍結定義（ソロ版）を踏襲する。
    ============================================================ */
 
-const VER = "4p-v0.2.2";
+const VER = "4p-v0.3.1";
 const ROOT = "transmit4pRoomsV0";
+// 版番号比較（4p-v0.3.0：バナー文言をどちらが古いかで出し分けるために追加）。
+// "4p-vMAJOR.MINOR.PATCH" 形式以外（旧形式の版文字列等）はnull＝比較不能を返す。
+function parseVer(v){
+  const m = /^4p-v(\d+)\.(\d+)\.(\d+)$/.exec(v || '');
+  if (!m) return null;
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
+}
+function compareVer(a, b){
+  const pa = parseVer(a), pb = parseVer(b);
+  if (!pa || !pb) return null;
+  for (let i=0;i<3;i++){ if (pa[i]!==pb[i]) return pa[i]<pb[i] ? -1 : 1; }
+  return 0;
+}
 // 本番Firebaseプロジェクト未設定（実装者の権限外・§9-e）。空のままだと下記が「未設定」動作になる。
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyD4VRqZjX3Z71ty1CDUTGeSHSDtfaICskg",
@@ -157,6 +209,7 @@ const DRAIN_INTERVALS = { off:null, slow:30000, standard:15000, fast:7000 };
 const HINT_LOCK_TIMEOUT_MS = 60000;
 const HINT_AMBIENT_REFERENCE_MS = 15000; // 「基準ドレイン速度」= standard固定。1/4で使用（暫定選択・報告書参照）
 const HINT_TEXT_MAX_LEN = 40;
+const ANTE_PER_TEAM = 1; // 4p-v0.3.1: ルール説明の数値表と単一の出所にするため命名（挙動は無変更）
 
 /* ---------------- ヒント入力フィルタ（§3。全文を報告書に記載） ----------------
    フィルタは摩擦装置であって完全防壁ではない。迂回表現の最終検証は試合終了時の
@@ -326,6 +379,7 @@ let auth = null, db = null, user = null;
 let ST = { room:null, seat:null, meta:null, seats:{}, game:null, myPrivate:null, oppNames:{} };
 let listeners = [];
 let heartbeatTimer = null;
+let drainTickTimer = null;
 let hostRelayUnsub = null;
 let GEN = 0;
 
@@ -428,6 +482,7 @@ async function joinRoom(codeInput, seatChoice, name){
   const candidates = seatChoice!=null ? [seatChoice] : [0,1,2,3];
   const tried = new Set();
   let seatNo = null;
+  let hadRecoverableError = false; // 4p-v0.3.0 §5-1: 「本当に満席」と区別するため
   for (let attempt=0; attempt<candidates.length; attempt++){
     // サーバーの最新値を都度読み直してから選ぶ（.get()はローカルキャッシュではなくサーバーへ問い合わせる）
     const seatsSnapshot = (await r.child('seats').get()).val();
@@ -437,13 +492,18 @@ async function joinRoom(codeInput, seatChoice, name){
     try{
       const result = await r.child(`seats/${candidate}`).transaction(cur => cur || { uid:user.uid, name, lastSeen: nowMs(), isNpc:false }, undefined, false);
       if (result.committed && result.snapshot.val() && result.snapshot.val().uid === user.uid){ seatNo = candidate; break; }
-      // committed===falseは他クライアントとの競合で先に占有された、という回復可能なケース。次候補へ。
+      hadRecoverableError = true; // committed===falseは他クライアントとの競合で先に占有された、という回復可能なケース。次候補へ。
     } catch(e){
       if (!isRecoverableSeatClaimError(e)) throw e;
-      // 回復可能な競合。エラーバナーを出さず、次の候補席で再試行する。
+      hadRecoverableError = true; // 回復可能な競合。エラーバナーを出さず、次の候補席で再試行する。
     }
   }
-  if (seatNo===null) throw new Error('その部屋には空席がありません');
+  if (seatNo===null){
+    // 4p-v0.3.0 §5-1: 最新スナップショット上で純粋に全席埋まっていた（衝突なし）場合だけ「満席」と表示する。
+    // 途中で回復可能な衝突/permission_deniedを経験していた場合は、通信または設定の問題の可能性があるため文言を分ける。
+    if (hadRecoverableError) throw new Error('部屋に参加できませんでした（通信または設定の問題の可能性があります。もう一度お試しください）');
+    throw new Error('その部屋には空席がありません（満席です）');
+  }
   ST.room = code; ST.seat = seatNo; saveSession(); attach();
 }
 
@@ -485,7 +545,9 @@ function detach(){
   listeners.forEach(off=>{ try{ off(); } catch(_){} });
   listeners = [];
   if (heartbeatTimer){ clearInterval(heartbeatTimer); heartbeatTimer=null; }
+  if (drainTickTimer){ clearInterval(drainTickTimer); drainTickTimer=null; }
   if (hostRelayUnsub){ hostRelayUnsub(); hostRelayUnsub=null; }
+  resetUiTrackers();
 }
 
 function attach(){
@@ -510,6 +572,14 @@ function attach(){
 
   const beat = ()=> roomRef(`seats/${ST.seat}`).update({lastSeen: nowMs()}).catch(()=>{});
   beat(); heartbeatTimer = setInterval(beat, 15000);
+
+  // 酸素ドレインのティック音（演出のみ。実際の消費量計算とは独立。4p-v0.3.0 §3）
+  drainTickTimer = setInterval(()=>{
+    if (!ST.game || !ST.meta) return;
+    const phase = ST.game.phase;
+    if (phase === 'hint'){ if (ST.meta.hintDrainToggle !== 'off') playDrainTick(); }
+    else if (phase === 'select_cards' || phase === 'betting'){ if (ST.meta.drainSpeed !== 'off') playDrainTick(); }
+  }, 4000);
 
   startHostRelayIfHost();
 }
@@ -639,8 +709,8 @@ async function hostMaybeAdvancePhase(){
 }
 
 function startAnteAndCards(g){
-  g.chips.A -= 1; g.chips.B -= 1; g.pot += 2;
-  logLine(g, `[R${g.roundNum}] アンティ 各1（燃焼・ポット${g.pot}）`);
+  g.chips.A -= ANTE_PER_TEAM; g.chips.B -= ANTE_PER_TEAM; g.pot += ANTE_PER_TEAM*2;
+  logLine(g, `[R${g.roundNum}] アンティ 各${ANTE_PER_TEAM}（燃焼・ポット${g.pot}）`);
   g.phase = 'select_cards';
   g.cardsRevealed = { A:null, B:null };
   g.drain.phaseEnteredAt = nowMs(); g.drain.ticksApplied = 0;
@@ -876,13 +946,62 @@ function el(tag, attrs, children){
   return e;
 }
 
+/* ==================== 音（Web Audio合成のみ。外部音源ファイル・CDN不可。4p-v0.3.0 §3） ==================== */
+let audioCtx = null;
+let muted = (function(){ try{ return localStorage.getItem('transmit4p_mute') === '1'; } catch(_){ return false; } })();
+function ensureAudioCtx(){
+  if (audioCtx) return audioCtx;
+  try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(_){ audioCtx = null; }
+  return audioCtx;
+}
+function updateMuteBtn(){
+  const b = document.getElementById('muteBtn');
+  if (b) b.textContent = muted ? '🔇 音声オフ' : '🔊 音声オン';
+}
+function setMuted(v){
+  muted = v;
+  try{ localStorage.setItem('transmit4p_mute', v ? '1' : '0'); } catch(_){}
+  updateMuteBtn();
+}
+function tone(freq, startOffset, duration, type, peak){
+  if (muted) return;
+  const ctx = ensureAudioCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + (startOffset || 0);
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(peak != null ? peak : 0.12, t0 + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(t0); osc.stop(t0 + duration + 0.02);
+}
+function playClick(){ tone(880, 0, 0.05, 'square', 0.05); }
+function playTurnNotify(){ tone(660, 0, 0.12, 'sine', 0.14); tone(880, 0.13, 0.16, 'sine', 0.14); }
+function playHintReveal(){ tone(523, 0, 0.10, 'triangle', 0.10); tone(659, 0.08, 0.10, 'triangle', 0.10); tone(784, 0.16, 0.18, 'triangle', 0.10); }
+function playShowdownResult(won){
+  if (won){ tone(523, 0, 0.12, 'sine', 0.14); tone(659, 0.10, 0.12, 'sine', 0.14); tone(784, 0.20, 0.22, 'sine', 0.14); }
+  else { tone(392, 0, 0.16, 'sawtooth', 0.10); tone(311, 0.14, 0.22, 'sawtooth', 0.10); }
+}
+function playDrainTick(){ tone(180 + Math.random()*40, 0, 0.06, 'sine', 0.035); }
+// 全ボタンのクリック音はイベント委譲で一括処理（知見6-2のレシピ）
+document.addEventListener('click', e=>{ if (e.target && e.target.closest && e.target.closest('.btn')) playClick(); }, true);
+
 let abortArmed = false, abortTimer = null;
 
 function render(){
   document.getElementById('verBadge').textContent = '伝達核4人版オンライン '+VER;
   const vb = document.getElementById('versionBanner');
   if (ST.meta && ST.meta.version && ST.meta.version !== VER){
-    vb.textContent = `この部屋はv${ST.meta.version}、あなたの画面はv${VER}です。ページを再読み込みしてください。`;
+    // 4p-v0.3.0: 部屋の方が古い版で作られている場合と、自分のページの方が古い場合とで文言を分ける（§5-2）
+    const cmp = compareVer(ST.meta.version, VER);
+    if (cmp === -1){
+      vb.textContent = `この部屋はv${ST.meta.version}という古い版で作られています。新しい部屋を作り直してください。`;
+    } else {
+      vb.textContent = `この部屋はv${ST.meta.version}、あなたの画面はv${VER}です。ページを再読み込みしてください。`;
+    }
     vb.hidden = false;
   } else vb.hidden = true;
 
@@ -948,7 +1067,7 @@ function renderHome(){
 }
 
 function seatLabel(i){
-  const names = {0:'チームA 観測員(味方)',1:'チームA 潜水士(味方)',2:'チームB 観測員(敵)',3:'チームB 潜水士(敵)'};
+  const names = {0:'📡 チームA 観測員(味方)',1:'🤿 チームA 潜水士(味方)',2:'📡 チームB 観測員(敵)',3:'🤿 チームB 潜水士(敵)'};
   return names[i];
 }
 
@@ -980,11 +1099,106 @@ function myTeam(){
   return TEAM_OF_SEAT[ST.seat];
 }
 
+/* ==================== 4p-v0.3.0 §2/§3: 状態バー・手番検出・音とアニメーションのトリガー ====================
+   render()はゲーム中は毎回DOMを作り直すため、これらのトラッカーは「前回描画からの変化」を
+   モジュール変数で追跡し、変化があった回だけ音とアニメーションクラスを発火させる
+   （自分の入力や無関係な再描画のたびに毎回鳴る／光る、という事故を防ぐため）。 */
+let _lastIsMyTurn = false;
+let _lastHintCount = 0;
+let _lastRoundHistoryLen = 0;
+let _lastRoundNumForPreview = null;
+// 確定前プレビュー（4p-v0.3.0 §4）の一時状態。ロック／確定操作の直後、またはラウンドが
+// 変わったタイミングでfalseへ戻す（次ラウンドに古いプレビュー状態を持ち越さないため）。
+let hintLockPreviewArmed = false;
+let betPreview = null; // {action, amount} | null
+function resetUiTrackers(){
+  _lastIsMyTurn = false; _lastHintCount = 0; _lastRoundHistoryLen = 0; _lastRoundNumForPreview = null;
+  hintLockPreviewArmed = false; betPreview = null;
+}
+function computeIsMyTurn(g, team, role){
+  if (!g) return false;
+  if (g.phase === 'hint' && role === 'observer'){
+    const locked = team==='A' ? g.hint.lockedA : g.hint.lockedB;
+    return !!(g.hint.active && !locked);
+  }
+  if (g.phase === 'select_cards' && role === 'diver'){
+    const mine = team==='A' ? g.cardsRevealed.A : g.cardsRevealed.B;
+    return mine === null;
+  }
+  if (g.phase === 'betting' && role === 'diver'){
+    return g.betting.toActTeam === team;
+  }
+  return false;
+}
+function updateReactiveTrackers(g, team, role){
+  const isMyTurn = computeIsMyTurn(g, team, role);
+  const justBecameMyTurn = isMyTurn && !_lastIsMyTurn;
+  _lastIsMyTurn = isMyTurn;
+
+  const hintCount = g.publicHints.length;
+  const justRevealedHint = hintCount > _lastHintCount;
+  _lastHintCount = hintCount;
+
+  const rhLen = g.roundHistory.length;
+  const justResolved = rhLen > _lastRoundHistoryLen;
+  let justWonState = null;
+  if (justResolved){
+    const last = g.roundHistory[rhLen-1];
+    justWonState = last.tie ? 'tie' : (last.winnerTeam===team ? 'win' : 'lose');
+  }
+  _lastRoundHistoryLen = rhLen;
+
+  if (_lastRoundNumForPreview !== g.roundNum){
+    _lastRoundNumForPreview = g.roundNum;
+    hintLockPreviewArmed = false;
+    betPreview = null;
+  }
+
+  if (justBecameMyTurn) playTurnNotify();
+  if (justRevealedHint) playHintReveal();
+  if (justResolved) playShowdownResult(justWonState === 'win');
+
+  return { isMyTurn, justBecameMyTurn, justRevealedHint, justResolved, justWonState };
+}
+function statusLine(g, team, role, isMyTurn){
+  if (g.phase === 'hint'){
+    if (role === 'observer'){
+      const locked = team==='A' ? g.hint.lockedA : g.hint.lockedB;
+      return locked ? '相手観測員のロック待ち、または60秒経過待ち' : 'あなたの入力待ち（ヒントを書いてロックしてください）';
+    }
+    return '味方観測員の送信をお待ちください';
+  }
+  if (g.phase === 'select_cards'){
+    if (role === 'diver'){
+      const mine = team==='A' ? g.cardsRevealed.A : g.cardsRevealed.B;
+      return mine === null ? 'あなたの入力待ち（動物を1体選んでください）' : '相手潜水士の提出待ち';
+    }
+    return '味方潜水士の選択をお待ちください';
+  }
+  if (g.phase === 'betting'){
+    if (role === 'diver') return g.betting.toActTeam===team ? 'あなたの入力待ち（ベット応酬）' : '敵の手番をお待ちください';
+    return g.betting.toActTeam===team ? '味方潜水士の手番です' : '敵の手番をお待ちください';
+  }
+  if (g.phase === 'resolved') return '決着。まもなく次のラウンドへ自動進行します';
+  return '';
+}
+function renderStatusBar(g, team, role, isMyTurn){
+  const phaseNames = { hint:'ヒント', select_cards:'カード選択', betting:'ベット応酬', resolved:'決着' };
+  const bar = el('div', {class:'statusbar' + (isMyTurn ? ' my-turn' : '')});
+  bar.appendChild(el('div', {}, [`フェーズ: ${phaseNames[g.phase] || g.phase}`]));
+  bar.appendChild(el('div', {class:'who'}, [statusLine(g, team, role, isMyTurn)]));
+  bar.appendChild(el('div', {}, [`${role==='observer' ? '📡 観測員' : '🤿 潜水士'}（チーム${team==='A'?'A(味方)':'B(敵)'}）`]));
+  return bar;
+}
+
 function renderGameScreen(){
   const wrap = el('div', {});
   const g = ST.game;
   const team = myTeam(), role = myRole();
   const opp = otherTeam(team);
+
+  const reactive = updateReactiveTrackers(g, team, role);
+  wrap.appendChild(renderStatusBar(g, team, role, reactive.isMyTurn));
 
   const stat = el('div', {class:'statbar'});
   stat.appendChild(el('div', {class:'stat'}, [`ラウンド ${g.roundNum}/${ROUNDS_TOTAL}`]));
@@ -995,10 +1209,10 @@ function renderGameScreen(){
   lsPanel.appendChild(el('h2', {}, ['命／得点（別勘定）']));
   const lsRow = el('div', {class:'row'});
   const mineBox = el('div', {});
-  mineBox.appendChild(el('div', {}, [`味方 命=${g.chips[team]} ／ 得点=${g.score[team]}`]));
+  mineBox.appendChild(el('div', {}, [`🫧 味方 命=${g.chips[team]} ／ 得点=${g.score[team]}`]));
   mineBox.appendChild(gaugeEl(g.chips[team], INITIAL_LIFE));
   const oppBox = el('div', {});
-  oppBox.appendChild(el('div', {}, [`敵 命=${g.chips[opp]} ／ 得点=${g.score[opp]}`]));
+  oppBox.appendChild(el('div', {}, [`🫧 敵 命=${g.chips[opp]} ／ 得点=${g.score[opp]}`]));
   oppBox.appendChild(gaugeEl(g.chips[opp], INITIAL_LIFE));
   lsRow.appendChild(mineBox); lsRow.appendChild(oppBox);
   lsPanel.appendChild(lsRow);
@@ -1024,14 +1238,17 @@ function renderGameScreen(){
 
   const refPanel = el('div', {class:'panel'});
   refPanel.appendChild(el('h2', {}, ['全8軸 順位表（公開リファレンス）']));
-  refPanel.appendChild(renderAxisReferenceTable());
+  const refWrap = el('div', {class:'tablewrap'}, [renderAxisReferenceTable()]);
+  refPanel.appendChild(refWrap);
   wrap.appendChild(refPanel);
 
   const hintPanel = el('div', {class:'panel'});
   hintPanel.appendChild(el('h2', {}, ['ヒントログ（R1〜R4のみ）']));
   if (!g.publicHints.length) hintPanel.appendChild(el('p', {class:'sub'}, ['まだヒントはありません。']));
-  g.publicHints.forEach(ph=>{
-    const line = el('div', {class:'hintline'});
+  g.publicHints.forEach((ph, idx)=>{
+    // 意味のある2アニメーションの1つ目：直前の描画で新規公開された分だけ出現アニメーションを付ける
+    const isFresh = reactive.justRevealedHint && idx >= g.publicHints.length - 2;
+    const line = el('div', {class:'hintline'+(isFresh?' hint-reveal-in':'')});
     const mine = ph.side === team;
     line.appendChild(el('span', {class:'tag '+(mine?'mine':'theirs')}, [mine?'味方':'敵']));
     line.appendChild(document.createTextNode(`R${ph.round}: ${ph.text}`));
@@ -1051,7 +1268,7 @@ function renderGameScreen(){
       const resultText = h.tie ? '引き分け（持ち越し）' : `${h.winnerTeam===team?'味方':'敵'}の勝ち`;
       tbl.appendChild(el('tr', {}, [el('td',{},[String(h.round)]), el('td',{},[h.animalA===undefined?'?':(team==='A'?h.animalA:h.animalB)]), el('td',{},[team==='A'?h.animalB:h.animalA]), el('td',{},[h.method==='fold'?'フォールド':'ショーダウン']), el('td',{},[resultText])]));
     });
-    histPanel.appendChild(tbl);
+    histPanel.appendChild(el('div', {class:'tablewrap'}, [tbl]));
   } else histPanel.appendChild(el('p', {class:'sub'}, ['まだ決着したラウンドはありません。']));
   wrap.appendChild(histPanel);
 
@@ -1061,11 +1278,23 @@ function renderGameScreen(){
     if (role==='observer'){
       const already = ST.myPrivate && ST.myPrivate.hintLocked;
       const draft = (ST.myPrivate && ST.myPrivate.hintText) || '';
-      const ta = el('textarea', {rows:'2', value:draft, disabled: !!already, oninput:safe(e=>{ submitHintDraft(e.target.value); render(); })});
-      roundPanel.appendChild(ta);
-      const violation = hintFilterViolation(ta.value);
-      roundPanel.appendChild(el('div', {class:'charcount'+(violation?' over':'')}, [`${ta.value.length}/${HINT_TEXT_MAX_LEN}文字${violation?' ― '+violation:''}`]));
-      roundPanel.appendChild(el('button', {class:'btn primary', disabled: !!(already || violation), onclick:safe(async ()=>{ await lockHint(); })}, [already?'送信ロック済み':'送信ロック']));
+      const violation = hintFilterViolation(draft);
+      if (!already && hintLockPreviewArmed){
+        // 確定前プレビュー（4p-v0.3.0 §4）：ロック直前に内容を確認する一段クッション。判断は奪わない。
+        const box = el('div', {class:'preview-box'});
+        box.appendChild(el('div', {}, ['この内容でロックします：']));
+        box.appendChild(el('div', {style:'font-weight:bold; margin:6px 0;'}, [draft]));
+        const row = el('div', {class:'row'});
+        row.appendChild(el('button', {class:'btn primary', onclick:safe(async ()=>{ hintLockPreviewArmed=false; await lockHint(); })}, ['ロックする']));
+        row.appendChild(el('button', {class:'btn', onclick:safe(()=>{ hintLockPreviewArmed=false; render(); })}, ['編集に戻る']));
+        box.appendChild(row);
+        roundPanel.appendChild(box);
+      } else {
+        const ta = el('textarea', {rows:'2', value:draft, disabled: !!already, oninput:safe(e=>{ submitHintDraft(e.target.value); render(); })});
+        roundPanel.appendChild(ta);
+        roundPanel.appendChild(el('div', {class:'charcount'+(violation?' over':'')}, [`${ta.value.length}/${HINT_TEXT_MAX_LEN}文字${violation?' ― '+violation:''}`]));
+        roundPanel.appendChild(el('button', {class:'btn primary', disabled: !!(already || violation), onclick:safe(()=>{ hintLockPreviewArmed=true; render(); })}, [already?'送信ロック済み':'送信ロック']));
+      }
       if (already) roundPanel.appendChild(el('p', {class:'sub'}, ['相手チームの送信、または60秒経過をお待ちください。']));
     } else {
       roundPanel.appendChild(el('p', {class:'sub'}, ['潜水士は入力できません。観測員の送信をお待ちください。']));
@@ -1092,7 +1321,8 @@ function renderGameScreen(){
     if (last){
       const resultText = last.tie ? '同一動物・引き分け（ポット持ち越し）' : `${last.winnerTeam===team?'味方':'敵'}の勝ち（${last.method==='fold'?'フォールド':'ショーダウン'}）`;
       roundPanel.appendChild(el('h2', {}, ['決着']));
-      roundPanel.appendChild(el('div', {class:'result-big'}, [`あなた側=${team==='A'?last.animalA:last.animalB} ／ 相手側=${team==='A'?last.animalB:last.animalA}　→　${resultText}`]));
+      // 意味のある2アニメーションの2つ目：この決着が今回の描画で新規に出た時だけ出現アニメーションを付ける
+      roundPanel.appendChild(el('div', {class:'result-big'+(reactive.justResolved?' showdown-reveal-in':'')}, [`あなた側=${team==='A'?last.animalA:last.animalB} ／ 相手側=${team==='A'?last.animalB:last.animalA}　→　${resultText}`]));
     }
     roundPanel.appendChild(el('p', {class:'sub'}, ['まもなく次のラウンドへ進みます…']));
   }
@@ -1140,21 +1370,44 @@ function renderBetLog(betting, myTeamKey){
   box.appendChild(el('div', {style:'font-size:0.85rem; line-height:1.6;'}, [lines.join(' → ')]));
   return box;
 }
+function betActionLabel(action, amount, opts, g){
+  if (action==='check') return 'チェック';
+  if (action==='fold') return 'フォールド';
+  if (action==='call'){
+    const myChips = g.chips[myTeam()];
+    return opts.toCall > myChips ? `コール（オールイン ${myChips}）` : `コール ${opts.toCall}`;
+  }
+  if (action==='bet') return 'ベット '+amount;
+  if (action==='raise') return 'レイズ +'+amount;
+  return action;
+}
 function renderActionButtons(g){
   const opts = computeBetOptions(g.betting, g.chips);
   const box = el('div', {class:'row', style:'margin-top:10px;'});
+  if (betPreview){
+    // 確定前プレビュー（4p-v0.3.0 §4）：ベット確定の直前に内容を確認する一段クッション。
+    const previewBox = el('div', {class:'preview-box'});
+    previewBox.appendChild(el('div', {}, ['このアクションを確定しますか？']));
+    previewBox.appendChild(el('div', {style:'font-weight:bold; margin:6px 0;'}, [betActionLabel(betPreview.action, betPreview.amount, opts, g)]));
+    const row = el('div', {class:'row'});
+    row.appendChild(el('button', {class:'btn primary', onclick:safe(async ()=>{ const p=betPreview; betPreview=null; await submitBettingAction(p.action, p.amount); })}, ['確定']));
+    row.appendChild(el('button', {class:'btn', onclick:safe(()=>{ betPreview=null; render(); })}, ['取り消し']));
+    previewBox.appendChild(row);
+    box.appendChild(previewBox);
+    return box;
+  }
   if (opts.kind==='open'){
-    box.appendChild(el('button', {class:'btn', onclick:safe(async ()=>{ await submitBettingAction('check'); })}, ['チェック']));
+    box.appendChild(el('button', {class:'btn', onclick:safe(()=>{ betPreview={action:'check'}; render(); })}, ['チェック']));
     extractValues(opts.options,'bet').forEach(v=>{
-      box.appendChild(el('button', {class:'btn primary', onclick:safe(async ()=>{ await submitBettingAction('bet', v); })}, ['ベット '+v]));
+      box.appendChild(el('button', {class:'btn primary', onclick:safe(()=>{ betPreview={action:'bet', amount:v}; render(); })}, ['ベット '+v]));
     });
   } else {
-    box.appendChild(el('button', {class:'btn danger', onclick:safe(async ()=>{ await submitBettingAction('fold'); })}, ['フォールド']));
+    box.appendChild(el('button', {class:'btn danger', onclick:safe(()=>{ betPreview={action:'fold'}; render(); })}, ['フォールド']));
     const myChips = g.chips[myTeam()];
     const callLabel = opts.toCall > myChips ? `コール（オールイン ${myChips}）` : `コール ${opts.toCall}`;
-    box.appendChild(el('button', {class:'btn primary', onclick:safe(async ()=>{ await submitBettingAction('call'); })}, [callLabel]));
+    box.appendChild(el('button', {class:'btn primary', onclick:safe(()=>{ betPreview={action:'call'}; render(); })}, [callLabel]));
     extractValues(opts.options,'raise').forEach(v=>{
-      box.appendChild(el('button', {class:'btn', onclick:safe(async ()=>{ await submitBettingAction('raise', v); })}, ['レイズ +'+v]));
+      box.appendChild(el('button', {class:'btn', onclick:safe(()=>{ betPreview={action:'raise', amount:v}; render(); })}, ['レイズ +'+v]));
     });
   }
   return box;
@@ -1186,6 +1439,119 @@ function renderEndScreen(){
 
   return wrap;
 }
+
+/* ==================== 4p-v0.3.0 §1: ルール説明モーダル ====================
+   #appの外（body直下の#ruleModal）に分離しているため、main render()による#app配下の
+   毎回の全再構築の影響を受けず、モーダルを開いたまま操作してもスクロール位置が壊れない
+   （seri教訓・CLAUDE.md §4-3）。
+   記述は実装済みの挙動のみ。軸名の発話は自由（禁止していない）— 存在しない規則を書かないこと。 */
+function ruleP(text){ return el('p', {}, [text]); }
+function ruleUl(items){ return el('ul', {style:'margin:4px 0; padding-left:20px;'}, items.map(i=> el('li', {style:'margin:3px 0;'}, [i]))); }
+function ruleOverview(){
+  const box = el('div', {});
+  box.appendChild(ruleP('2チーム対抗の伝達ゲームです。各チームは観測員1名と潜水士1名に分かれ、観測員だけが自チームの「軸」（動物の並び順の基準）を知っています。'));
+  box.appendChild(ruleP('潜水士は、観測員がテキストで送るヒント（無線）だけを頼りに、8匹の動物図鑑から1匹を選んで対戦相手と勝負します。'));
+  box.appendChild(ruleP('選んだ動物の軸上の順位を両チームで比較し、勝った方がそのラウンドのポット（酸素）を得点にします。どちらかのチームの酸素が先に0になるとそのチームは得点に関わらず即座に敗北し、そうでなければ8ラウンド終了時に得点が多い方の勝ちです。'));
+  return box;
+}
+function ruleObserverTab(){
+  const box = el('div', {});
+  box.appendChild(el('h3', {}, ['観測員のあなたがすること']));
+  box.appendChild(ruleUl([
+    `あなたは自チームの軸（${AXES.join('・')}、のいずれか1つ。相手チームは別の軸）を知っています。`,
+    'ラウンド1〜4の各ラウンドでヒントを1通送れます。内容も、どこまで露骨に言うかも毎回自由です。鋭いヒントは味方に確実に届きますが、敵チームにも同じだけ聞こえます（NPCチームの観測員は、決まった段階〔遠回し→遠回し→中間→直接的〕で送ります。R5以降はヒントなしで直接カード選択に進みます）。',
+    `ヒントは${HINT_TEXT_MAX_LEN}字以内の自由なテキストです。相手チームの観測員も同時に（並行して）ヒントを書いており、両方が送信ロックするか${HINT_LOCK_TIMEOUT_MS/1000}秒経過すると同時に公開されます。`,
+    '送信ロック後は取り消せません。ロック前に確認画面が一度出ます。',
+    '締切までロックしなかった場合は「無線沈黙」として全員に表示されます。',
+    '軸の名前そのものを言うことは自由です（禁止されていません）。ただし、数字（算用数字・漢数字含む）や「1位」「最大」「一番」等の順位を直接示す語句は自動フィルタでブロックされます。',
+    'ヒントで嘘をつくことは禁止です（自チームの軸に照らして正直であること。曖昧さ・遠回しは自由）。試合終了時に両チームの軸と全ヒントが公開され、全員で事後検証できます。',
+    '潜水士は入力できません。あなたの送信だけが頼りです。',
+  ]));
+  return box;
+}
+function ruleDiverTab(){
+  const box = el('div', {});
+  box.appendChild(el('h3', {}, ['潜水士のあなたがすること']));
+  box.appendChild(ruleUl([
+    'あなたは軸を知りません。チームメイトの観測員が送るヒントの無線だけを頼りに動物を選びます。',
+    'ヒントフェーズが終わると、8匹の動物図鑑からまだ使っていない1匹を選んで伏せて提出します。',
+    'あなたには「アンカー」という消去情報が2つ配られています。これは、あなたのチームの軸でも、相手チームの軸でもないと確定している軸です（二重の消去情報）。自チームのヒントの解読の裏取りにも、相手チームの軸の絞り込みにも使えます。',
+    '両チームが動物を提出すると、両陣営それぞれの軸での順位を比較して勝敗が決まります。同じ動物を出した場合、または異なる動物でも両陣営の軸上の順位が同じ数値になった場合は、引き分けです。',
+    '勝敗が決まる前にベット応酬（チェック／ベット／コール／レイズ／フォールド）があります。確定前に一度確認画面が出ます。',
+  ]));
+  return box;
+}
+function ruleGlossaryTab(){
+  const box = el('div', {});
+  box.appendChild(el('h3', {}, ['用語集']));
+  box.appendChild(ruleUl([
+    `軸（じく）：動物を並び替える基準。${AXES.length}種類のうち、各チームに1つずつ、別々に割り当てられます。`,
+    'アンカー：潜水士だけが知る、自チームの軸でも相手チームの軸でもないと確定している消去情報（二重の消去情報）。2つ配られます。',
+    '酸素：チームの残りチップ。ベットで賭けた酸素はポットに入り、そのラウンドの勝者チームの得点に加算されます（酸素そのものが相手に移るわけではありません）。酸素が先に0になったチームは即座に敗北します。',
+    '得点：ポットを獲得した回数の積み上げ。酸素が両チームとも残っている（または同時に尽きた）まま8ラウンドを終えたときは、得点が多い方の勝ちです。',
+    '無線：観測員から送られるヒントのテキストのこと。',
+    'ロック：ヒントの送信を確定すること。ロック後は編集・取消不可。',
+    'フォールド：ベット応酬を降りること。相手チームがそのラウンドの勝ちになります。',
+  ]));
+  box.appendChild(el('h3', {}, ['数値の目安']));
+  const tbl = el('table');
+  tbl.appendChild(el('tr', {}, [el('th',{},['項目']), el('th',{},['値'])]));
+  [
+    ['初期酸素', String(INITIAL_LIFE)],
+    ['アンティ(毎ラウンド自動徴収)', `各チーム${ANTE_PER_TEAM}`],
+    ['ベット額', BET_OPTIONS.join('・')],
+    ['レイズ上限', `${MAX_RAISES}回`],
+    ['ヒント文字数上限', `${HINT_TEXT_MAX_LEN}字`],
+    ['送信ロック締切', `${HINT_LOCK_TIMEOUT_MS/1000}秒（両者ロックで早まる）`],
+  ].forEach(([k,v])=>{
+    tbl.appendChild(el('tr', {}, [el('td',{},[k]), el('td',{},[v])]));
+  });
+  box.appendChild(el('div', {class:'tablewrap'}, [tbl]));
+  return box;
+}
+function openRuleModal(){
+  const modal = document.getElementById('ruleModal');
+  const body = document.getElementById('ruleModalBody');
+  body.innerHTML = '';
+  body.appendChild(ruleOverview());
+
+  const tabsRow = el('div', {class:'modal-tabs'});
+  const panes = {};
+  const defs = [
+    ['observer', '📡 観測員向け', ruleObserverTab],
+    ['diver', '🤿 潜水士向け', ruleDiverTab],
+    ['glossary', '📖 用語集', ruleGlossaryTab],
+  ];
+  const contentWrap = el('div', {});
+  defs.forEach(([key,label,fn])=>{
+    const pane = fn();
+    pane.hidden = true;
+    panes[key] = pane;
+    contentWrap.appendChild(pane);
+  });
+  function selectTab(key){
+    defs.forEach(([k])=>{ panes[k].hidden = (k!==key); });
+    [...tabsRow.children].forEach(btn=> btn.classList.toggle('active', btn.dataset.tab===key));
+  }
+  defs.forEach(([key,label])=>{
+    const btn = el('button', {class:'modal-tab', type:'button', onclick:()=>selectTab(key)}, [label]);
+    btn.dataset.tab = key;
+    tabsRow.appendChild(btn);
+  });
+  body.appendChild(tabsRow);
+  body.appendChild(contentWrap);
+
+  // 自分の役割のタブを最初に開く（着席前のホーム画面では観測員タブを既定にする）
+  const defaultTab = (ST.seat!=null && myRole()==='diver') ? 'diver' : 'observer';
+  selectTab(defaultTab);
+
+  modal.hidden = false;
+}
+function closeRuleModal(){ document.getElementById('ruleModal').hidden = true; }
+document.getElementById('ruleOpenBtn').addEventListener('click', openRuleModal);
+document.getElementById('ruleCloseBtn').addEventListener('click', closeRuleModal);
+document.getElementById('muteBtn').addEventListener('click', ()=> setMuted(!muted));
+updateMuteBtn();
 
 render();
 bootstrap();
