@@ -52,16 +52,24 @@ function runGame(seed, checkEachPhase) {
 console.log('秘匿不変条件（非GMビューに未公開点数なし）:');
 let phaseChecks = 0;
 for (let g = 0; g < 60; g++) {
-  runGame(300 + g, (state) => {
+  const finalState = runGame(300 + g, (state) => {
     for (const seat of PLAYERS) {
       const view = E.viewFor(state, seat);
       // cardMeta には score があってはならない
       const metaSigs = [];
       collectScoreSigs(view.cardMeta, 'cardMeta', metaSigs);
       ok(metaSigs.length === 0, `g${g} ${state.phase} cardMetaに点数混入`);
-      // 公開集合: roundResult.entries, history[].entries, decision.result.entries の score のみ
+      // 公開集合（新）: 判定確定済みentriesの score/scoreZen/scoreKou のみ
+      // （§3-4・v4指示書: ネタばらし画面で両半分を公開するため、scoreZen/scoreKouも許可集合に加える）
       const allowed = [];
-      const gather = (r) => { if (r && r.entries) for (const e of r.entries) if (e.score) allowed.push(`${e.score.base}|${e.score.mod}`); };
+      const gather = (r) => {
+        if (!r || !r.entries) return;
+        for (const e of r.entries) {
+          if (e.score) allowed.push(`${e.score.base}|${e.score.mod}`);
+          if (e.scoreZen) allowed.push(`${e.scoreZen.base}|${e.scoreZen.mod}`);
+          if (e.scoreKou) allowed.push(`${e.scoreKou.base}|${e.scoreKou.mod}`);
+        }
+      };
       gather(view.roundResult);
       (view.history || []).forEach(gather);
       gather(view.decision?.result);
@@ -70,13 +78,20 @@ for (let g = 0; g < 60; g++) {
       collectScoreSigs({ committedCards: view.committedCards, roundResult: view.roundResult, history: view.history, decision: view.decision, myHand: view.myHand, myReserved: view.myReserved }, 'v', all);
       // gm欄が非GMビューに存在しないこと
       ok(view.gm === null, `g${g} ${state.phase} 非GMビューにgm欄`);
-      // 全点数が公開集合に含まれる（多重集合として: 各シグが allowed に存在すればOK）
+      // 全点数が公開集合に含まれる（score/scoreZen/scoreKouのみ。手札・温存札・cardMetaには一切現れない）
       const allowedSet = new Set(allowed);
       const leak = all.find((x) => !allowedSet.has(x.sig));
       ok(!leak, `g${g} ${state.phase} 未公開点数リーク: ${leak ? JSON.stringify(leak) : ''}`);
       phaseChecks++;
     }
   });
+  // 新規（§3-4）: ゲーム完走後、公開済み(history)の全エントリに両半分(scoreZen/scoreKou)が含まれることを1回だけ検証
+  const finalView = E.viewFor(finalState, PLAYERS[0]);
+  ok(finalView.history.length > 0, `g${g} 完走後history非空`);
+  for (const h of finalView.history) for (const e of h.entries) {
+    ok(e.scoreZen && typeof e.scoreZen.base === 'number', `g${g} history entry(${h.kind}) に scoreZen`);
+    ok(e.scoreKou && typeof e.scoreKou.base === 'number', `g${g} history entry(${h.kind}) に scoreKou`);
+  }
 }
 console.log(`  フェーズ点検 ${phaseChecks} 回`);
 

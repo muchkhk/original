@@ -64,6 +64,10 @@
   .timeline .round-log{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;background:var(--panel2);}
   .muted{color:var(--dim);font-size:12px;}
   .rulebox p{margin:8px 0;} .rulebox li{margin:6px 0;}
+  .tabbar{display:flex;gap:6px;margin-bottom:10px;}
+  .tabbtn{flex:1;padding:8px;font-size:13px;background:var(--panel2);border:1px solid var(--line);border-radius:8px 8px 0 0;margin:0;}
+  .tabbtn.active{background:var(--panel);border-bottom-color:var(--panel);color:var(--acc);font-weight:700;}
+  .half-both .used{font-weight:700;color:var(--txt);} .half-both .unused{color:var(--dim);font-size:11px;}
   /* --- ルール説明の視覚化 --- */
   .goal-box{background:linear-gradient(135deg,#2a2415,#1f2a1a);border:1.5px solid var(--acc);border-radius:12px;padding:14px 16px;margin:6px 0 16px;}
   .goal-box .lbl{font-size:12px;color:var(--acc);font-weight:700;letter-spacing:1px;}
@@ -141,9 +145,15 @@ document.title = `こたえあわせ（仮）- ${VER}`;
 function verNum(v) { const m = /v?(\d+)\.(\d+)/.exec(String(v || '')); return m ? Number(m[1]) * 1000 + Number(m[2]) : -1; }
 /* ---------- 同点決着（tieBreakUsed）の表示文言（単一定義。ホットシート/オンライン/ネタばらし共用） ---------- */
 function tieBreakText(t) {
-  if (t === 'overall') return '同点 → 副基準（全体評価）で決着';
+  if (t === 'overall') return '同点 → 隠れた副基準で決着';
   if (t === 'split') return '副基準も同値 → 山分け';
   return '';
+}
+/* ---------- 前半/後半 併記（§3-4・ネタばらし画面専用）。判定に使った側は太字、使わなかった側は減光。
+ * ラベルは「前」「後」の1文字のみ（意味に到達する語は書かない）。 ---------- */
+function halfPairHtml(e, half) {
+  const zenUsed = half === 'zen';
+  return `<span class="half-both"><span class="${zenUsed ? 'used' : 'unused'}">前${esc(E.scoreLabel(e.scoreZen))}</span> <span class="${!zenUsed ? 'used' : 'unused'}">後${esc(E.scoreLabel(e.scoreKou))}</span></span>`;
 }
 
 let S = null;
@@ -534,6 +544,10 @@ const RULES_HTML = `
   <div class="rsec">🔄 1ラウンドの流れ</div>
   <div class="flow">
     <div class="step"><div class="num">1</div><div class="stxt">🎙️ <b>GMが基準を宣言</b>（「前半」か「後半」）</div></div>
+    <div class="callout" style="white-space:pre-line">「前半」「後半」とは？
+札の強さは、2種類記録されている。GMがラウンドごとに「前半で判定」「後半で判定」のどちらかを宣言し、宣言された側の強さで勝負する。同じ札でも、前半と後半で強さが違うことがある。
+この2つが何を指しているのかは、あえて伏せてある。
+遊びながら気づいてほしい。</div>
     <div class="arrow">▼</div>
     <div class="step"><div class="num">2</div><div class="stxt">🂠 全員、手札から1枚を<b>同時に伏せて</b>出す</div></div>
     <div class="arrow">▼</div>
@@ -554,6 +568,12 @@ const RULES_HTML = `
   <div class="rsec">🎴 全体の構成</div>
   <p>第1章 → 第2章 → 第3章（各6ラウンド）→ <b>決着ラウンド</b>。各章のはじめに札が8枚配られ、6枚を使う。残した札は決着に持ち越す。</p>
 
+  <div class="rsec">🏆 決着ラウンド</div>
+  <p>各章で<b>温存した札（章ごとに2枚・計6枚）</b>の中から、<b>1枚だけ</b>を選んで出す。</p>
+  <p>この最後の1枚だけは、<b>強さの決まり方がそれまでのラウンドと違う。</b></p>
+  <p>前半で判定するか後半で判定するかは、<b>全員が札を選んだ後</b>にGMが宣言する。</p>
+  <p>勝利6点。さらに追加の予想が1つでき、当たると +3。</p>
+
   <div class="callout">🔒 <b>このゲームで遊べるのは、今夜の一度きり。</b>札の強さは<b>すでに決まっていて</b>、その決まり方には法則がある——そしてそれは、<b>あなたたち自身と無関係ではない。</b>気づけるかどうかは、あなた次第。（理由は遊び終わる頃にわかる）</div>
 
   <div class="rsec">📌 覚えておくこと</div>
@@ -562,6 +582,25 @@ const RULES_HTML = `
     <li>同点のときは、各札の<b>もう一つの隠し数値</b>で決着（これも法則の一部）。それでも並んだら山分け。</li>
     <li><b>札の効果テキストはただの飾り。</b>このゲームでは一切機能せず、強さとも関係ない。</li>
     <li>ゲーム中にスマホ・資料・検索へ頼るのは<b>紳士協定で禁止</b>。</li>
+  </ul>
+  </div>`;
+/* ---------- 用語集（§3-2）: 定義文は1箇所に持ち、用語集タブから参照する ---------- */
+const GLOSSARY_HTML = `
+  <div class="rulebox">
+  <h2 style="margin-top:4px">用語集</h2>
+  <ul class="note-list">
+    <li><b>基準</b>：そのラウンドで「前半」「後半」のどちらの強さで判定するかという、GMが宣言するルール。</li>
+    <li><b>前半・後半</b>：札の強さの2つの記録のされ方。同じ札でも前半と後半で強さが違うことがある。それぞれが何を指すかは、あえて説明されていない。</li>
+    <li><b>コミット</b>：手札から1枚を選び、伏せて場に出す操作。全員が出すまで中身は公開されない。</li>
+    <li><b>一段目公開（表）</b>：全員のコミットが揃った直後に、札の名前だけが公開される段階。強さはまだ伏せられている。</li>
+    <li><b>自分宣言</b>：予想タイムに、自分が出した札の強さを数字でピタリ予想する宣言。的中でボーナス。</li>
+    <li><b>横予想</b>：予想タイムに、他人が出した札の強さを数字でピタリ予想する宣言（1件まで）。的中でボーナス。</li>
+    <li><b>的中</b>：宣言・予想した数字と、実際の強さの整数部分が一致すること。+/−の違いは問わない。</li>
+    <li><b>温存札</b>：各章で配られた8枚のうち、使わずに残した2枚。決着ラウンドに持ち越される。</li>
+    <li><b>決着ラウンド</b>：全3章が終わった後の最終ラウンド。温存札の中から1枚を選び、それまでのラウンドとは違う決まり方で強さが判定される。</li>
+    <li><b>副基準</b>：同点のときに使う、もう一つの隠れた数値。</li>
+    <li><b>山分け</b>：副基準まで並んだ完全な同点のときに、獲得ポイントを均等（端数切り上げ）に分け合うこと。</li>
+    <li><b>章</b>：ゲーム全体を構成する3つの区切り（第1章・第2章・第3章）。各6ラウンドで、章ごとに判定基準の固定/可変が異なる。</li>
   </ul>
   </div>`;
 
@@ -669,13 +708,26 @@ window.UI = {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = 'kotaeawase_state.json'; a.click();
   },
-  showRules() { modal(RULES_HTML); },
+  showRules() {
+    modal(`<div class="tabbar">
+      <button class="tabbtn active" id="tab-play" onclick="UI.rulesTab('play')">遊びかた</button>
+      <button class="tabbtn" id="tab-gloss" onclick="UI.rulesTab('gloss')">用語集</button>
+    </div>
+    <div id="tabpane-play">${RULES_HTML}</div>
+    <div id="tabpane-gloss" style="display:none">${GLOSSARY_HTML}</div>`);
+  },
+  rulesTab(which) {
+    document.getElementById('tabpane-play').style.display = which === 'play' ? '' : 'none';
+    document.getElementById('tabpane-gloss').style.display = which === 'gloss' ? '' : 'none';
+    document.getElementById('tab-play').classList.toggle('active', which === 'play');
+    document.getElementById('tab-gloss').classList.toggle('active', which === 'gloss');
+  },
   closeModal() { document.getElementById('modal-root').innerHTML = ''; },
   showTimeline() {
     const rounds = S.history.filter((h) => h.kind === 'round');
     modal(`<h2>全ラウンドの記録</h2><div class="timeline">${rounds.map((r) => `
       <div class="round-log"><b>${S.config.sets[r.set].label} R${r.round + 1}</b> <span class="half-tag">${HALF_LABEL[r.half]}</span> → ${esc(r.winners.join('・'))}${r.tieBreakUsed ? ` <span class="muted">（${esc(tieBreakText(r.tieBreakUsed))}）</span>` : ''}
-        ${r.entries.map((e) => `<div class="muted">${esc(e.player)}: ${esc(e.cardName)} = <b>${E.scoreLabel(e.score)}</b> ${e.comment ? '「' + esc(e.comment) + '」' : ''}</div>`).join('')}
+        ${r.entries.map((e) => `<div class="muted">${esc(e.player)}: ${esc(e.cardName)} = ${halfPairHtml(e, r.half)} ${e.comment ? '「' + esc(e.comment) + '」' : ''}</div>`).join('')}
       </div>`).join('')}</div>`);
   },
   showReserved() {
@@ -1123,7 +1175,7 @@ const Online = {
   },
   showTimelineV() {
     const v = this.view; const rounds = (v.history || []).filter((h) => h.kind === 'round');
-    modal(`<h2>全ラウンドの記録</h2><div class="timeline">${rounds.map((r) => `<div class="round-log"><b>${v.config.sets[r.set].label} R${r.round + 1}</b> <span class="half-tag">${r.half === 'zen' ? '前半' : '後半'}</span> → ${esc(r.winners.join('・'))}${r.tieBreakUsed ? ` <span class="muted">（${esc(tieBreakText(r.tieBreakUsed))}）</span>` : ''}${r.entries.map((e) => `<div class="muted">${esc(e.player)}: ${esc(e.cardName)} = <b>${E.scoreLabel(e.score)}</b>${e.comment ? ' 「' + esc(e.comment) + '」' : ''}</div>`).join('')}</div>`).join('')}</div>`);
+    modal(`<h2>全ラウンドの記録</h2><div class="timeline">${rounds.map((r) => `<div class="round-log"><b>${v.config.sets[r.set].label} R${r.round + 1}</b> <span class="half-tag">${r.half === 'zen' ? '前半' : '後半'}</span> → ${esc(r.winners.join('・'))}${r.tieBreakUsed ? ` <span class="muted">（${esc(tieBreakText(r.tieBreakUsed))}）</span>` : ''}${r.entries.map((e) => `<div class="muted">${esc(e.player)}: ${esc(e.cardName)} = ${halfPairHtml(e, r.half)}${e.comment ? ' 「' + esc(e.comment) + '」' : ''}</div>`).join('')}</div>`).join('')}</div>`);
   },
 };
 window.Online = Online;

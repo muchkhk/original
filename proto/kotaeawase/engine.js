@@ -534,10 +534,10 @@ function viewFor(state, seat) {
     for (const p of P) if (committed[p]) { addMeta(committed[p]); v.committedCards[p] = committed[p]; }
   }
   if (phase === 'roundEnd' && state.roundResult) {
-    v.roundResult = sanitizeResult(state.roundResult, cfg, addMeta);
+    v.roundResult = sanitizeResult(state.roundResult, cfg, addMeta, state.cardsById);
   }
   // history は全て公開済み（判定確定済のみ push される）
-  v.history = state.history.map((h) => h.kind === 'decision' ? sanitizeDecision(h, cfg, addMeta) : sanitizeResult(h, cfg, addMeta));
+  v.history = state.history.map((h) => h.kind === 'decision' ? sanitizeDecision(h, cfg, addMeta, state.cardsById) : sanitizeResult(h, cfg, addMeta, state.cardsById));
 
   // 自分の手札（GMは手札なし）
   if (!isGM && hands[seat]) { v.myHand = hands[seat].map((id) => { addMeta(id); return id; }); }
@@ -549,7 +549,7 @@ function viewFor(state, seat) {
     if (!isGM && reserved[seat]) v.myReserved = reserved[seat].map((id) => { addMeta(id); return id; });
     if (isGM) v.gmReserved = Object.fromEntries(P.map((p) => [p, (reserved[p] || []).map((id) => { addMeta(id); return id; })]));
     if (!isGM && ds.picks[seat]) { addMeta(ds.picks[seat]); d.myPick = ds.picks[seat]; }
-    if (phase === 'final' && ds.result) d.result = sanitizeDecision({ kind: 'decision', ...ds.result }, cfg, addMeta);
+    if (phase === 'final' && ds.result) d.result = sanitizeDecision({ kind: 'decision', ...ds.result }, cfg, addMeta, state.cardsById);
     // 決着の札公開（picks）はfinalでのみ全公開。それ以前は自分のpickのみ。
     if (phase === 'final') { d.picks = {}; for (const p of P) if (ds.picks[p]) { addMeta(ds.picks[p]); d.picks[p] = ds.picks[p]; } }
     v.decision = d;
@@ -574,19 +574,29 @@ function viewFor(state, seat) {
   v.cardMeta = cardMeta;
   return v;
 }
-/* 判定確定済ラウンドの entries は点数・コメント込みで公開してよい */
-function sanitizeResult(r, cfg, addMeta) {
+/* 判定確定済ラウンドの entries は点数・コメント込みで公開してよい。
+ * §3-4（v4指示書）: ネタばらし画面での前半/後半併記のため、判定に使った側(score)に加え、
+ * 同じ採点者による両半分(scoreZen/scoreKou)も公開する（cardsByIdから直接引く）。 */
+function sanitizeResult(r, cfg, addMeta, cardsById) {
   return {
     kind: 'round', set: r.set, round: r.round, half: r.half,
-    entries: r.entries.map((e) => { addMeta(e.cardId); return { player: e.player, cardId: e.cardId, cardName: e.cardName, score: e.score, comment: e.comment }; }),
+    entries: r.entries.map((e) => {
+      addMeta(e.cardId);
+      const rater = e.player, card = cardsById[e.cardId];
+      return { player: e.player, cardId: e.cardId, cardName: e.cardName, score: e.score, scoreZen: card.scores.zen[rater], scoreKou: card.scores.kou[rater], comment: e.comment };
+    }),
     winners: r.winners.slice(), tieBreakUsed: r.tieBreakUsed,
     declResults: r.declResults, pointsAwarded: r.pointsAwarded, winPoints: r.winPoints,
   };
 }
-function sanitizeDecision(r, cfg, addMeta) {
+function sanitizeDecision(r, cfg, addMeta, cardsById) {
   return {
     kind: 'decision', half: r.half,
-    entries: r.entries.map((e) => { addMeta(e.cardId); return { player: e.player, cardId: e.cardId, cardName: e.cardName, score: e.score, comment: e.comment }; }),
+    entries: r.entries.map((e) => {
+      addMeta(e.cardId);
+      const rater = cfg.gmName, card = cardsById[e.cardId];
+      return { player: e.player, cardId: e.cardId, cardName: e.cardName, score: e.score, scoreZen: card.scores.zen[rater], scoreKou: card.scores.kou[rater], comment: e.comment };
+    }),
     winners: r.winners.slice(), tieBreakUsed: r.tieBreakUsed,
     guessResults: r.guessResults, pointsAwarded: r.pointsAwarded,
   };

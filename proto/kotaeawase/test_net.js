@@ -16,7 +16,8 @@ function assertViewClean(view, tag) {
   const metaSigs = []; collectScores(view.cardMeta, metaSigs);
   ok(metaSigs.length === 0, `${tag}: cardMetaに点数`);
   const allowed = new Set();
-  const gather = (r) => { if (r && r.entries) for (const e of r.entries) if (e.score) allowed.add(`${e.score.base}|${e.score.mod}`); };
+  // §3-4(v4指示書): sanitizeResult/sanitizeDecisionがscoreZen/scoreKouも公開するようになったため許可集合に加える
+  const gather = (r) => { if (r && r.entries) for (const e of r.entries) { if (e.score) allowed.add(`${e.score.base}|${e.score.mod}`); if (e.scoreZen) allowed.add(`${e.scoreZen.base}|${e.scoreZen.mod}`); if (e.scoreKou) allowed.add(`${e.scoreKou.base}|${e.scoreKou.mod}`); } };
   gather(view.roundResult); (view.history || []).forEach(gather); gather(view.decision && view.decision.result);
   const all = []; collectScores({ committedCards: view.committedCards, roundResult: view.roundResult, history: view.history, decision: view.decision, myHand: view.myHand, myReserved: view.myReserved }, all);
   const leak = all.find((x) => !allowed.has(x));

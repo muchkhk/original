@@ -1,7 +1,6 @@
 /* 静的テスト: ui_template.html / net.js のソーステキストに対する不変条件を検証する。
  * ランタイム挙動ではなく「書かれているべきこと／書かれていてはいけないこと」の検査。
- * §3-1/§3-3（RULES_HTMLへの一字一句指定文の挿入）は design chat への差し戻し中のため、
- * ここでは §7 完了条件のうち §3 の一字一句一致チェックは含まない（文言確定後に追加する）。 */
+ * v4指示書（§3-1/§3-3/§5-3の文言確定・§3-4新規追加）に対応。 */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -56,16 +55,49 @@ console.log('決着ラウンド画面文言（§4・D-1）:');
     'オンライン版 decisionPick 画面文言に「マッチ」「前半」「後半」を含むこと');
 }
 
-console.log('ルール説明の核漏洩防止（§7・RULES_HTML）:');
+console.log('ルール説明の核漏洩防止（§3-1/§3-3・RULES_HTML/GLOSSARY_HTML）:');
 {
   const rulesMatch = /const RULES_HTML = `([\s\S]*?)`;/.exec(uiSrc);
   ok(!!rulesMatch, 'RULES_HTML 定数を検出できること');
   const rulesBody = rulesMatch ? rulesMatch[1] : '';
-  for (const bad of ['序盤', '終盤', 'マッチ', '全体評価']) {
+  const glossMatch = /const GLOSSARY_HTML = `([\s\S]*?)`;/.exec(uiSrc);
+  ok(!!glossMatch, 'GLOSSARY_HTML 定数を検出できること');
+  const glossBody = glossMatch ? glossMatch[1] : '';
+  for (const bad of ['序盤', '終盤', 'スレイ・ザ・スパイア']) {
     ok(!rulesBody.includes(bad), `RULES_HTML に「${bad}」が含まれないこと`);
+    ok(!glossBody.includes(bad), `GLOSSARY_HTML に「${bad}」が含まれないこと`);
   }
-  // 注: §3-1(前半/後半の定義・一字一句指定)・§3-3(決着ラウンド節)は
-  // design chatへの差し戻し中のため、ここでは追加していない（文言確定後に別途検証を追加）。
+  // 「マッチ」はRULES_HTMLのみ禁止（§3-3: 決着の判定者はルール説明で明かさない。
+  // 用語集・画面文言では既存どおり許容範囲＝GLOSSARY_HTMLには元々登場していない）
+  ok(!rulesBody.includes('マッチ'), 'RULES_HTML に「マッチ」が含まれないこと');
+  ok(!glossBody.includes('マッチ'), 'GLOSSARY_HTML に「マッチ」が含まれないこと');
+
+  // §3-1: 一字一句指定文がRULES_HTMLに完全一致で含まれること
+  const sec31Exact = '「前半」「後半」とは？\n札の強さは、2種類記録されている。GMがラウンドごとに「前半で判定」「後半で判定」のどちらかを宣言し、宣言された側の強さで勝負する。同じ札でも、前半と後半で強さが違うことがある。\nこの2つが何を指しているのかは、あえて伏せてある。\n遊びながら気づいてほしい。';
+  ok(rulesBody.includes(sec31Exact), 'RULES_HTML に §3-1 の定義文が一字一句含まれること');
+}
+
+console.log('ネタばらし画面の前半/後半併記（§3-4）:');
+{
+  ok(/function halfPairHtml\(/.test(uiSrc), 'halfPairHtml() が定義されていること');
+  ok(/scoreZen/.test(uiSrc) && /scoreKou/.test(uiSrc), 'halfPairHtml() が scoreZen/scoreKou を参照すること');
+  const hotseatTL = /showTimeline\(\) \{[\s\S]*?\n  \},/.exec(uiSrc);
+  const onlineTL = /showTimelineV\(\) \{[\s\S]*?\n  \},/.exec(uiSrc);
+  ok(!!hotseatTL && /halfPairHtml\(/.test(hotseatTL[0]), 'ホットシート showTimeline() が halfPairHtml()（scoreZen/scoreKou併記）を呼ぶこと');
+  ok(!!onlineTL && /halfPairHtml\(/.test(onlineTL[0]), 'オンライン showTimelineV() が halfPairHtml()（scoreZen/scoreKou併記）を呼ぶこと');
+
+  // 非対象: roundEnd/finalのカードタイル生成・resultBoard・renderFinalV には現れないこと
+  const noLeakTargets = [
+    ['function renderRoundEnd\\(\\)[\\s\\S]*?\\n\\}', 'renderRoundEnd()'],
+    ['function renderFinal\\(\\)[\\s\\S]*?\\n\\}', 'renderFinal()'],
+    ['resultBoard\\(r\\)[\\s\\S]*?\\n  \\},', 'resultBoard()'],
+    ['renderFinalV\\(v\\)[\\s\\S]*?\\n  \\},', 'renderFinalV()'],
+  ];
+  for (const [pat, label] of noLeakTargets) {
+    const m = new RegExp(pat).exec(uiSrc);
+    ok(!!m, `${label} を検出できること`);
+    ok(!m || (!/scoreZen/.test(m[0]) && !/scoreKou/.test(m[0]) && !/halfPairHtml\(/.test(m[0])), `${label} に scoreZen/scoreKou/halfPairHtml() が現れないこと`);
+  }
 }
 
 console.log('hostState の DB書き込み撤去（§2-2）:');
