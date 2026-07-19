@@ -303,7 +303,7 @@ function renderSeatOnly(p) {
 function renderLobby() {
   const hasReal = !!window.REAL_DECKS;
   return `<div class="panel center">
-    <h2>v0.6（ローカル・ホットシート）</h2>
+    <h2>${VER}（ローカル・ホットシート）</h2>
     <p class="muted">1台の端末を回して遊ぶ検証用ビルドです。</p>
     <label>プレイ形式</label>
     <select id="mode-sel" onchange="UI.onModeChange(this.value)">

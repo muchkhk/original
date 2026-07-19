@@ -29,6 +29,14 @@ console.log('版不一致ガード（§2-4）:');
   ok(/meta\.ver/.test(uiSrc), 'meta.ver を参照する比較分岐が存在すること');
   ok(/再読み込みしてください/.test(uiSrc), '「部屋の方が新しい」ケースのバナー文言が存在すること');
   ok(/部屋を作り直してください/.test(uiSrc), '「部屋の方が古い」ケースのバナー文言が存在すること');
+  // べた書きの版番号（"v0.6" 等）が VER の定義行以外に残っていないこと（実際にv0.6のロビー見出しが
+  // べた書きのまま残っていた回帰があったため、再発防止として静的テストに追加）
+  const hardcodedVer = uiSrc.split('\n').filter((line) => {
+    const t = line.trim();
+    if (t.startsWith('//') || t.startsWith('/*') || t.startsWith('*')) return false; // コードコメントは対象外
+    return /\bv0\.\d+\b/.test(line) && !/const VER\s*=/.test(line);
+  });
+  ok(hardcodedVer.length === 0, `VER定義行以外にべた書きの版番号が無いこと (実:${hardcodedVer.length}行: ${hardcodedVer.join(' / ')})`);
 }
 
 console.log('全画面からルールに到達できること（§2-5）:');
