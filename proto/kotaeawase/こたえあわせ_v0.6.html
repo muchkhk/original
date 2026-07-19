@@ -1,0 +1,1943 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>こたえあわせ（仮）- v0.6</title>
+<style>
+  :root{
+    --bg:#101418; --panel:#1a2027; --panel2:#232b34; --line:#33404d;
+    --txt:#e8edf2; --dim:#8fa0b0; --acc:#ffb84d; --acc2:#5ec8ff; --win:#7dd87d; --bad:#ff7d7d;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;line-height:1.6;}
+  #app{max-width:760px;margin:0 auto;padding:12px 12px 90px;}
+  header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--line);margin-bottom:10px;}
+  header h1{font-size:16px;margin:0;color:var(--acc);letter-spacing:2px;white-space:nowrap;}
+  .stage{font-size:12px;color:var(--dim);text-align:right;}
+  #sndbtn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 6px;margin:0;}
+  .board{display:flex;gap:8px;margin:8px 0 14px;}
+  .score{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;text-align:center;}
+  .score .nm{font-size:12px;color:var(--dim);} .score .pt{font-size:22px;font-weight:700;}
+  .score.leader{border-color:var(--acc);}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px;}
+  .center{text-align:center;}
+  h2{font-size:15px;margin:0 0 10px;color:var(--acc2);}
+  button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:12px 18px;font-size:15px;cursor:pointer;margin:4px;transition:transform .06s, filter .12s;}
+  button:active{transform:scale(.965);filter:brightness(1.15);}
+  button.primary{background:var(--acc);color:#20180a;font-weight:700;border:none;box-shadow:0 2px 10px rgba(255,184,77,.25);}
+  button.big{width:100%;padding:16px;font-size:17px;}
+  button:disabled{opacity:.35;cursor:default;transform:none;}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;}
+  .card{background:var(--panel2);border:1.5px solid var(--line);border-radius:10px;padding:10px;cursor:pointer;position:relative;}
+  .card.sel{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc);}
+  .card.static{cursor:default;}
+  .card .nm{font-weight:700;font-size:13px;margin-bottom:4px;}
+  .card .meta{font-size:11px;color:var(--dim);}
+  .card .fx{font-size:10.5px;margin-top:6px;white-space:pre-wrap;color:#77879a;font-style:italic;}
+  .card .fx::before{content:"（飾り）";color:#5a6a7a;font-size:9.5px;margin-right:2px;}
+  .card .owner{position:absolute;top:-9px;right:8px;background:var(--acc2);color:#06202e;font-size:11px;font-weight:700;border-radius:8px;padding:0 8px;}
+  .card .val{font-size:30px;font-weight:800;text-align:center;margin:6px 0 2px;color:var(--acc);}
+  .card.winner{border-color:var(--win);box-shadow:0 0 0 2px var(--win);}
+  .comment{background:#141a20;border-left:3px solid var(--acc2);border-radius:0 8px 8px 0;padding:6px 10px;font-size:12px;margin-top:8px;color:#b9c7d4;white-space:pre-wrap;}
+  .cover{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:50;gap:18px;padding:20px;text-align:center;}
+  .cover .who{font-size:26px;font-weight:800;color:var(--acc);}
+  select{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:16px;}
+  label{font-size:13px;color:var(--dim);display:block;margin:10px 0 4px;}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .chip{font-size:12px;border-radius:99px;padding:3px 10px;border:1px solid var(--line);}
+  .chip.hit{background:#153a15;border-color:var(--win);color:var(--win);}
+  .chip.miss{background:#3a1515;border-color:var(--bad);color:var(--bad);}
+  .banner{font-size:20px;font-weight:800;text-align:center;margin:12px 0;color:var(--win);}
+  .half-tag{display:inline-block;background:var(--panel2);border:1px solid var(--acc2);color:var(--acc2);border-radius:8px;padding:2px 12px;font-size:13px;font-weight:700;}
+  #gmbar{position:fixed;bottom:0;left:0;right:0;background:#0b0e11;border-top:1px solid var(--line);display:flex;justify-content:center;gap:8px;padding:8px;z-index:60;}
+  #gmbar button{font-size:12px;padding:8px 14px;margin:0;}
+  #gmdrawer{position:fixed;bottom:52px;left:0;right:0;max-height:55vh;overflow:auto;background:#0e1319;border-top:2px solid var(--acc);padding:14px;z-index:59;display:none;}
+  #gmdrawer.open{display:block;}
+  .gm-title{color:var(--acc);font-weight:700;font-size:13px;margin-bottom:8px;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;justify-content:center;align-items:center;z-index:70;padding:16px;}
+  .modal>div{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:560px;max-height:80vh;overflow:auto;padding:20px;}
+  .timeline .round-log{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;background:var(--panel2);}
+  .muted{color:var(--dim);font-size:12px;}
+  .rulebox p{margin:8px 0;} .rulebox li{margin:6px 0;}
+  /* --- ルール説明の視覚化 --- */
+  .goal-box{background:linear-gradient(135deg,#2a2415,#1f2a1a);border:1.5px solid var(--acc);border-radius:12px;padding:14px 16px;margin:6px 0 16px;}
+  .goal-box .lbl{font-size:12px;color:var(--acc);font-weight:700;letter-spacing:1px;}
+  .goal-box .txt{font-size:16px;font-weight:700;margin-top:4px;}
+  .rsec{margin:16px 0 6px;font-size:14px;font-weight:700;color:var(--acc2);display:flex;align-items:center;gap:6px;}
+  .flow{display:flex;flex-direction:column;gap:0;margin:8px 0;}
+  .flow .step{display:flex;gap:10px;align-items:flex-start;padding:8px 0;}
+  .flow .num{flex:0 0 26px;height:26px;border-radius:50%;background:var(--acc);color:#20180a;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px;}
+  .flow .stxt{font-size:13.5px;padding-top:2px;} .flow .stxt b{color:var(--txt);}
+  .flow .arrow{color:var(--dim);margin-left:12px;font-size:12px;line-height:.6;}
+  .sctbl{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px;}
+  .sctbl th{background:var(--panel2);color:var(--acc2);} .sctbl td,.sctbl th{border:1px solid var(--line);padding:6px 8px;text-align:center;}
+  .callout{background:#141a20;border-left:3px solid var(--acc);border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;}
+  .genre{display:inline-block;background:var(--panel2);border:1px solid var(--acc2);color:var(--acc2);border-radius:99px;padding:2px 12px;font-size:12px;font-weight:700;margin-bottom:8px;}
+  .note-list{list-style:none;padding:0;margin:6px 0;} .note-list li{padding:4px 0 4px 22px;position:relative;font-size:12.5px;color:#b9c7d4;}
+  .note-list li::before{content:"▸";position:absolute;left:6px;color:var(--acc2);}
+  /* --- オンライン --- */
+  .seatrow{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:6px 0;}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;}
+  .dot.on{background:var(--win);box-shadow:0 0 6px var(--win);} .dot.off{background:#555;}
+  .seatrow.me{border-color:var(--acc);}
+  .waitbox{text-align:center;padding:24px 12px;} .waitbox .spin{font-size:30px;animation:pulse 1.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.35;}50%{opacity:1;}}
+  .rc{font-family:monospace;font-size:26px;letter-spacing:6px;color:var(--acc);font-weight:800;}
+  input[type=text]{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:16px;width:100%;}
+  .banner-warn{background:#3a2a15;border:1px solid var(--acc);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--acc);margin:8px 0;}
+  /* 段階公開アニメ */
+  @keyframes rvIn{from{opacity:0;transform:translateY(14px) scale(.95);}to{opacity:1;transform:none;}}
+  .rv{opacity:0;animation:rvIn .55s cubic-bezier(.2,.9,.3,1.2) forwards;}
+  .rv1{animation-delay:.25s;} .rv2{animation-delay:1.25s;} .rv3{animation-delay:2.25s;}
+  .rv-after{animation-delay:3.3s;} .rv-banner{animation-delay:3.8s;}
+  .noanim .rv{animation-delay:0s !important;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="gmbar">
+  <button onclick="UI.toggleGM()">GM専用パネル</button>
+  <button onclick="UI.undo()">⟲ 1手戻す（GM）</button>
+  <button onclick="UI.exportState()">状態保存</button>
+  <button onclick="UI.showRules()">ルール</button>
+</div>
+<div id="gmdrawer"></div>
+<div id="modal-root"></div>
+
+<!-- Firebase SDK（オンライン対戦用。読み込めなくてもホットシート/ソロは動作） -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" onerror="window.__FB_FAIL__=1"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js" onerror="window.__FB_FAIL__=1"></script>
+<script>
+/* =========================================================
+ * 『答え合わせ』(仮) ゲームエンジン v0.1
+ * 純粋状態機械。UI/同期層から独立。ローカル試遊版・Firebase版で共用。
+ *
+ * 用語:
+ *  half: 'zen'(前半) | 'kou'(後半)
+ *  score: {base: 1..5, mod: -0.5 | 0 | +0.5}   // 4+ => {base:4, mod:+0.5}
+ *  数値強度 = base + mod。宣言的中判定は base のみ比較（+/-は問わない）。
+ * ========================================================= */
+'use strict';
+
+const ENGINE_VERSION = '0.3.0';
+
+/* ---------- 設定（調整ノブは全部ここ） ---------- */
+const DEFAULT_CONFIG = {
+  players: ['からあげ', 'てかさ', '逆廻'],
+  gmName: 'マッチ',
+  sets: [
+    { label: '第1章', winPoints: 3, fixedHalf: 'zen' },
+    { label: '第2章', winPoints: 4, fixedHalf: 'kou' },
+    { label: '第3章', winPoints: 5, fixedHalf: null }, // null = ラウンドごとにGMが宣言
+  ],
+  roundsPerSet: 6,
+  handSize: 8,           // 8枚配布・6枚使用・2枚温存
+  hitSelfPoints: 2,      // 自分宣言的中
+  hitSidePoints: 2,      // 横予想的中
+  decision: {
+    enabled: true,
+    label: '決着',
+    winPoints: 6,        // 推奨値（v2の8から調整）
+    hitPoints: 3,        // マッチ点数予想的中
+  },
+};
+
+/* ---------- スコア表現ユーティリティ ---------- */
+function numeric(score) {
+  if (!score || typeof score.base !== 'number') return null;
+  return score.base + (score.mod || 0);
+}
+function scoreLabel(score) {
+  if (!score) return '—';
+  const m = score.mod > 0 ? '+' : score.mod < 0 ? '-' : '';
+  return `${score.base}${m}`;
+}
+/* 生文字列("4+","５-",3 等) → score オブジェクト。データ取込時に使用 */
+function parseScoreStr(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/＋/g, '+').replace(/－/g, '-');
+  const m = s.match(/^([1-5])(?:\.(5))?\s*([+-])?$/);
+  if (!m) return null;
+  let base = parseInt(m[1], 10);
+  let mod = 0;
+  if (m[3] === '+') mod = 0.5;
+  else if (m[3] === '-') mod = -0.5;
+  else if (m[2] === '5') { mod = 0.5; } // 3.5 のような数値表現は +0.5 とみなし base は整数部
+  return { base, mod };
+}
+
+/* ---------- カード形状 ----------
+ * card = {
+ *   id, name, cost, type, effect,
+ *   scores: { zen: {<player|gm>: score}, kou: {...} },
+ *   overall: { zen: number, kou: number },   // 4人平均（タイブレーク用）
+ *   comments: { <player|gm>: string }
+ * }
+ */
+
+/* ---------- 状態 ---------- */
+function createGame(deckSets, decisionPoolIndependent, config) {
+  const cfg = deepMerge(structuredCloneSafe(DEFAULT_CONFIG), config || {});
+  if (deckSets.length !== cfg.sets.length) throw new Error(`deckSets数(${deckSets.length})がconfig.sets数(${cfg.sets.length})と不一致`);
+  deckSets.forEach((deck, i) => {
+    const need = cfg.players.length * cfg.handSize;
+    if (deck.length < need) throw new Error(`セット${i + 1}のデッキが${deck.length}枚しかない（必要${need}枚）`);
+    validateDeck(deck, cfg, i);
+  });
+  return {
+    engineVersion: ENGINE_VERSION,
+    config: cfg,
+    cardsById: indexCards(deckSets.flat()),
+    deckSets: deckSets.map((d) => d.map((c) => c.id)),
+    phase: 'lobby', // lobby → deal → basis → commit → faces → declare → scores → roundEnd → (setEnd) → decisionPick → decisionDeclare → decisionReveal → final
+    setIndex: -1,
+    roundIndex: -1,          // セット内 0-origin
+    currentHalf: null,
+    hands: {},               // player -> [cardId]（未使用の手札）
+    reserved: {},            // player -> [cardId]（温存として残った札; セット終了時に確定）
+    committed: {},           // player -> cardId
+    declarations: {},        // player -> {self: int|null, side: {target, value}|null}
+    scores: {},              // player -> 総得点
+    roundResult: null,       // 直近ラウンドの判定詳細
+    history: [],             // 全ラウンドのログ（ネタばらし画面用）
+    decisionState: null,
+    rngLog: [],
+  };
+}
+
+function validateDeck(deck, cfg, setIdx) {
+  const seen = new Set();
+  for (const c of deck) {
+    if (!c.id) throw new Error(`セット${setIdx + 1}: idなしカード`);
+    if (seen.has(c.id)) throw new Error(`セット${setIdx + 1}: id重複 ${c.id}`);
+    seen.add(c.id);
+    for (const half of ['zen', 'kou']) {
+      for (const p of cfg.players) {
+        const s = c.scores?.[half]?.[p];
+        if (!s || typeof s.base !== 'number' || s.base < 1 || s.base > 5) {
+          throw new Error(`カード「${c.name}」(${c.id}) の ${half}/${p} の点数が不正: ${JSON.stringify(s)}`);
+        }
+      }
+      if (typeof c.overall?.[half] !== 'number') {
+        throw new Error(`カード「${c.name}」(${c.id}) の overall.${half} 欠落`);
+      }
+      if (cfg.decision.enabled) {
+        const g = c.scores?.[half]?.[cfg.gmName];
+        if (!g || typeof g.base !== 'number') throw new Error(`カード「${c.name}」(${c.id}) の ${half}/${cfg.gmName}(GM) 点数欠落（決着ラウンドに必要）`);
+      }
+    }
+  }
+}
+
+function indexCards(cards) {
+  const m = {};
+  cards.forEach((c) => { m[c.id] = c; });
+  return m;
+}
+
+/* ---------- アクション ---------- */
+const Actions = {
+  START_GAME: 'START_GAME',           // {} lobby → セット1配札
+  ANNOUNCE_BASIS: 'ANNOUNCE_BASIS',   // {half} GMが基準宣言（固定セットではhalf省略可）
+  COMMIT: 'COMMIT',                   // {player, cardId}
+  REVEAL_FACES: 'REVEAL_FACES',       // {} GM操作
+  DECLARE: 'DECLARE',                 // {player, self, side}
+  REVEAL_SCORES: 'REVEAL_SCORES',     // {} GM操作 → 判定確定
+  NEXT: 'NEXT',                       // {} roundEnd → 次ラウンド or 次セット or 決着へ
+  DECISION_PICK: 'DECISION_PICK',     // {player, cardId} 温存2枚から1枚
+  DECISION_ANNOUNCE: 'DECISION_ANNOUNCE', // {half} 決着の基準宣言 → 表公開
+  DECISION_DECLARE: 'DECISION_DECLARE',   // {player, guess: int|null} マッチ点数予想
+  DECISION_REVEAL: 'DECISION_REVEAL', // {} 判定確定 → final
+};
+
+function reduce(state, action) {
+  const s = structuredCloneSafe(state); // 破壊回避（呼び出し側の巻き戻し・保全のため）
+  const cfg = s.config;
+  const type = action.type;
+
+  const expect = (...phases) => {
+    if (!phases.includes(s.phase)) throw new Error(`${type} はフェーズ ${s.phase} では実行不可（許可: ${phases.join(',')}）`);
+  };
+  const isPlayer = (p) => cfg.players.includes(p);
+
+  switch (type) {
+    case Actions.START_GAME: {
+      expect('lobby');
+      startSet(s, 0);
+      return s;
+    }
+
+    case Actions.ANNOUNCE_BASIS: {
+      expect('basis');
+      const fixed = cfg.sets[s.setIndex].fixedHalf;
+      const half = fixed || action.half;
+      if (half !== 'zen' && half !== 'kou') throw new Error(`基準が不正: ${action.half}`);
+      if (fixed && action.half && action.half !== fixed) throw new Error(`このセットの基準は${fixed}固定`);
+      s.currentHalf = half;
+      s.committed = {};
+      s.declarations = {};
+      s.phase = 'commit';
+      return s;
+    }
+
+    case Actions.COMMIT: {
+      expect('commit');
+      const { player, cardId } = action;
+      if (!isPlayer(player)) throw new Error(`不明なプレイヤー: ${player}`);
+      if (s.committed[player]) throw new Error(`${player} はコミット済み`);
+      const hand = s.hands[player];
+      const idx = hand.indexOf(cardId);
+      if (idx < 0) throw new Error(`${player} の手札に ${cardId} がない`);
+      s.committed[player] = cardId;
+      if (Object.keys(s.committed).length === cfg.players.length) s.phase = 'faces';
+      return s;
+    }
+
+    case Actions.REVEAL_FACES: {
+      expect('faces');
+      s.phase = 'declare';
+      return s;
+    }
+
+    case Actions.DECLARE: {
+      expect('declare');
+      const { player } = action;
+      if (!isPlayer(player)) throw new Error(`不明なプレイヤー: ${player}`);
+      if (s.declarations[player]) throw new Error(`${player} は宣言済み`);
+      const decl = { self: null, side: null };
+      if (action.self !== null && action.self !== undefined) {
+        const v = Number(action.self);
+        if (!Number.isInteger(v) || v < 1 || v > 5) throw new Error(`自分宣言は1〜5の整数: ${action.self}`);
+        decl.self = v;
+      }
+      if (action.side) {
+        const { target, value } = action.side;
+        if (!isPlayer(target) || target === player) throw new Error(`横予想の対象が不正: ${target}`);
+        const v = Number(value);
+        if (!Number.isInteger(v) || v < 1 || v > 5) throw new Error(`横予想は1〜5の整数: ${value}`);
+        decl.side = { target, value: v };
+      }
+      s.declarations[player] = decl;
+      if (Object.keys(s.declarations).length === cfg.players.length) s.phase = 'scoresReady';
+      return s;
+    }
+
+    case Actions.REVEAL_SCORES: {
+      expect('scoresReady');
+      s.roundResult = judgeRound(s);
+      applyRoundResult(s, s.roundResult);
+      s.phase = 'roundEnd';
+      return s;
+    }
+
+    case Actions.NEXT: {
+      expect('roundEnd');
+      // 手札から使用済みを除去
+      for (const p of cfg.players) {
+        s.hands[p] = s.hands[p].filter((id) => id !== s.committed[p]);
+      }
+      const lastRoundOfSet = s.roundIndex + 1 >= cfg.roundsPerSet;
+      if (!lastRoundOfSet) {
+        s.roundIndex += 1;
+        s.currentHalf = null;
+        s.committed = {};
+        s.declarations = {};
+        s.roundResult = null;
+        s.phase = 'basis';
+        return s;
+      }
+      // セット終了: 残り手札を温存として記録
+      for (const p of cfg.players) {
+        s.reserved[p] = (s.reserved[p] || []).concat(s.hands[p]);
+        s.hands[p] = [];
+      }
+      const lastSet = s.setIndex + 1 >= cfg.sets.length;
+      if (!lastSet) {
+        startSet(s, s.setIndex + 1);
+        return s;
+      }
+      if (cfg.decision.enabled) {
+        s.decisionState = { picks: {}, guesses: {}, half: null, result: null };
+        s.phase = 'decisionPick';
+      } else {
+        s.phase = 'final';
+      }
+      return s;
+    }
+
+    case Actions.DECISION_PICK: {
+      expect('decisionPick');
+      const { player, cardId } = action;
+      if (!isPlayer(player)) throw new Error(`不明なプレイヤー: ${player}`);
+      if (s.decisionState.picks[player]) throw new Error(`${player} は選択済み`);
+      if (!s.reserved[player].includes(cardId)) throw new Error(`${player} の温存札に ${cardId} がない`);
+      s.decisionState.picks[player] = cardId;
+      if (Object.keys(s.decisionState.picks).length === cfg.players.length) s.phase = 'decisionBasis';
+      return s;
+    }
+
+    case Actions.DECISION_ANNOUNCE: {
+      expect('decisionBasis');
+      const half = action.half;
+      if (half !== 'zen' && half !== 'kou') throw new Error(`基準が不正: ${half}`);
+      s.decisionState.half = half;
+      s.phase = 'decisionDeclare';
+      return s;
+    }
+
+    case Actions.DECISION_DECLARE: {
+      expect('decisionDeclare');
+      const { player } = action;
+      if (!isPlayer(player)) throw new Error(`不明なプレイヤー: ${player}`);
+      if (player in s.decisionState.guesses) throw new Error(`${player} は予想済み`);
+      let g = null;
+      if (action.guess !== null && action.guess !== undefined) {
+        const v = Number(action.guess);
+        if (!Number.isInteger(v) || v < 1 || v > 5) throw new Error(`予想は1〜5の整数: ${action.guess}`);
+        g = v;
+      }
+      s.decisionState.guesses[player] = g;
+      if (Object.keys(s.decisionState.guesses).length === cfg.players.length) s.phase = 'decisionReady';
+      return s;
+    }
+
+    case Actions.DECISION_REVEAL: {
+      expect('decisionReady');
+      const res = judgeDecision(s);
+      s.decisionState.result = res;
+      for (const [p, pts] of Object.entries(res.pointsAwarded)) s.scores[p] += pts;
+      s.history.push({ kind: 'decision', ...res });
+      s.phase = 'final';
+      return s;
+    }
+
+    default:
+      throw new Error(`未知のアクション: ${type}`);
+  }
+}
+
+function startSet(s, setIndex) {
+  const cfg = s.config;
+  s.setIndex = setIndex;
+  s.roundIndex = 0;
+  s.currentHalf = null;
+  s.committed = {};
+  s.declarations = {};
+  s.roundResult = null;
+  // 配札: deckSets[setIndex] の並び順どおりに配る（シャッフルは呼び出し側の責務。再現性のため）
+  const ids = s.deckSets[setIndex].slice();
+  const need = cfg.players.length * cfg.handSize;
+  const dealt = ids.slice(0, need);
+  cfg.players.forEach((p, i) => {
+    s.hands[p] = dealt.filter((_, k) => k % cfg.players.length === i);
+  });
+  if (setIndex === 0) { s.scores = {}; cfg.players.forEach((p) => { s.scores[p] = 0; }); s.reserved = {}; cfg.players.forEach((p) => { s.reserved[p] = []; }); }
+  s.phase = 'basis';
+}
+
+/* ---------- 判定 ---------- */
+function judgeRound(s) {
+  const cfg = s.config;
+  const half = s.currentHalf;
+  const entries = cfg.players.map((p) => {
+    const card = s.cardsById[s.committed[p]];
+    const sc = card.scores[half][p];       // 自分基準核: 出した本人の点数
+    return { player: p, cardId: card.id, cardName: card.name, score: sc, value: numeric(sc), overall: card.overall[half], comment: card.comments?.[p] ?? null };
+  });
+
+  const maxV = Math.max(...entries.map((e) => e.value));
+  let top = entries.filter((e) => e.value === maxV);
+  let tieBreakUsed = null;
+  if (top.length > 1) {
+    tieBreakUsed = 'overall';
+    const maxO = Math.max(...top.map((e) => e.overall));
+    const top2 = top.filter((e) => e.overall === maxO);
+    if (top2.length < top.length && top2.length === 1) top = top2;
+    else { top = top2; tieBreakUsed = 'split'; }
+  }
+
+  const winPoints = cfg.sets[s.setIndex].winPoints;
+  const pointsAwarded = {};
+  cfg.players.forEach((p) => { pointsAwarded[p] = 0; });
+  if (top.length === 1) {
+    pointsAwarded[top[0].player] += winPoints;
+  } else {
+    const each = Math.ceil(winPoints / top.length); // 山分けは切り上げ
+    top.forEach((e) => { pointsAwarded[e.player] += each; });
+  }
+
+  // 宣言判定（的中＝baseの整数一致。+/-は問わない）
+  const declResults = {};
+  for (const p of cfg.players) {
+    const d = s.declarations[p] || { self: null, side: null };
+    const own = entries.find((e) => e.player === p);
+    const r = { self: null, side: null };
+    if (d.self !== null) {
+      const hit = d.self === own.score.base;
+      r.self = { value: d.self, hit };
+      if (hit) pointsAwarded[p] += cfg.hitSelfPoints;
+    }
+    if (d.side) {
+      const tgt = entries.find((e) => e.player === d.side.target);
+      const hit = d.side.value === tgt.score.base;
+      r.side = { target: d.side.target, value: d.side.value, hit, actualBase: tgt.score.base };
+      if (hit) pointsAwarded[p] += cfg.hitSidePoints;
+    }
+    declResults[p] = r;
+  }
+
+  return {
+    kind: 'round',
+    set: s.setIndex, round: s.roundIndex, half,
+    entries, winners: top.map((e) => e.player), tieBreakUsed,
+    declResults, pointsAwarded, winPoints,
+  };
+}
+
+function applyRoundResult(s, res) {
+  for (const [p, pts] of Object.entries(res.pointsAwarded)) s.scores[p] += pts;
+  s.history.push(res);
+}
+
+function judgeDecision(s) {
+  const cfg = s.config;
+  const half = s.decisionState.half;
+  const gm = cfg.gmName;
+  const entries = cfg.players.map((p) => {
+    const card = s.cardsById[s.decisionState.picks[p]];
+    const sc = card.scores[half][gm];      // 決着: マッチ基準
+    return { player: p, cardId: card.id, cardName: card.name, score: sc, value: numeric(sc), overall: card.overall[half], comment: card.comments?.[gm] ?? null };
+  });
+  const maxV = Math.max(...entries.map((e) => e.value));
+  let top = entries.filter((e) => e.value === maxV);
+  let tieBreakUsed = null;
+  if (top.length > 1) {
+    tieBreakUsed = 'overall';
+    const maxO = Math.max(...top.map((e) => e.overall));
+    const top2 = top.filter((e) => e.overall === maxO);
+    if (top2.length === 1) top = top2; else { top = top2; tieBreakUsed = 'split'; }
+  }
+  const pointsAwarded = {};
+  cfg.players.forEach((p) => { pointsAwarded[p] = 0; });
+  if (top.length === 1) pointsAwarded[top[0].player] += cfg.decision.winPoints;
+  else top.forEach((e) => { pointsAwarded[e.player] += Math.ceil(cfg.decision.winPoints / top.length); });
+
+  const guessResults = {};
+  for (const p of cfg.players) {
+    const g = s.decisionState.guesses[p];
+    if (g === null || g === undefined) { guessResults[p] = null; continue; }
+    const own = entries.find((e) => e.player === p);
+    const hit = g === own.score.base;
+    guessResults[p] = { value: g, hit };
+    if (hit) pointsAwarded[p] += cfg.decision.hitPoints;
+  }
+  return { half, entries, winners: top.map((e) => e.player), tieBreakUsed, guessResults, pointsAwarded };
+}
+
+/* ---------- 補助 ---------- */
+function structuredCloneSafe(o) {
+  return (typeof structuredClone === 'function') ? structuredClone(o) : JSON.parse(JSON.stringify(o));
+}
+function deepMerge(base, over) {
+  if (Array.isArray(over)) return structuredCloneSafe(over);
+  if (over && typeof over === 'object') {
+    const out = { ...base };
+    for (const k of Object.keys(over)) out[k] = deepMerge(base?.[k], over[k]);
+    return out;
+  }
+  return over === undefined ? base : over;
+}
+
+/* ---------- 平準化配札 ----------
+ * 各プレイヤーの「自分の点数での手札平均」（前後半の平均）の差を targetSpread 以下へ
+ * 緩やかに近づける（ほんのり平等）。完全均一化はしない。
+ * 戻り値: 配札順に並べ替えたデッキ（reduce側のラウンドロビン配札でこの手札になる）
+ */
+function balanceDeal(deck, players, handSize, rng, targetSpread = 0.4, maxIter = 400) {
+  rng = rng || Math.random;
+  const need = players.length * handSize;
+  if (deck.length < need) throw new Error(`balanceDeal: デッキ不足 ${deck.length} < ${need}`);
+  const pool = deck.slice();
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const hands = players.map((_, i) => pool.slice(i * handSize, (i + 1) * handSize));
+  const rest = pool.slice(need);
+  const val = (card, p) => (numeric(card.scores.zen[p]) + numeric(card.scores.kou[p])) / 2;
+  const avg = (i) => hands[i].reduce((a, c) => a + val(c, players[i]), 0) / handSize;
+  const spread = () => { const as = players.map((_, i) => avg(i)); return Math.max(...as) - Math.min(...as); };
+  for (let it = 0; it < maxIter && spread() > targetSpread; it++) {
+    const as = players.map((_, i) => avg(i));
+    const hi = as.indexOf(Math.max(...as)), lo = as.indexOf(Math.min(...as));
+    // hiの高価値札とloの低価値札を交換候補としてランダムに試す
+    const a = Math.floor(rng() * handSize), b = Math.floor(rng() * handSize);
+    const ca = hands[hi][a], cb = hands[lo][b];
+    const before = spread();
+    hands[hi][a] = cb; hands[lo][b] = ca;
+    if (spread() >= before) { hands[hi][a] = ca; hands[lo][b] = cb; } // 改善しなければ戻す
+  }
+  // ラウンドロビン(k % n == i)で hands[i] が再現される並びに編む
+  const out = [];
+  for (let k = 0; k < handSize; k++) for (let i = 0; i < players.length; i++) out.push(hands[i][k]);
+  return out.concat(rest);
+}
+
+/* =========================================================
+ * viewFor(state, seat): 座席別の秘匿ビュー（オンライン配信用）
+ *
+ * 目的: 非GM座席のクライアントには「未公開の点数」を一切渡さない。
+ *   - カードのメタデータ（名前/コスト/種別/効果=飾り/キャラ）は非秘匿（物理カードに書いてある）
+ *   - 点数(scores)・全体評価(overall)は秘匿。公開されるのは判定確定後の
+ *     roundResult / history / decisionState.result の中の entries のみ。
+ *   - 自分の手札は自分には見える（メタのみ、点数なし）。他人の手札は名前も渡さない
+ *     （コミット前）。コミット表公開後は各札のメタ（名前）だけ渡す。
+ * GM座席には答えパネル用に committed/picked 札の点数を付与する（GMは信頼されたホスト）。
+ * これは純粋関数。テストで「非GMビューに未公開点数が無い」ことを不変条件として検証する。
+ * ========================================================= */
+function meta(card) {
+  return { id: card.id, name: card.name, cost: card.cost, type: card.type, char: card.char || null, effect: card.effect || '' };
+}
+function publicConfig(cfg) {
+  return {
+    players: cfg.players.slice(), gmName: cfg.gmName,
+    sets: cfg.sets.map((s) => ({ label: s.label, winPoints: s.winPoints, fixedHalf: s.fixedHalf })),
+    roundsPerSet: cfg.roundsPerSet, handSize: cfg.handSize,
+    hitSelfPoints: cfg.hitSelfPoints, hitSidePoints: cfg.hitSidePoints,
+    decision: { enabled: cfg.decision.enabled, label: cfg.decision.label, winPoints: cfg.decision.winPoints, hitPoints: cfg.decision.hitPoints },
+  };
+}
+function viewFor(state, seat) {
+  const cfg = state.config;
+  const isGM = seat === cfg.gmName;
+  const P = cfg.players;
+  // Firebase等が空オブジェクト/配列/nullを削除して読み戻すケースへの防御
+  const committed = state.committed || {};
+  const declarations = state.declarations || {};
+  const hands = state.hands || {};
+  const reserved = state.reserved || {};
+  const phase = state.phase;
+  const facesShown = ['faces', 'declare', 'scoresReady', 'roundEnd'].includes(phase);
+  const cardMeta = {}; // id -> メタのみ（点数なし）
+  const addMeta = (id) => { if (id && !cardMeta[id]) cardMeta[id] = meta(state.cardsById[id]); };
+
+  const v = {
+    engineVersion: state.engineVersion,
+    seat, isGM,
+    config: publicConfig(cfg),
+    phase, setIndex: state.setIndex, roundIndex: state.roundIndex, currentHalf: state.currentHalf,
+    scores: { ...state.scores },
+    committedSeats: {},   // seat -> bool（誰が出したか。札の中身は含めない）
+    declaredSeats: {},    // seat -> bool
+    committedCards: null, // faces以降のみ: seat -> meta
+    roundResult: null,    // roundEndのみ: 公開データ
+    history: [],          // 公開済み（全ラウンド）
+    myHand: null,         // 自分の手札メタ
+    myReserved: null,     // 決着時: 自分の温存メタ
+    decision: null,
+    gm: null,             // GM専用の答えパネル
+  };
+
+  for (const p of P) {
+    v.committedSeats[p] = !!committed[p];
+    v.declaredSeats[p] = !!declarations[p];
+  }
+  if (facesShown && Object.keys(committed).length) {
+    v.committedCards = {};
+    for (const p of P) if (committed[p]) { addMeta(committed[p]); v.committedCards[p] = committed[p]; }
+  }
+  if (phase === 'roundEnd' && state.roundResult) {
+    v.roundResult = sanitizeResult(state.roundResult, cfg, addMeta);
+  }
+  // history は全て公開済み（判定確定済のみ push される）
+  v.history = state.history.map((h) => h.kind === 'decision' ? sanitizeDecision(h, cfg, addMeta) : sanitizeResult(h, cfg, addMeta));
+
+  // 自分の手札（GMは手札なし）
+  if (!isGM && hands[seat]) { v.myHand = hands[seat].map((id) => { addMeta(id); return id; }); }
+  // 決着
+  if (state.decisionState) {
+    const ds = state.decisionState;
+    const d = { half: ds.half, pickedSeats: {}, guessedSeats: {}, result: null, myPick: null };
+    for (const p of P) { d.pickedSeats[p] = !!ds.picks[p]; d.guessedSeats[p] = (p in ds.guesses); }
+    if (!isGM && reserved[seat]) v.myReserved = reserved[seat].map((id) => { addMeta(id); return id; });
+    if (isGM) v.gmReserved = Object.fromEntries(P.map((p) => [p, (reserved[p] || []).map((id) => { addMeta(id); return id; })]));
+    if (!isGM && ds.picks[seat]) { addMeta(ds.picks[seat]); d.myPick = ds.picks[seat]; }
+    if (phase === 'final' && ds.result) d.result = sanitizeDecision({ kind: 'decision', ...ds.result }, cfg, addMeta);
+    // 決着の札公開（picks）はfinalでのみ全公開。それ以前は自分のpickのみ。
+    if (phase === 'final') { d.picks = {}; for (const p of P) if (ds.picks[p]) { addMeta(ds.picks[p]); d.picks[p] = ds.picks[p]; } }
+    v.decision = d;
+  }
+
+  // GM専用: いま場に出ている札の答え（点数・コメント・全体評価）
+  if (isGM) {
+    v.gm = { answers: {}, hands: {} };
+    const half = state.currentHalf || state.decisionState?.half;
+    const isDec = phase.startsWith('decision') || phase === 'final';
+    const committed = isDec ? (state.decisionState?.picks || {}) : state.committed;
+    for (const p of P) {
+      const id = committed[p]; if (!id) continue;
+      const c = state.cardsById[id]; addMeta(id);
+      const rater = isDec ? cfg.gmName : p;
+      v.gm.answers[p] = { cardId: id, rater, zen: c.scores.zen[rater], kou: c.scores.kou[rater], overallZen: c.overall.zen, overallKou: c.overall.kou, comment: c.comments?.[rater] ?? null };
+    }
+    // GMは全員の手札も把握（進行補助）。メタのみ＋自分点(=各自の点)を付す。
+    for (const p of P) v.gm.hands[p] = (hands[p] || []).map((id) => { addMeta(id); const c = state.cardsById[id]; return { id, zen: c.scores.zen[p], kou: c.scores.kou[p] }; });
+  }
+
+  v.cardMeta = cardMeta;
+  return v;
+}
+/* 判定確定済ラウンドの entries は点数・コメント込みで公開してよい */
+function sanitizeResult(r, cfg, addMeta) {
+  return {
+    kind: 'round', set: r.set, round: r.round, half: r.half,
+    entries: r.entries.map((e) => { addMeta(e.cardId); return { player: e.player, cardId: e.cardId, cardName: e.cardName, score: e.score, comment: e.comment }; }),
+    winners: r.winners.slice(), tieBreakUsed: r.tieBreakUsed,
+    declResults: r.declResults, pointsAwarded: r.pointsAwarded, winPoints: r.winPoints,
+  };
+}
+function sanitizeDecision(r, cfg, addMeta) {
+  return {
+    kind: 'decision', half: r.half,
+    entries: r.entries.map((e) => { addMeta(e.cardId); return { player: e.player, cardId: e.cardId, cardName: e.cardName, score: e.score, comment: e.comment }; }),
+    winners: r.winners.slice(), tieBreakUsed: r.tieBreakUsed,
+    guessResults: r.guessResults, pointsAwarded: r.pointsAwarded,
+  };
+}
+
+/* ---------- エクスポート（node / ブラウザ両対応） ---------- */
+const EngineAPI = { ENGINE_VERSION, DEFAULT_CONFIG, Actions, createGame, reduce, judgeRound, judgeDecision, parseScoreStr, numeric, scoreLabel, balanceDeal, viewFor };
+if (typeof module !== 'undefined' && module.exports) module.exports = EngineAPI;
+if (typeof window !== 'undefined') window.Engine = EngineAPI;
+
+</script>
+<script>
+/* =========================================================
+ * net.js — オンライン対戦のトランスポート層（DOM非依存）
+ *
+ * 設計:
+ *  - ホスト権威モデル。GM(マッチ)のクライアントが唯一の権威=ホスト。
+ *  - プレイヤーは「意図(intent)」をDBに書くだけ。ホストが検証してエンジンに畳み込む。
+ *  - ホストは座席別の秘匿ビュー(viewFor)をDBに公開。各クライアントは自分のビューだけ購読。
+ *  - 畳み込みは冪等（state側で既適用を判定＋stepタグで別フェーズ混入を防止）。
+ *  - ホストは復帰用に完全状態(hostState)も保存（答えを含む＝バンドルと同等の信頼前提）。
+ *
+ * DBアダプタ契約: ref(path) => {
+ *   child(sub), set(v):Promise, update(obj):Promise, remove():Promise, get():Promise<value>,
+ *   on('value', cb)=>unsub, push(v):Promise<{key}>, onDisconnect()=>{set(v),remove()} }
+ * ========================================================= */
+'use strict';
+
+/* ---------------- 決定的ID（Date/Math.random非依存でも動く） ---------------- */
+function makeId(prefix, seedBox) {
+  seedBox.n = (seedBox.n || 0) + 1;
+  return prefix + String(seedBox.n).padStart(6, '0');
+}
+
+/* ---------------- MockDB: RTDBの必要部分を忠実に模倣 ---------------- */
+function createMockDb() {
+  const root = {};                 // ツリー（プレーンオブジェクト）
+  const listeners = [];            // {path, cb}
+  const disconnects = new Map();   // uid相当キー -> [{path, action:'set'|'remove', value}]
+  const pushSeed = { n: 0 };
+  let pushCounter = 0;
+
+  const clone = (v) => v === undefined ? null : JSON.parse(JSON.stringify(v));
+  const parts = (p) => p.split('/').filter(Boolean);
+  function getNode(path) { let n = root; for (const k of parts(path)) { if (n == null || typeof n !== 'object') return undefined; n = n[k]; } return n; }
+  function setNode(path, value) {
+    const ps = parts(path);
+    if (ps.length === 0) { for (const k of Object.keys(root)) delete root[k]; if (value && typeof value === 'object') Object.assign(root, clone(value)); return; }
+    let n = root;
+    for (let i = 0; i < ps.length - 1; i++) { const k = ps[i]; if (n[k] == null || typeof n[k] !== 'object') n[k] = {}; n = n[k]; }
+    const last = ps[ps.length - 1];
+    if (value === null || value === undefined) delete n[last];
+    else n[last] = clone(value);
+  }
+  function notify(changedPath) {
+    const cp = changedPath.replace(/\/+$/, '');
+    for (const l of listeners.slice()) {
+      // value: リスナpathが変更pathの祖先or同一or子孫なら発火（RTDB近似）
+      const lp = l.path.replace(/\/+$/, '');
+      if (cp === lp || cp.startsWith(lp + '/') || lp.startsWith(cp + '/') || lp === '' ) {
+        try { l.cb(clone(getNode(l.path))); } catch (e) { /* listener error ignored */ }
+      }
+    }
+  }
+  function ref(path) {
+    return {
+      path,
+      child(sub) { return ref((path ? path + '/' : '') + sub); },
+      async set(v) { setNode(path, v); notify(path); },
+      async update(obj) { for (const k of Object.keys(obj)) setNode((path ? path + '/' : '') + k, obj[k]); notify(path); },
+      async remove() { setNode(path, null); notify(path); },
+      async get() { return clone(getNode(path)); },
+      on(event, cb) {
+        if (event !== 'value') return () => {};
+        const l = { path, cb };
+        listeners.push(l);
+        Promise.resolve().then(() => { try { cb(clone(getNode(path))); } catch (e) {} }); // 初回発火
+        return () => { const i = listeners.indexOf(l); if (i >= 0) listeners.splice(i, 1); };
+      },
+      async push(v) { const key = 'k' + String(++pushCounter).padStart(8, '0'); setNode((path ? path + '/' : '') + key, v); notify(path); return { key }; },
+      onDisconnect() {
+        return {
+          set: async (v) => { const arr = disconnects.get(path) || []; arr.push({ path, action: 'set', value: v }); disconnects.set(path, arr); },
+          remove: async () => { const arr = disconnects.get(path) || []; arr.push({ path, action: 'remove' }); disconnects.set(path, arr); },
+        };
+      },
+    };
+  }
+  // テスト用: 切断シミュレーション
+  ref.__simulateDisconnect = function (pathPrefix) {
+    for (const [key, arr] of disconnects) {
+      if (!pathPrefix || key.startsWith(pathPrefix)) {
+        for (const d of arr) { if (d.action === 'remove') { setNode(d.path, null); } else { setNode(d.path, d.value); } notify(d.path); }
+        disconnects.delete(key);
+      }
+    }
+  };
+  ref.__dump = () => clone(root);
+  return { ref, _isMock: true };
+}
+
+/* ---------------- Firebase(compat)アダプタ（ブラウザのみ） ---------------- */
+function createFirebaseDb(config) {
+  if (typeof firebase === 'undefined') throw new Error('Firebase SDK未読込');
+  if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(config);
+  const db = firebase.database();
+  function wrap(fref) {
+    return {
+      path: fref.toString(),
+      child(sub) { return wrap(fref.child(sub)); },
+      set(v) { return fref.set(v); },
+      update(obj) { return fref.update(obj); },
+      remove() { return fref.remove(); },
+      async get() { const s = await fref.once('value'); return s.val(); },
+      on(event, cb) { const h = fref.on(event, (snap) => cb(snap.val())); return () => fref.off(event, h); },
+      async push(v) { const r = fref.push(); await r.set(v); return { key: r.key }; },
+      onDisconnect() { const od = fref.onDisconnect(); return { set: (v) => od.set(v), remove: () => od.remove() }; },
+    };
+  }
+  return { ref: (path) => wrap(db.ref(path)), _isMock: false, _serverTime: firebase.database.ServerValue ? firebase.database.ServerValue.TIMESTAMP : 0 };
+}
+
+/* ---------------- Firebase読み戻しの正規化 ----------------
+ * RTDBは空オブジェクト/空配列/null値のキーを保存しない。hostStateを読み戻すと
+ * committed:{} 等が丸ごと消え、viewFor/reduce が undefined を座席名で索引して落ちる。
+ * 復帰時に状態の器を再構築する。 */
+function hydrateState(state) {
+  if (!state || !state.config) return state;
+  const P = state.config.players || [];
+  state.committed = state.committed || {};
+  state.declarations = state.declarations || {};
+  state.hands = state.hands || {};
+  state.reserved = state.reserved || {};
+  state.scores = state.scores || {};
+  state.history = state.history || [];
+  for (const p of P) {
+    if (!Array.isArray(state.hands[p])) state.hands[p] = state.hands[p] ? Object.values(state.hands[p]) : [];
+    if (!Array.isArray(state.reserved[p])) state.reserved[p] = state.reserved[p] ? Object.values(state.reserved[p]) : [];
+    if (typeof state.scores[p] !== 'number') state.scores[p] = 0;
+  }
+  // deckSets は配列の配列。RTDBが疎配列をオブジェクト化した場合に備え正規化
+  if (state.deckSets && !Array.isArray(state.deckSets)) state.deckSets = Object.values(state.deckSets);
+  if (Array.isArray(state.deckSets)) state.deckSets = state.deckSets.map((d) => Array.isArray(d) ? d : (d ? Object.values(d) : []));
+  // 決着フェーズでは decisionState 全体（picks:{},guesses:{},half:null,result:null）が
+  // 空になり丸ごと消えることがある。フェーズから必要性を判断して器を復元。
+  const inDecision = state.phase && (state.phase.startsWith('decision') || state.phase === 'final');
+  if (!state.decisionState && inDecision) state.decisionState = { picks: {}, guesses: {}, half: null, result: null };
+  if (state.decisionState) {
+    state.decisionState.picks = state.decisionState.picks || {};
+    state.decisionState.guesses = state.decisionState.guesses || {};
+    if (!('half' in state.decisionState)) state.decisionState.half = null;
+    if (!('result' in state.decisionState)) state.decisionState.result = null;
+  }
+  return state;
+}
+
+/* ---------------- ステップタグ（フェーズ混入防止） ---------------- */
+function stepOf(state) {
+  const p = state.phase;
+  if (p.startsWith('decision') || p === 'final') return `D:${p}`;
+  return `${state.setIndex}:${state.roundIndex}:${p}`;
+}
+
+/* ---------------- RoomHost（GMクライアントが所有） ---------------- */
+function RoomHost(db, code, opts) {
+  const E = opts.engine;
+  const base = `rooms/${code}`;
+  const self = {
+    state: null, undoStack: [], _unsubs: [], _startedAt: opts.now || 0,
+    deckSets: opts.deckSets, gmName: opts.gmName, deckKey: opts.deckKey,
+    onPublish: opts.onPublish || (() => {}),
+  };
+
+  async function loadOrCreate() {
+    const saved = await db.ref(`${base}/hostState`).get();
+    if (saved && saved.phase) { self.state = hydrateState(saved); return 'resumed'; }
+    const balanced = self.deckSets.map((d) => E.balanceDeal(d, E.DEFAULT_CONFIG.players, E.DEFAULT_CONFIG.handSize));
+    self.state = E.reduce(E.createGame(balanced, null, {}), { type: E.Actions.START_GAME });
+    return 'created';
+  }
+
+  async function publish() {
+    const st = self.state;
+    const step = stepOf(st);
+    const seats = [...st.config.players, st.config.gmName];
+    const updates = {};
+    for (const seat of seats) {
+      const v = E.viewFor(st, seat);
+      v.step = step;
+      updates[`views/${seat}`] = v;
+    }
+    updates['hostState'] = st;              // 復帰用（答え含む＝信頼前提）
+    updates['meta/step'] = step;
+    updates['meta/phase'] = st.phase;
+    updates['meta/finished'] = st.phase === 'final';
+    await db.ref(base).update(updates);
+    self.onPublish(st);
+  }
+
+  function applyGm(action) {
+    const next = E.reduce(self.state, action); // 先にreduce（例外はここで＝mutation前）
+    self.undoStack.push(self.state);
+    if (self.undoStack.length > 300) self.undoStack.shift();
+    self.state = next;
+  }
+
+  self.forceComplete = async () => {
+    const st = self.state, A = E.Actions; let changed = false;
+    if (st.phase === 'commit') { for (const p of st.config.players) if (!st.committed[p]) { self.state = E.reduce(self.state, { type: A.COMMIT, player: p, cardId: st.hands[p][0] }); changed = true; } }
+    else if (st.phase === 'declare') { for (const p of st.config.players) if (!st.declarations[p]) { self.state = E.reduce(self.state, { type: A.DECLARE, player: p, self: null, side: null }); changed = true; } }
+    else if (st.phase === 'decisionPick') { for (const p of st.config.players) if (!st.decisionState.picks[p]) { self.state = E.reduce(self.state, { type: A.DECISION_PICK, player: p, cardId: st.reserved[p][0] }); changed = true; } }
+    else if (st.phase === 'decisionDeclare') { for (const p of st.config.players) if (!(p in st.decisionState.guesses)) { self.state = E.reduce(self.state, { type: A.DECISION_DECLARE, player: p, guess: null }); changed = true; } }
+    if (changed) await publish();
+    return changed;
+  };
+
+  async function foldIntents(intents) {
+    if (!intents) return;
+    const st = self.state;
+    const step = stepOf(st);
+    let changed = false;
+    const A = E.Actions;
+    for (const seat of st.config.players) {
+      const it = intents[seat];
+      if (!it || it.step !== step) continue;
+      try {
+        if (it.kind === 'commit' && st.phase === 'commit' && !st.committed[seat]) { self.state = E.reduce(self.state, { type: A.COMMIT, player: seat, cardId: it.cardId }); changed = true; }
+        else if (it.kind === 'declare' && st.phase === 'declare' && !st.declarations[seat]) { self.state = E.reduce(self.state, { type: A.DECLARE, player: seat, self: it.self ?? null, side: it.side ?? null }); changed = true; }
+        else if (it.kind === 'decisionPick' && st.phase === 'decisionPick' && !st.decisionState.picks[seat]) { self.state = E.reduce(self.state, { type: A.DECISION_PICK, player: seat, cardId: it.cardId }); changed = true; }
+        else if (it.kind === 'decisionGuess' && st.phase === 'decisionDeclare' && !(seat in st.decisionState.guesses)) { self.state = E.reduce(self.state, { type: A.DECISION_DECLARE, player: seat, guess: it.guess ?? null }); changed = true; }
+      } catch (e) {
+        // 不正意図: 無視し、当該座席に軽いフィードバックを残す
+        await db.ref(`${base}/errors/${seat}`).set({ step, msg: String(e.message || e) });
+      }
+    }
+    if (changed) { self.undoStack.push(st); await publish(); }
+  }
+
+  self.start = async function () {
+    const how = await loadOrCreate();
+    await publish();
+    // フェーズが進むたびに古い意図は publish 内で消える。意図購読開始。
+    self._unsubs.push(db.ref(`${base}/intents`).on('value', (intents) => { foldIntents(intents); }));
+    return how;
+  };
+  // GMアクション
+  self.announceBasis = async (half) => { applyGm({ type: E.Actions.ANNOUNCE_BASIS, half }); await publish(); };
+  self.revealFaces = async () => { applyGm({ type: E.Actions.REVEAL_FACES }); await publish(); };
+  self.revealScores = async () => { applyGm({ type: E.Actions.REVEAL_SCORES }); await publish(); };
+  self.next = async () => { applyGm({ type: E.Actions.NEXT }); await publish(); };
+  self.decisionAnnounce = async (half) => { applyGm({ type: E.Actions.DECISION_ANNOUNCE, half }); await publish(); };
+  self.decisionReveal = async () => { applyGm({ type: E.Actions.DECISION_REVEAL }); await publish(); };
+  self.undo = async () => { if (!self.undoStack.length) return false; self.state = self.undoStack.pop(); await publish(); return true; };
+  self.resync = async () => { await publish(); };
+  self.stop = () => { self._unsubs.forEach((u) => u()); self._unsubs = []; };
+  return self;
+}
+
+/* ---------------- RoomClient（プレイヤー） ---------------- */
+function RoomClient(db, code, seat) {
+  const base = `rooms/${code}`;
+  const c = { seat, _unsubs: [], view: null };
+  c.onView = (cb) => { c._unsubs.push(db.ref(`${base}/views/${seat}`).on('value', (v) => { c.view = v; cb(v); })); };
+  c.onError = (cb) => { c._unsubs.push(db.ref(`${base}/errors/${seat}`).on('value', (e) => { if (e) cb(e); })); };
+  c.sendIntent = async (kind, payload) => {
+    const step = c.view && c.view.step;
+    await db.ref(`${base}/intents/${seat}`).set(Object.assign({ kind, step }, payload));
+  };
+  c.stop = () => { c._unsubs.forEach((u) => u()); c._unsubs = []; };
+  return c;
+}
+
+/* ---------------- ルーム参加・在席・座席 ---------------- */
+async function createRoom(db, code, { gmUid, gmName, deckKey, now }) {
+  await db.ref(`rooms/${code}/meta`).set({ hostUid: gmUid, gmName, deckKey, engine: 'kotaeawase', createdAt: now || 0, started: false, finished: false });
+  await claimSeat(db, code, gmName, gmUid, gmName);
+  await setPresence(db, code, gmUid);
+}
+async function claimSeat(db, code, seat, uid, name) {
+  const ref = db.ref(`rooms/${code}/seats/${seat}`);
+  const cur = await ref.get();
+  if (cur && cur.uid && cur.uid !== uid) throw new Error(`座席「${seat}」は使用中`);
+  await ref.set({ uid, name: name || seat });
+  return true;
+}
+async function setPresence(db, code, uid) {
+  const ref = db.ref(`rooms/${code}/presence/${uid}`);
+  await ref.set(true);
+  try { await ref.onDisconnect().set(false); } catch (e) {}
+}
+function watchRoom(db, code, cb) {
+  const unsubs = [
+    db.ref(`rooms/${code}/seats`).on('value', (seats) => cb({ seats })),
+    db.ref(`rooms/${code}/presence`).on('value', (presence) => cb({ presence })),
+    db.ref(`rooms/${code}/meta`).on('value', (meta) => cb({ meta })),
+  ];
+  return () => unsubs.forEach((u) => u());
+}
+async function startRoom(db, code) { await db.ref(`rooms/${code}/meta/started`).set(true); }
+
+/* ---------------- エクスポート ---------------- */
+const NetAPI = { createMockDb, createFirebaseDb, RoomHost, RoomClient, createRoom, claimSeat, setPresence, watchRoom, startRoom, stepOf, makeId, hydrateState };
+if (typeof module !== 'undefined' && module.exports) module.exports = NetAPI;
+if (typeof window !== 'undefined') window.Net = NetAPI;
+
+</script>
+<script>
+window.DUMMY_DECKS = [[{"id":"A0","name":"【ダミー】蒼い手袋 No.1","cost":3,"type":"スキル","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":-0.5},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":1.5,"kou":2.625},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"適当に付けた気がする（ダミー）"}},{"id":"A1","name":"【ダミー】凍てつく手袋 No.2","cost":3,"type":"パワー","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.5,"kou":4.5},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"正直覚えていない（ダミー）","逆廻":"正直覚えていない（ダミー）","マッチ":"当時の勢いで付けた点（ダミー）"}},{"id":"A2","name":"【ダミー】蒼い水鏡 No.3","cost":3,"type":"アタック","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0.5},"てかさ":{"base":4,"mod":0},"逆廻":{"base":3,"mod":-0.5},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":2.75,"kou":3},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"これ好きなんだよな（ダミー）"}},{"id":"A3","name":"【ダミー】錆びた影法師 No.4","cost":0,"type":"スキル","effect":"あなたは少し考える","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0.5},"マッチ":{"base":3,"mod":-0.5}},"kou":{"からあげ":{"base":4,"mod":-0.5},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":2.25,"kou":2.75},"comments":{"からあげ":"悪くないが好みではない（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"A4","name":"【ダミー】最果ての貯金箱 No.5","cost":2,"type":"パワー","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":2,"mod":-0.5},"てかさ":{"base":5,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":3,"kou":3.125},"comments":{"からあげ":"悪くないが好みではない（ダミー）","てかさ":"適当に付けた気がする（ダミー）","逆廻":"これは自信あり（ダミー）","マッチ":"これ好きなんだよな（ダミー）"}},{"id":"A5","name":"【ダミー】踊る標本 No.6","cost":3,"type":"パワー","effect":"出した瞬間に懐かしくなる","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":3.25,"kou":2.5},"comments":{"からあげ":"悪くないが好みではない（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"正直覚えていない（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"A6","name":"【ダミー】眠れる火種 No.7","cost":2,"type":"アタック","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":2,"mod":0.5},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0.5},"てかさ":{"base":3,"mod":-0.5},"逆廻":{"base":5,"mod":-0.5},"マッチ":{"base":5,"mod":-0.5}}},"overall":{"zen":2.375,"kou":3.25},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"正直覚えていない（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"A7","name":"【ダミー】逆さの火種 No.8","cost":2,"type":"スキル","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":5,"mod":-0.5}}},"overall":{"zen":4,"kou":4.125},"comments":{"からあげ":"これ好きなんだよな（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"A8","name":"【ダミー】忘れられた歯車 No.9","cost":0,"type":"パワー","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":4,"mod":0.5},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":3.25,"kou":3.25},"comments":{"からあげ":"適当に付けた気がする（ダミー）","てかさ":"当時の勢いで付けた点（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"A9","name":"【ダミー】無音の羅針盤 No.10","cost":1,"type":"パワー","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0.5},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":3.625,"kou":3},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"適当に付けた気がする（ダミー）","逆廻":"悪くないが好みではない（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"A10","name":"【ダミー】踊る標本 No.11","cost":1,"type":"スキル","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":4,"mod":0.5},"てかさ":{"base":1,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":2.125,"kou":3.5},"comments":{"からあげ":"適当に付けた気がする（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"これ好きなんだよな（ダミー）"}},{"id":"A11","name":"【ダミー】歪んだ貯金箱 No.12","cost":3,"type":"アタック","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":3,"mod":-0.5},"てかさ":{"base":1,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0.5},"てかさ":{"base":3,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3.125,"kou":3.625},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"A12","name":"【ダミー】凍てつく手袋 No.13","cost":0,"type":"スキル","effect":"特に何も起こらないが味わい深い","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0.5}}},"overall":{"zen":3.875,"kou":2.875},"comments":{"からあげ":"悪くないが好みではない（ダミー）","てかさ":"適当に付けた気がする（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"当時の勢いで付けた点（ダミー）"}},{"id":"A13","name":"【ダミー】踊る鍵束 No.14","cost":0,"type":"パワー","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":4,"mod":0.5}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":2,"mod":-0.5},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3.125,"kou":2.75},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"正直覚えていない（ダミー）","逆廻":"悪くないが好みではない（ダミー）","マッチ":"当時の勢いで付けた点（ダミー）"}},{"id":"A14","name":"【ダミー】踊る風見鶏 No.15","cost":0,"type":"パワー","effect":"出した瞬間に懐かしくなる","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":3.125,"kou":1.75},"comments":{"からあげ":"悪くないが好みではない（ダミー）","てかさ":"正直覚えていない（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"A15","name":"【ダミー】最果ての手袋 No.16","cost":0,"type":"パワー","effect":"出した瞬間に懐かしくなる","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":2,"mod":-0.5},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":2.125,"kou":3.125},"comments":{"からあげ":"適当に付けた気がする（ダミー）","てかさ":"正直覚えていない（ダミー）","逆廻":"これは自信あり（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"A16","name":"【ダミー】燃える火種 No.17","cost":1,"type":"アタック","effect":"特に何も起こらないが味わい深い","scores":{"zen":{"からあげ":{"base":2,"mod":0.5},"てかさ":{"base":4,"mod":0},"逆廻":{"base":1,"mod":0.5},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":2.5,"kou":3},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"A17","name":"【ダミー】眠れる手袋 No.18","cost":2,"type":"パワー","effect":"あなたは少し考える","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":2,"mod":-0.5},"マッチ":{"base":1,"mod":0.5}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2,"kou":2.5},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"当時の勢いで付けた点（ダミー）","逆廻":"これは自信あり（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"A18","name":"【ダミー】凍てつく羅針盤 No.19","cost":3,"type":"パワー","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":4,"mod":-0.5},"てかさ":{"base":3,"mod":0},"逆廻":{"base":4,"mod":-0.5},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3,"kou":3.25},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"正直覚えていない（ダミー）","逆廻":"これは自信あり（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"A19","name":"【ダミー】眠れる手袋 No.20","cost":1,"type":"アタック","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":2,"mod":0.5},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":1.625,"kou":3.25},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"当時の勢いで付けた点（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"これは自信あり（ダミー）"}},{"id":"A20","name":"【ダミー】凍てつく貯金箱 No.21","cost":3,"type":"スキル","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3.5,"kou":3.25},"comments":{"からあげ":"悪くないが好みではない（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"悪くないが好みではない（ダミー）","マッチ":"当時の勢いで付けた点（ダミー）"}},{"id":"A21","name":"【ダミー】無音の写本 No.22","cost":2,"type":"パワー","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":3,"mod":0.5},"逆廻":{"base":3,"mod":-0.5},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":2,"kou":1.75},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"正直覚えていない（ダミー）","逆廻":"正直覚えていない（ダミー）","マッチ":"これ好きなんだよな（ダミー）"}},{"id":"A22","name":"【ダミー】忘れられた影法師 No.23","cost":2,"type":"パワー","effect":"あなたは少し考える","scores":{"zen":{"からあげ":{"base":3,"mod":0.5},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3.25,"kou":2.25},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"A23","name":"【ダミー】最果ての貯金箱 No.24","cost":1,"type":"パワー","effect":"特に何も起こらないが味わい深い","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":2,"mod":0.5},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":3,"mod":0.5},"逆廻":{"base":5,"mod":-0.5},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":3.125,"kou":3.25},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}}],[{"id":"B0","name":"【ダミー】眠れる歯車 No.1","cost":0,"type":"パワー","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":4,"mod":0.5},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":3.125,"kou":3},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"悪くないが好みではない（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"B1","name":"【ダミー】踊る標本 No.2","cost":3,"type":"アタック","effect":"出した瞬間に懐かしくなる","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":5,"mod":-0.5},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.75,"kou":4.375},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"適当に付けた気がする（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"B2","name":"【ダミー】最果ての写本 No.3","cost":2,"type":"パワー","effect":"特に何も起こらないが味わい深い","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":3.375,"kou":3},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"当時の勢いで付けた点（ダミー）","逆廻":"正直覚えていない（ダミー）","マッチ":"当時の勢いで付けた点（ダミー）"}},{"id":"B3","name":"【ダミー】蒼い羅針盤 No.4","cost":0,"type":"スキル","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":-0.5}}},"overall":{"zen":3,"kou":2.125},"comments":{"からあげ":"これ好きなんだよな（ダミー）","てかさ":"正直覚えていない（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"適当に付けた気がする（ダミー）"}},{"id":"B4","name":"【ダミー】蒼い振り子 No.5","cost":3,"type":"アタック","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":4,"mod":0.5},"てかさ":{"base":5,"mod":0},"逆廻":{"base":2,"mod":0.5},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":2,"mod":0.5}}},"overall":{"zen":4,"kou":3.625},"comments":{"からあげ":"これ好きなんだよな（ダミー）","てかさ":"当時の勢いで付けた点（ダミー）","逆廻":"正直覚えていない（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"B5","name":"【ダミー】最果ての歯車 No.6","cost":3,"type":"アタック","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":2.25,"kou":4},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"正直覚えていない（ダミー）","逆廻":"これは自信あり（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"B6","name":"【ダミー】逆さの振り子 No.7","cost":0,"type":"アタック","effect":"特に何も起こらないが味わい深い","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":2,"mod":0.5},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":3,"mod":0.5},"マッチ":{"base":2,"mod":0.5}}},"overall":{"zen":1.625,"kou":3.75},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"当時の勢いで付けた点（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"当時の勢いで付けた点（ダミー）"}},{"id":"B7","name":"【ダミー】眠れる貯金箱 No.8","cost":0,"type":"スキル","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":3,"mod":-0.5},"マッチ":{"base":3,"mod":0.5}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":2.875,"kou":3.5},"comments":{"からあげ":"これ好きなんだよな（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"正直覚えていない（ダミー）","マッチ":"これは自信あり（ダミー）"}},{"id":"B8","name":"【ダミー】最果ての振り子 No.9","cost":3,"type":"アタック","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":3.25,"kou":2.5},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"これ好きなんだよな（ダミー）"}},{"id":"B9","name":"【ダミー】忘れられた貯金箱 No.10","cost":1,"type":"スキル","effect":"次のラウンドに期待が持てる","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":1,"mod":0.5}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":5,"mod":-0.5},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":2.125,"kou":3.75},"comments":{"からあげ":"悪くないが好みではない（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"B10","name":"【ダミー】逆さの写本 No.11","cost":1,"type":"パワー","effect":"あなたは少し考える","scores":{"zen":{"からあげ":{"base":5,"mod":-0.5},"てかさ":{"base":3,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":2,"mod":-0.5}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":3.25,"kou":3},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"悪くないが好みではない（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"B11","name":"【ダミー】忘れられた写本 No.12","cost":0,"type":"パワー","effect":"次のラウンドに期待が持てる","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":3,"mod":-0.5},"逆廻":{"base":2,"mod":-0.5},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":3.25,"kou":3},"comments":{"からあげ":"悪くないが好みではない（ダミー）","てかさ":"正直覚えていない（ダミー）","逆廻":"これは自信あり（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"B12","name":"【ダミー】無音の振り子 No.13","cost":3,"type":"スキル","effect":"次のラウンドに期待が持てる","scores":{"zen":{"からあげ":{"base":5,"mod":-0.5},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0.5},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":4,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3.75,"kou":3.375},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"適当に付けた気がする（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"B13","name":"【ダミー】錆びた火種 No.14","cost":0,"type":"アタック","effect":"出した瞬間に懐かしくなる","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":5,"mod":-0.5},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":2,"mod":-0.5},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":3.25,"kou":2},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"これは自信あり（ダミー）","マッチ":"当時の勢いで付けた点（ダミー）"}},{"id":"B14","name":"【ダミー】忘れられた羅針盤 No.15","cost":3,"type":"スキル","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3.625,"kou":4.5},"comments":{"からあげ":"適当に付けた気がする（ダミー）","てかさ":"当時の勢いで付けた点（ダミー）","逆廻":"悪くないが好みではない（ダミー）","マッチ":"適当に付けた気がする（ダミー）"}},{"id":"B15","name":"【ダミー】双子の標本 No.16","cost":2,"type":"パワー","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":-0.5},"逆廻":{"base":1,"mod":0.5},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2,"kou":2.5},"comments":{"からあげ":"これ好きなんだよな（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"悪くないが好みではない（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"B16","name":"【ダミー】眠れる鍵束 No.17","cost":3,"type":"アタック","effect":"次のラウンドに期待が持てる","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":4,"mod":-0.5},"てかさ":{"base":2,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3.25,"kou":3.625},"comments":{"からあげ":"適当に付けた気がする（ダミー）","てかさ":"適当に付けた気がする（ダミー）","逆廻":"これは自信あり（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"B17","name":"【ダミー】最果ての写本 No.18","cost":1,"type":"アタック","effect":"出した瞬間に懐かしくなる","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":4,"mod":0.5},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":4,"mod":-0.5},"てかさ":{"base":3,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":4,"kou":2.875},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"悪くないが好みではない（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"B18","name":"【ダミー】双子の鍵束 No.19","cost":1,"type":"アタック","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0.5},"マッチ":{"base":1,"mod":0.5}}},"overall":{"zen":4,"kou":1.5},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"正直覚えていない（ダミー）","マッチ":"これ好きなんだよな（ダミー）"}},{"id":"B19","name":"【ダミー】燃える風見鶏 No.20","cost":2,"type":"スキル","effect":"次のラウンドに期待が持てる","scores":{"zen":{"からあげ":{"base":1,"mod":0.5},"てかさ":{"base":4,"mod":0},"逆廻":{"base":3,"mod":-0.5},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":2,"mod":-0.5},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":4,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":3,"kou":2.25},"comments":{"からあげ":"これ好きなんだよな（ダミー）","てかさ":"適当に付けた気がする（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"これは自信あり（ダミー）"}},{"id":"B20","name":"【ダミー】眠れる手袋 No.21","cost":3,"type":"パワー","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0.5},"てかさ":{"base":2,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.75,"kou":2.625},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"これは自信あり（ダミー）"}},{"id":"B21","name":"【ダミー】踊る標本 No.22","cost":0,"type":"アタック","effect":"次のラウンドに期待が持てる","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":3,"mod":0},"マッチ":{"base":4,"mod":-0.5}}},"overall":{"zen":2.25,"kou":2.5},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"適当に付けた気がする（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"B22","name":"【ダミー】歪んだ火種 No.23","cost":3,"type":"パワー","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0.5},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0.5},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":3.25,"kou":2.5},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"正直覚えていない（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"適当に付けた気がする（ダミー）"}},{"id":"B23","name":"【ダミー】逆さの影法師 No.24","cost":1,"type":"スキル","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":5,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":-0.5}}},"overall":{"zen":3.75,"kou":4.5},"comments":{"からあげ":"適当に付けた気がする（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}}],[{"id":"C0","name":"【ダミー】踊る水鏡 No.1","cost":1,"type":"パワー","effect":"出した瞬間に懐かしくなる","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":2,"mod":-0.5},"てかさ":{"base":2,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3.25,"kou":2.875},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"これは自信あり（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"C1","name":"【ダミー】燃える貯金箱 No.2","cost":0,"type":"パワー","effect":"次のラウンドに期待が持てる","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3,"kou":3.25},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"当時の勢いで付けた点（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"適当に付けた気がする（ダミー）"}},{"id":"C2","name":"【ダミー】無音の貯金箱 No.3","cost":1,"type":"パワー","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":5,"mod":-0.5}}},"overall":{"zen":3,"kou":3.375},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"これ好きなんだよな（ダミー）"}},{"id":"C3","name":"【ダミー】最果ての鍵束 No.4","cost":2,"type":"アタック","effect":"あなたは少し考える","scores":{"zen":{"からあげ":{"base":4,"mod":-0.5},"てかさ":{"base":3,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":2.75,"kou":3.75},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"正直覚えていない（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"これは自信あり（ダミー）"}},{"id":"C4","name":"【ダミー】忘れられた鍵束 No.5","cost":3,"type":"アタック","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":3,"mod":0.5},"逆廻":{"base":4,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":4.5,"kou":4.125},"comments":{"からあげ":"これ好きなんだよな（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"これは自信あり（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"C5","name":"【ダミー】眠れる水鏡 No.6","cost":3,"type":"アタック","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":3,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":3.875,"kou":2.5},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"C6","name":"【ダミー】歪んだ手袋 No.7","cost":0,"type":"アタック","effect":"あなたは少し考える","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":1,"mod":0.5}}},"overall":{"zen":2,"kou":1.875},"comments":{"からあげ":"適当に付けた気がする（ダミー）","てかさ":"適当に付けた気がする（ダミー）","逆廻":"正直覚えていない（ダミー）","マッチ":"これ好きなんだよな（ダミー）"}},{"id":"C7","name":"【ダミー】最果ての貯金箱 No.8","cost":0,"type":"アタック","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":4,"mod":-0.5},"てかさ":{"base":3,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":2.625,"kou":3},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"適当に付けた気がする（ダミー）"}},{"id":"C8","name":"【ダミー】双子の手袋 No.9","cost":1,"type":"アタック","effect":"次のラウンドに期待が持てる","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":4,"mod":0.5},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0.5}}},"overall":{"zen":3.5,"kou":2.375},"comments":{"からあげ":"適当に付けた気がする（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"これ好きなんだよな（ダミー）"}},{"id":"C9","name":"【ダミー】凍てつく貯金箱 No.10","cost":1,"type":"アタック","effect":"特に何も起こらないが味わい深い","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0.5},"マッチ":{"base":3,"mod":-0.5}},"kou":{"からあげ":{"base":5,"mod":-0.5},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":1,"mod":0.5}}},"overall":{"zen":1.75,"kou":3},"comments":{"からあげ":"悪くないが好みではない（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"当時の勢いで付けた点（ダミー）"}},{"id":"C10","name":"【ダミー】錆びた水鏡 No.11","cost":1,"type":"パワー","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3.5,"kou":3.5},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"適当に付けた気がする（ダミー）"}},{"id":"C11","name":"【ダミー】凍てつく写本 No.12","cost":0,"type":"アタック","effect":"あなたは少し考える","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":2.125,"kou":2.875},"comments":{"からあげ":"これ好きなんだよな（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"当時の勢いで付けた点（ダミー）"}},{"id":"C12","name":"【ダミー】逆さの貯金箱 No.13","cost":2,"type":"アタック","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":1,"mod":0.5},"てかさ":{"base":2,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":1,"mod":0.5}}},"overall":{"zen":2.375,"kou":1.625},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"適当に付けた気がする（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"C13","name":"【ダミー】燃える水鏡 No.14","cost":1,"type":"パワー","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":2,"mod":0.5}}},"overall":{"zen":2.25,"kou":3.875},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"適当に付けた気がする（ダミー）","逆廻":"適当に付けた気がする（ダミー）","マッチ":"これは自信あり（ダミー）"}},{"id":"C14","name":"【ダミー】凍てつく鍵束 No.15","cost":1,"type":"パワー","effect":"あなたは少し考える","scores":{"zen":{"からあげ":{"base":2,"mod":-0.5},"てかさ":{"base":1,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":1.875,"kou":2.5},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"正直覚えていない（ダミー）","マッチ":"悪くないが好みではない（ダミー）"}},{"id":"C15","name":"【ダミー】燃える標本 No.16","cost":2,"type":"アタック","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":-0.5}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":3,"mod":-0.5},"逆廻":{"base":3,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":2.625,"kou":2.875},"comments":{"からあげ":"悪くないが好みではない（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"適当に付けた気がする（ダミー）"}},{"id":"C16","name":"【ダミー】眠れる水鏡 No.17","cost":1,"type":"アタック","effect":"特に何も起こらないが味わい深い","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":4,"kou":3},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"これは自信あり（ダミー）","マッチ":"これ好きなんだよな（ダミー）"}},{"id":"C17","name":"【ダミー】眠れる水鏡 No.18","cost":0,"type":"スキル","effect":"次のラウンドに期待が持てる","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":2,"mod":-0.5}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":3,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":2.75,"kou":2.875},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"悪くないが好みではない（ダミー）","マッチ":"これは自信あり（ダミー）"}},{"id":"C18","name":"【ダミー】忘れられた水鏡 No.19","cost":2,"type":"パワー","effect":"あなたは少し考える","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0.5},"マッチ":{"base":1,"mod":0.5}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":-0.5}}},"overall":{"zen":2.25,"kou":3.125},"comments":{"からあげ":"当時の勢いで付けた点（ダミー）","てかさ":"当時の勢いで付けた点（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"当時の勢いで付けた点（ダミー）"}},{"id":"C19","name":"【ダミー】双子の鍵束 No.20","cost":2,"type":"スキル","effect":"何かが1つ増える","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":5,"mod":-0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":-0.5}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":3,"kou":2.75},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"当時の勢いで付けた点（ダミー）","逆廻":"当時の勢いで付けた点（ダミー）","マッチ":"適当に付けた気がする（ダミー）"}},{"id":"C20","name":"【ダミー】眠れる振り子 No.21","cost":2,"type":"アタック","effect":"あなたは少し考える","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.5,"kou":2.25},"comments":{"からあげ":"正直覚えていない（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"正直覚えていない（ダミー）","マッチ":"これは自信あり（ダミー）"}},{"id":"C21","name":"【ダミー】錆びた標本 No.22","cost":1,"type":"アタック","effect":"誰かが笑ったら成功","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":2,"mod":-0.5}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":4,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":2.875,"kou":3.625},"comments":{"からあげ":"これ好きなんだよな（ダミー）","てかさ":"これは自信あり（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"適当に付けた気がする（ダミー）"}},{"id":"C22","name":"【ダミー】忘れられた鍵束 No.23","cost":1,"type":"スキル","effect":"出した瞬間に懐かしくなる","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":2,"mod":0.5},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":3,"kou":2.125},"comments":{"からあげ":"これは自信あり（ダミー）","てかさ":"悪くないが好みではない（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"正直覚えていない（ダミー）"}},{"id":"C23","name":"【ダミー】蒼い写本 No.24","cost":1,"type":"スキル","effect":"あなたは少し考える","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":1,"mod":0.5}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":-0.5},"逆廻":{"base":2,"mod":0.5},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":2.375,"kou":3.25},"comments":{"からあげ":"悪くないが好みではない（ダミー）","てかさ":"これ好きなんだよな（ダミー）","逆廻":"これ好きなんだよな（ダミー）","マッチ":"当時の勢いで付けた点（ダミー）"}}]];
+
+</script>
+<script>
+window.REAL_DECKS = [[{"id":"S1_0","name":"ジャグリング","char":"アイアンクラッド","cost":1,"type":"パワー","rarity":"アンコモン","effect":"毎ターン、3枚目にプレイしたアタックのコピーを1枚手札に加える","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":2.375,"kou":2.5},"comments":{"からあげ":"優先して使わないが邪魔になるカードを入れるくらいならとりあえず突っ込め","てかさ":"コピー先のコストが0になるわけではないので...\n初手にプレイしたアタックの複製ならもっと評価が上がっていた","逆廻":"破棄があるものを含め任意のカードをコピーが可能、パワーであるため手札に揃える必要もない","マッチ":"高コストの強力なカードを使おうとすると、その頃にはエナジーが足りなくなる。\n踏みつけとの相性は良い"}},{"id":"S1_1","name":"滅多打ち","char":"アイアンクラッド","cost":1,"type":"アタック","rarity":"レア","effect":"4ダメ―ジを2回与える\n手札のランダムなアタックを1枚廃棄し、そのダメージをこれに追加する","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":4,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3.375,"kou":3.25},"comments":{"からあげ":"序盤は強いが後半は専用構築用","てかさ":"ランダムではあるが、悪く働くことはほぼない","逆廻":"運要素が高めのロマン、最低でも一定ダメージが出るので悪くはない","マッチ":"1回目は弱く、2回目以降に輝くが、ランダムなのが手痛い。\n長期戦のフィニッシャーとして採用出来るかも"}},{"id":"S1_2","name":"カスケード","char":"アイアンクラッド","cost":"X","type":"スキル","rarity":"レア","effect":"山札の上からX枚のカードをプレイする","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":2,"mod":-0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":2,"mod":-0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":1.625,"kou":1.875},"comments":{"からあげ":"ガチャ\n0コスト大量みたいなデッキでない限り使える","てかさ":"ザ・博打撃ち","逆廻":"ロマン、これ用に高コストで構築すると事故率が上がるので構築しても弱い","マッチ":"高級な荒廃といった印象。\nXシナジーがあるなら獲得を考えても良い"}},{"id":"S1_3","name":"ぶんどる","char":"アイアンクラッド","cost":1,"type":"アタック","rarity":"アンコモン","effect":"6ダメージを与える\nアタック以外のカードを引くまで、カードを引く","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":3,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.625,"kou":3.125},"comments":{"からあげ":"専用構築でないと使いづらいが死にカードにはならない","てかさ":"運試しカードではあるが、6ダメ+バーサーカーソウルは悪くはない\n とはいってもこのカードの存在により防御カードを減らした歪んだデッキにはあまりしたくない。\n 激怒があるなら少し評価が上がるかも","逆廻":"構築が嚙み合えば強い、最低でも1枚引けるのもよい","マッチ":"ヘルレイザーと合わせて、即死コンボの可能性を秘めている"}},{"id":"S1_4","name":"怒り","char":"アイアンクラッド","cost":0,"type":"アタック","rarity":"コモン","effect":"6ダメージを与える\nこのカードのコピーを1枚捨て札に加える","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":4.125,"kou":2.375},"comments":{"からあげ":"お手軽ダメージだが、デッキによっては邪魔になる","てかさ":"序盤は悪くないが、ドロー数が少ないのでせっかくの0コストを回せない。かといって後半のドローカードが充実したタイミングだとドロー阻害に働きやすいので嫌い。後半の悪影響の方が大きいので取りたくはないが良いカードが引けない時は取らざるを得ない。","逆廻":"前半であれば火力追加、後半であればアタックの使用回数追加や追加効果によりエネルギーやブロックを追加","マッチ":"序盤の要。後半は邪魔になる為、ストライクよりも削除優先度は高い"}},{"id":"S1_5","name":"ごろつき","char":"アイアンクラッド","cost":0,"type":"アタック","rarity":"アンコモン","effect":"4ダメージを与える\n敵に付与している弱体1につき、追加で2ダメージを与える","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":2,"kou":2},"comments":{"からあげ":"弱体化デッキじゃないと使いづらい","てかさ":"追加ダメージ量がしょぼい\n 6ダメージのためにドローカード1枚がこれになる可能性を作りたくない","逆廻":"コストが0なので使い勝手は良い、火力は思ったよりでない","マッチ":"強打の後に打てば、0コス8点。\n少し心もとないので、他の弱体手段の後に獲得したい"}},{"id":"S1_6","name":"粉砕","char":"アイアンクラッド","cost":2,"type":"アタック","rarity":"レジェンド","effect":"20ダメージを与える\n弱体5を付与する","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":2.875,"kou":2.75},"comments":{"からあげ":"強いけど重い","てかさ":"弱体はコレ1枚で解決する","逆廻":"レリックが必要でこの効果、、、","マッチ":"敵をほぼ永続弱体化させる。\n弱体軸のヒーロー"}},{"id":"S1_7","name":"ツインストライク","char":"アイアンクラッド","cost":1,"type":"アタック","rarity":"コモン","effect":"5ダメージを2回与える","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":2.5,"kou":2.5},"comments":{"からあげ":"ソードブーメランより序盤が強い","てかさ":"ストライクより強いので十分序盤の戦力になる。\n 追加効果が無いので後半は筋力を乗せないとパっとしないが妥協点レベルの強さはあるので取る価値あり","逆廻":"ストライクよりかは強い程度、単体の火力はソードブーメランより強く筋力の恩恵は低い","マッチ":"数値は合格点。\nここから筋力シナジーへ"}},{"id":"S1_8","name":"残酷","char":"アイアンクラッド","cost":1,"type":"パワー","rarity":"レア","effect":"弱体中の敵は、追加で25%のダメージを受ける","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.25,"kou":3.25},"comments":{"からあげ":"専用構築用","てかさ":"弱いわけはないよね","逆廻":"1枚としては総ダメージが高くなる","マッチ":"弱体軸のダメージ上昇カード。\n後半になれば効果自体は大きい。"}},{"id":"S1_9","name":"八つ裂き","char":"アイアンクラッド","cost":2,"type":"アタック","rarity":"レア","effect":"5ダメージを与える\nこの戦闘でHPを失った回数分、追加で攻撃する","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2,"kou":3},"comments":{"からあげ":"アイアンクラッドだから許されるカード","てかさ":"2コスは重いので、基本はコンボ前提","逆廻":"長期戦前提だが高火力が狙える、失うという点には注意","マッチ":"筋力と自傷シナジーの掛け算。\n効率が良くなるのは後半戦"}},{"id":"S1_10","name":"焼印","char":"アイアンクラッド","cost":0,"type":"スキル","rarity":"レア","effect":"HPを1失う\nカードを1枚破棄する\n筋力1を得る","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":3,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":3,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":2.625,"kou":3.125},"comments":{"からあげ":"筋力は強いがデメリットも重い","てかさ":"この効果で破棄が無いのは意外\n破棄デッキでなくても普通に強い","逆廻":"破棄用のカードと両引き出来れば強いが、ランダム要素が少なくない","マッチ":"アイクラのあらゆるシナジーの架け橋となれる良カード"}},{"id":"S1_11","name":"鬼火","char":"アイアンクラッド","cost":2,"type":"アタック","rarity":"レア","effect":"手札を全て破棄する\n破棄したカード1枚につき、7ダメージを与える\n破棄","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":3.75,"kou":3.25},"comments":{"からあげ":"単発威力が伸びやすい\n使いやす","てかさ":"いらないカードを破棄しながら高ダメージを出したり、道中敵を瞬殺するのに使ったりと破棄デッキでなくとも使える超強力なアタックカード\n\n 10点ダメになるので、取るならアプグレを優先したい","逆廻":"破棄したいカードを一気に破棄したり、高火力を狙えるが破棄したくないカードを除くことができなければ使えない","マッチ":"打点、廃棄シナジー、筋力シナジー、ドローによる伸び、全てが強い"}},{"id":"S1_12","name":"闘争心","char":"アイアンクラッド","cost":1,"type":"パワー","rarity":"レア","effect":"ターン開始時、摺手札にあるランダムなアタックを1枚手札に加え、それをアップグレードする","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":3.25,"kou":3.75},"comments":{"からあげ":"便利カード枠\nただし後半は使わなくてもよい場面も出てくる","てかさ":"最低限のアタックカード保証が1コスで得られるのはドローの弱いアイアンクラッドと相性が良い","逆廻":"毎ターン手札⁺1は強い","マッチ":"実質追加ドロー+強化\nアプグレするかは悩みどころ"}},{"id":"S1_13","name":"ポンメルストライク","char":"アイアンクラッド","cost":1,"type":"アタック","rarity":"コモン","effect":"9ダメージを与える\nカードを1枚引く","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":4.25,"kou":3.5},"comments":{"からあげ":"シンプル効果で便利","てかさ":"貴重なドローカード\n 十分なダメージに加えてドローのおかげで序盤は恩恵が大きく、後半も腐らない良カード\n 早めに強化したい","逆廻":"1枚ドローは強い","マッチ":"言わずとしれたドローが強力。\nアプグレ優先度は高い。\n今作は無限ループ出来るかは不明。"}},{"id":"S1_14","name":"血の壁","char":"アイアンクラッド","cost":2,"type":"スキル","rarity":"コモン","effect":"HPを2失う\n16ブロックを得る","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":1.75,"kou":1.5},"comments":{"からあげ":"コスト下げろ","てかさ":"ブロックが弱いなら必要経費として取る","逆廻":"コストが高い","マッチ":"実質2エナ14ブロックと数値は貧弱。\n自傷シナジーの受け皿だけがアピポ"}},{"id":"S1_15","name":"アッシュストライク","char":"アイアンクラッド","cost":1,"type":"アタック","rarity":"アンコモン","effect":"6ダメージを与える\n廃棄札にあるカード1枚につき、追加で3ダメージを与える","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":1.75,"kou":2.75},"comments":{"からあげ":"専用構築にしか入れない","てかさ":"コンボ前提なので評価しづらい","逆廻":"構築が出来れば高火力が出るが時間がかかる","マッチ":"数値が低いため、廃棄系カードがないと、取りづらい。\n鬼火のような大量廃棄カードがあれば光る"}},{"id":"S1_16","name":"かがり火","char":"アイアンクラッド","cost":2,"type":"パワー","rarity":"レア","effect":"ターン開始時、●を得る","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":2,"kou":3.5},"comments":{"からあげ":"強化前提\nコストが重い","てかさ":"無難に強いがアプグレしないと使いにくい","逆廻":"ドローソースによる","マッチ":"典型的な長期戦向きカード。\n使ったターンが一番しんどい"}},{"id":"S1_17","name":"忘れられし儀式","char":"アイアンクラッド","cost":1,"type":"スキル","rarity":"アンコモン","effect":"このターンカードを廃棄していた場合、エナジー3を得る","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2,"kou":3.25},"comments":{"からあげ":"専用構築用\nただし、後半は破棄カードが増えやすいので使うことは多い","てかさ":"破棄デッキだと強力","逆廻":"構築が合えば強い","マッチ":"廃棄軸の超絶エナジー生成カード。\n毎ターンちびちび廃棄するデッキに合っている"}},{"id":"S1_18","name":"契約の終わり","char":"アイアンクラッド","cost":0,"type":"アタック","rarity":"レア","effect":"廃棄札にカードが3枚以上ある場合のみプレイ可能。すべての敵に17ダメージを与える","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":1.75,"kou":3.25},"comments":{"からあげ":"廃棄カードは状態異常とかでもいいから条件が緩い","てかさ":"破棄の有無で評価が大きく変わるので評価難しめ","逆廻":"条件が満たせれば0で使える全体火力","マッチ":"序盤は強いが、条件達成は厳しい。\n鬼火やセカンドウィンドといった大量廃棄と組み合わせたい"}},{"id":"S1_19","name":"アッパーカット","char":"アイアンクラッド","cost":2,"type":"アタック","rarity":"アンコモン","effect":"13ダメージを与える\n脱力1を付与する\n弱体1を付与する","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":5,"mod":-0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3.125,"kou":2.25},"comments":{"からあげ":"効果は強力だがコストが重い","てかさ":"アプグレによって脱力、弱体が2になると化ける\n アプグレ済みが出たのであればほぼ迷わず取る。\n アーティファクト剥がしにも便利","逆廻":"コストに見合っていない","マッチ":"打点も効果もピカイチ。\n必ずアプグレしたい"}},{"id":"S1_20","name":"セカンドウィンド","char":"アイアンクラッド","cost":1,"type":"スキル","rarity":"アンコモン","effect":"手札にあるアタック以外のカードをすべて廃棄する\n廃棄したカード1枚につき、ブロック5を得る","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.375,"kou":2.5},"comments":{"からあげ":"専用構築でないと入れたくない。\n場合によっては専用構築でも使いたくない","てかさ":"破棄デッキでなくても圧縮しながら膨大なブロックを稼げる強力なカード","逆廻":"使えるなら構築が悪くなっている","マッチ":"廃棄軸やブロック軸など、多くのカードと高いシナジーを発揮する。"}},{"id":"S1_21","name":"ランページ","char":"アイアンクラッド","cost":1,"type":"アタック","rarity":"アンコモン","effect":"9ダメージを与える\nこの戦闘中、このカードのダメージが5増加する","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":2.875,"kou":1.875},"comments":{"からあげ":"カードが少ない序盤は強く感じるが後半は使い勝手の悪さが目立ちやすい","てかさ":"2回使えば無料ヘモキネ\n十分に強いが、ドローが弱い分ヘッドバットとかで回さないと安定しない","逆廻":"ロマンはあるが高火力になるまで続くのはゲームオーバーへ繋がる","マッチ":"ダメージの伸びは大きい\n序盤に取れたらデッキを圧縮したい"}},{"id":"S1_22","name":"残忍","char":"アイアンクラッド","cost":1,"type":"パワー","rarity":"アンコモン","effect":"弱体を付与するたび、カードを1枚引く","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":2,"kou":3},"comments":{"からあげ":"専用構築が必要になる","てかさ":"強打撃ってカード1枚引いてもなぁ...","逆廻":"構築が合えば強い、単体では弱い","マッチ":"このカードが弱体軸を支えているといっても過言ではない"}},{"id":"S1_23","name":"瀉血","char":"アイアンクラッド","cost":0,"type":"スキル","rarity":"コモン","effect":"HPを3失う\n●●を得る","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":3,"kou":4.625},"comments":{"からあげ":"自傷に見合った効果\n便利カード枠","てかさ":"HP3はアイアンクラッドならそこまで痛くはない\n 2エナジーのアドは大きいが序盤はドロー数が少ない分活かしづらい","逆廻":"ドローリソースがあれば強い","マッチ":"高コストカードやドローがあれば光る事も。\n自傷シナジーは存在するのか？"}}],[{"id":"S2_0","name":"地底からの引き寄せ","char":"ネクロバインダー","cost":1,"type":"アタック","rarity":"アンコモン","effect":"この戦闘中にプレイしたエセリアル1枚につき、5ダメージを与える","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":1.75,"kou":2.75},"comments":{"からあげ":"エセリアル軸なら必ず入る\nそれ以外は正直微妙","てかさ":"エセリアルビルドのフィニッシャー\nこのカードに期待すると火力が足りていないが、気が付くと強い　そんな感じ","逆廻":"デメリット効果構築、構築してもそこまで価値を感じない","マッチ":"エセリアルカードを2枚以上採用しているなら、獲得を考えても良い\n長期戦は強そう"}},{"id":"S2_1","name":"解析","char":"ネクロバインダー","cost":1,"type":"スキル","rarity":"アンコモン","effect":"エセリアル\nカードを3枚引く","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":3,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":4,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":2.625,"kou":3.375},"comments":{"からあげ":"ドローカードとしては優秀だがコスト商品のため高評価までは行けない","てかさ":"使用が強制されるといえ、3枚ドローは強い","逆廻":"強いが、デメリット効果構築、構築してもそこまで価値を感じない","マッチ":"ネクロでは珍しい即席のドロソ。\nシンプルで使いやすい"}},{"id":"S2_2","name":"根絶","char":"ネクロバインダー","cost":"X","type":"アタック","rarity":"レア","effect":"保留\n11ダメージをX回与える","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3.25,"kou":2.375},"comments":{"からあげ":"保留多段ヒットは強いが後半は正直使わない","てかさ":"どうしてこの効果で保留が付いてるんですか？\n串刺しに謝れ","逆廻":"火力キャラじゃない","マッチ":"Xカードにしては謎にエナジー効率の良いカード。\n保留のため、相手の攻撃のないターンに全力で使える。"}},{"id":"S2_3","name":"葬送歌","char":"ネクロバインダー","cost":"X","type":"スキル","rarity":"アンコモン","effect":"召喚3をX回行う\nソウルをX枚山札に加える","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3,"kou":2.5},"comments":{"からあげ":"コストXでもこのカード特有の強みをあまり感じられない","てかさ":"憑依と魂喰らいを使って適当にエナジーを増やしたこのアプグレカードを使えば大体解決する","逆廻":"耐久力とドローリソースを確保をできる","マッチ":"エナジー効率は悪目だが、召喚シナジーとソウルシナジー両方にまたがっている。"}},{"id":"S2_4","name":"反抗","char":"ネクロバインダー","cost":1,"type":"スキル","rarity":"コモン","effect":"エセリアル\n6ブロックを得る\n脱力1を付与する","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":3.5,"kou":3},"comments":{"からあげ":"防御札として有能","てかさ":"アプグレ優先対象\n後半も腐らない上に不要なら捨てられる強カード\n複数枚採用したい","逆廻":"デメリット効果構築、構築してもそこまで価値を感じない","マッチ":"序盤に10ブロックくらいの仕事はするので、そこそこ\nアプグレ効果が大きい"}},{"id":"S2_5","name":"ガラガラ","char":"ネクロバインダー","cost":1,"type":"アタック","rarity":"アンコモン","effect":"オスティが7ダメージを与える\nこのターン中にオスティが攻撃した回数分、追加で繰り返す","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":-0.5},"逆廻":{"base":3,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.375,"kou":3},"comments":{"からあげ":"オスティ軸フィニッシャーは初期カードで事足りる","てかさ":"フィニッシャーに比べると弱い\nとにかく火力が安定しない","逆廻":"構築次第","マッチ":"オスティ攻撃シナジーの切り札。\nオスティのアタックが揃わないと力不足"}},{"id":"S2_6","name":"ベールピアサー","char":"ネクロバインダー","cost":1,"type":"アタック","rarity":"アンコモン","effect":"10ダメージを与える\n次にプレイするエセリアルのコストは0●","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":3,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.875,"kou":3.625},"comments":{"からあげ":"エセリアルカードは便利かつ強力なものが多いので使いがってが良い\nだけど結局はデッキ次第","てかさ":"エセリアルビルドの要\n十分な打点があり、次のターンに持ち越せるのでプレイするタイミングを縛られない","逆廻":"デメリット効果構築、構築してもそこまで価値を感じない","マッチ":"打点は良く、エセリアルシナジーがある。\nターンをまたげるため、同時に引かなくても1エナ以上得する。"}},{"id":"S2_7","name":"運命共同体","char":"ネクロバインダー","cost":0,"type":"スキル","rarity":"レア","effect":"筋力2を失う\n敵は筋力2を失う\n廃棄","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":1.875,"kou":2.875},"comments":{"からあげ":"デッキを選ぶ","てかさ":"デメリットが重い\nオスティ/純粋な破滅ビルドぐらいでしか採用できないのでは？","逆廻":"オスティ構築ではデメリット無","マッチ":"メリットにふさわしいデメリットを抱える。\n後半に破滅軸に寄ってるなら、取っても良い"}},{"id":"S2_8","name":"骨の破片","char":"ネクロバインダー","cost":1,"type":"アタック","rarity":"アンコモン","effect":"オスティが生存中の場合、すべての敵に9ダメージを与え、9ブロックを得る\nオスティは死亡する","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":4.25,"kou":3},"comments":{"からあげ":"オスティを使い捨てすれば良いのでくそ雑便利枠","てかさ":"ダッシュを1コス下げた代わりに全体打点にしました\n2コスカード撲滅委員会もニッコリ^^\nオスティビルド以外の全てで採用できる","逆廻":"前半と特定の構築以外ならデメリットが低い","マッチ":"数値は破格。\n他の死亡カードとは併用が難しくなるので注意"}},{"id":"S2_9","name":"プロテクター","char":"ネクロバインダー","cost":1,"type":"アタック","rarity":"レジェンド","effect":"オスティが10ダメージを与える\n追加でオスティの最大HPに等しいダメージを与える","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3.375,"kou":2.75},"comments":{"からあげ":"オスティ軸ならあり","てかさ":"オスティを育てるのが大変","逆廻":"レリックの価値は無い","マッチ":"無論強力ではあるが、オスティが倒せれてしまう体力では効果を発揮できない。"}},{"id":"S2_10","name":"やっちゃえ","char":"ネクロバインダー","cost":1,"type":"アタック","rarity":"アンコモン","effect":"オスティが5ダメージを与える\nこのターン、オスティがこの敵を攻撃するたび、召喚2","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":-0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":1.875,"kou":2.875},"comments":{"からあげ":"オスティの攻撃依存なのが便利さを下げている","てかさ":"値が足りていない","逆廻":"構築次第","マッチ":"序盤での採用は数値が低め\nシナジーが揃ってからが本番"}},{"id":"S2_11","name":"禁断の魔導書","char":"ネクロバインダー","cost":2,"type":"パワー","rarity":"レジェンド","effect":"戦闘終了後、デッキからカードを1枚削除してもよい\n永劫","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":4,"kou":3.5},"comments":{"からあげ":"使ったことないけど書いてることは強いと思う","てかさ":"評価が難しい\nカード圧縮自体はネクロはそこまで急がなくても何とかなる","逆廻":"永劫を持つためこのカードは削除出来ないので実質呪いがあるようなカード、戦闘中には関係が無い効果だがショップやイベントでコストを払いながら行うデッキから削除するというこのカード唯一の能力を持つ","マッチ":"戦闘後のアド生成カードの中でも最強格の一品。\nあらゆる戦闘がデッキ圧縮イベントと化す。"}},{"id":"S2_12","name":"採取","char":"ネクロバインダー","cost":1,"type":"スキル","rarity":"アンコモン","effect":"捨て札にあるカードを3枚手札に加える\n廃棄","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":4,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":2.375,"kou":3.375},"comments":{"からあげ":"効果自体は優秀だがこのカードにリソースを吐いてまで使いたいタイミングは少ない","てかさ":"コスト回収手段1枚+αを選択すれば腐らない有能カード","逆廻":"メインカードを使い回せる","マッチ":"擬似的なドロソ。\nアプグレで保留がつくと、1ターン目に引いても腐りづらい。"}},{"id":"S2_13","name":"オブリビオン","char":"ネクロバインダー","cost":0,"type":"スキル","rarity":"レア","effect":"このターン、カードをプレイするたび、敵に破滅3を付与する","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":3,"mod":0.5},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.875,"kou":3.625},"comments":{"からあげ":"雑にデッキに入っても仕事する","てかさ":"破滅ビルドの万能枠\nカードを回しているだけで破滅をトリガーにダメージやらブロックやら色々生えてくる","逆廻":"構築による","マッチ":"最限でも0エナ9点とGood。\n破滅で誘発する効果とのシナジーは凄まじい。"}},{"id":"S2_14","name":"ボディガード","char":"ネクロバインダー","cost":1,"type":"スキル","rarity":"基本","effect":"召喚5","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.5,"kou":2.125},"comments":{"からあげ":"実質防御","てかさ":"ドロップカードより高性能な可能性がある召喚カード","逆廻":"火力とブロックの主軸","マッチ":"次のターンも持ち越せるブロックとしても使用でき、腐りづらい"}},{"id":"S2_15","name":"埋葬","char":"ネクロバインダー","cost":4,"type":"アタック","rarity":"アンコモン","effect":"52ダメージを与える","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":1.5,"kou":2.125},"comments":{"からあげ":"コスト増やすカード前提はどれだけ打点高くても基本論外","てかさ":"殺意とエナジー補充手段があるなら取れ","逆廻":"単体では使えず使えるようにしても使う価値がない","マッチ":"数値は馬鹿げているが、通常は使うことすらままならない。\n使うことさえできれば、中盤まで無双できる"}},{"id":"S2_16","name":"降霊術","char":"ネクロバインダー","cost":0,"type":"スキル","rarity":"レア","effect":"エセリアル\n山札のカード1枚ををソウルに変化させる","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3.625,"kou":3.625},"comments":{"からあげ":"便利カード枠","てかさ":"無料ドローソース\n強いが、パワーのあるカードというわけではないので、ボス報酬で選びにくい","逆廻":"デメリット効果構築、構築してもそこまで価値を感じない","マッチ":"デッキ圧縮andドローエンジン。\n0エナはやりすぎ。\nエセリアルがデメリットになっていない。"}},{"id":"S2_17","name":"亡霊の儀","char":"ネクロバインダー","cost":2,"type":"スキル","rarity":"レア","effect":"手札をすべて廃棄する\nこの方法で9枚のカードを廃棄した場合、霊体1を得る","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":1,"kou":1.125},"comments":{"からあげ":"効果自体は強いが条件が厳しすぎる","てかさ":"本当にネクロマンサーのカードか？\n他のカードと比べ物にならないぐらい弱い\nせめて0コストにして欲しい","逆廻":"条件の割に弱い","マッチ":"ターンをスキップして無敵になる。\n条件が厳しい上にどういう意図なの？\n一応手札圧縮は出来る"}},{"id":"S2_18","name":"ミザリー","char":"ネクロバインダー","cost":0,"type":"アタック","rarity":"レア","effect":"7ダメージを与える\n対象の敵に付与しているすべてのデバフを、他のすべての敵にも付与する","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3.5,"kou":3.625},"comments":{"からあげ":"複数戦で無類の強さを持つ","てかさ":"0コス打点なので腐りはしないし、複数戦では活躍するが、単体戦の比重の方が大きいのでこの評価","逆廻":"ノーコストでダメージがあり、一枚ではあり得ないデバフをばら撒ける","マッチ":"複数戦でないなら、ただの0エナ打点。\nデバフの準備も必要で、妙に手間がかかる。"}},{"id":"S2_19","name":"まさに右腕","char":"ネクロバインダー","cost":0,"type":"アタック","rarity":"アンコモン","effect":"オスティが4ダメージを与える。\nコストが●●以上のカードをプレイするたび、これを手札に戻す","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":2.75,"kou":2.75},"comments":{"からあげ":"コスト無は優秀だが手札に入る条件が正直きつい","てかさ":"コスト2以上で戻る効果を生かしたくなるほどの打点はない\nドローの邪魔になる可能性の方が高い","逆廻":"2コスト以上に火力⁺4、単体でもノーコストで腐りづらい","マッチ":"条件が2エナプレイのため、複数回使い回すのが難しい"}},{"id":"S2_20","name":"ぺしゃんこ","char":"ネクロバインダー","cost":2,"type":"アタック","rarity":"コモン","effect":"オスティが12ダメージを与える\nこのターン、オスティがすでに攻撃している場合、このカードのコストは0●","scores":{"zen":{"からあげ":{"base":4,"mod":0},"てかさ":{"base":3,"mod":0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":3.125,"kou":2.75},"comments":{"からあげ":"使い勝手は悪くないけど後半は邪魔","てかさ":"弱くはないのだろうけど、ぺしゃんこと同時にオスティ攻撃が引けないことが多々あるのであまり使わない","逆廻":"構築次第","マッチ":"序盤の打点として便利で、オスティ攻撃シナジーにもつながる"}},{"id":"S2_21","name":"浄化","char":"ネクロバインダー","cost":1,"type":"スキル","rarity":"アンコモン","effect":"召喚3\n山札のカードを1枚廃棄する","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":1.75,"kou":2.375},"comments":{"からあげ":"山札破棄の真価は後半ならでは","てかさ":"1コス払って1枚廃棄って..\nリージェントを見習え","逆廻":"初期カードレベル","マッチ":"召喚兼デッキ圧縮。\n効果は小さく、序盤では力不足"}},{"id":"S2_22","name":"種まき","char":"ネクロバインダー","cost":1,"type":"アタック","rarity":"コモン","effect":"保留\nすべての敵に8ダメージを与える","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":2.75,"kou":1.5},"comments":{"からあげ":"可もなく不可もなく","てかさ":"このカードが必要になることはあまりない","逆廻":"後半は火力不足","マッチ":"地味なAoEだが、保留は偉い"}},{"id":"S2_23","name":"冒涜","char":"ネクロバインダー","cost":1,"type":"アタック","rarity":"コモン","effect":"エセリアル\n13ダメージを与える","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":3.5,"kou":2.25},"comments":{"からあげ":"ダメージは優秀だけど後半は少し邪魔","てかさ":"素晴らしい打点\n後半も腐らない打点な上で不要なら廃棄できる","逆廻":"デメリット効果構築、構築してもそこまで価値を感じない","マッチ":"数値が良し。エセリアルシナジーの起点にしたい。"}}],[{"id":"S3_0","name":"ダッシュ","char":"サイレント","cost":2,"type":"アタック","rarity":"アンコモン","effect":"10ブロックを得る\n10ダメージを得る","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":3,"kou":1.875},"comments":{"からあげ":"どっちつかず","てかさ":"2コスといえどダメージとブロックの両方で十分な値なので序盤の救済カード\nアイアンウェーブと比較するとこちらは1枚で2枚分の働き=デッキ圧縮になっているこちらの方が強い","逆廻":"コストが重い","マッチ":"何かと取り回しの良いカード。\nアイアンウェーブとなぜここまでの差が？"}},{"id":"S3_1","name":"重圧","char":"リージェント","cost":1,"type":"アタック","rarity":"コモン","effect":"すべての敵に7ダメージを与える\n（このターン、）すべての敵は筋力1を失う","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":4,"kou":2.5},"comments":{"からあげ":"全体攻撃の筋力低下とかいう便利カード","てかさ":"筋力1下げはパッとしない効果だが、リージェントには必要","逆廻":"前半には使いやすい全体攻撃カード","マッチ":"数値は低めだが、筋力を低下させる効果自体は優秀。\nアプグレによる影響は大きい"}},{"id":"S3_2","name":"ロイヤリティ","char":"リージェント","cost":1,"type":"パワー","rarity":"レア","effect":"戦闘終了時、30ゴールドを獲得する","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3.25,"kou":2.75},"comments":{"からあげ":"やってる場合かとなりがち","てかさ":"使ってる余裕あるか？","逆廻":"敵と構築によるが富豪になれる","マッチ":"戦闘終了後のアドを生み出すチートカード。\nリーサルの必要すらなく、報酬は非常に大きい。"}},{"id":"S3_3","name":"反響化","char":"ディフェクト","cost":3,"type":"パワー","rarity":"レア","effect":"エセリアル\n毎ターン、最初にプレイするカードをもう一度プレイする","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3,"kou":3.875},"comments":{"からあげ":"重い","てかさ":"使えたら強いカードではあるが、このカードを使えるセットアップがないとただの呪いになる","逆廻":"強い","マッチ":"あらゆるデッキ出力を倍増させる最終兵器。序盤ですら相当の確率で採用に値する"}},{"id":"S3_4","name":"オーバークロック","char":"ディフェクト","cost":0,"type":"スキル","rarity":"アンコモン","effect":"カードを2枚引く\n火傷を1枚捨て札に加える","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.875,"kou":3.125},"comments":{"からあげ":"状態異常を処理するカード必須","てかさ":"UGなしなら評価点-1.5点\n0コスドローが強いように見えて、実は火傷がキツイことに最近気が付いた\n廃棄手段が無いとデッキが腐っていくので注意","逆廻":"有用なドローソース","マッチ":"セットアップのために長期的なデメリットを得るドロソ。のはずが、状態異常軸ではただの壊れドロソと化す。"}},{"id":"S3_5","name":"マルチキャスト","char":"ディフェクト","cost":"X","type":"アタック","rarity":"レア","effect":"右端のオーブをX回解放する","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3,"kou":3.25},"comments":{"からあげ":"エックスコストとしてはこっちのほうがオーブ軸では強い","てかさ":"オーブビルドの優秀なリーサル手段","逆廻":"コストに見合わない","マッチ":"ダークやプラズマとは相性が良く、特にダークは単体で勝ち筋となり得る。"}},{"id":"S3_6","name":"星屑","char":"リージェント","cost":"0(✦X)","type":"アタック","rarity":"アンコモン","effect":"ランダムな敵1体に5ダメージをX回与える","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":1.5,"kou":2.375},"comments":{"からあげ":"星構築のフィニッシャー","てかさ":"余っているスターの使い道 虚無化なんか使っていると活かしやすい","逆廻":"単体だと火力が低すぎ","マッチ":"ランダムヒットと✦準備の二重苦"}},{"id":"S3_7","name":"抑圧","char":"サイレント","cost":0,"type":"アタック","rarity":"レジェンド","effect":"天賦\n11ダメージを与える\n脱力3を付与する","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":5,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":5,"mod":0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":3.875,"kou":4.125},"comments":{"からあげ":"無力化の上位互換が弱いわけない","てかさ":"サイレント最強カード\nアプグレ最優先","逆廻":"レリックが必要だがそこまで強くない","マッチ":"効果は激強だが、エンシェント専用なので、この評価に落ち着く。"}},{"id":"S3_8","name":"衝撃波","char":"無色","cost":2,"type":"スキル","rarity":"アンコモン","effect":"すべての敵に脱力3弱体3を与える\n廃棄","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":2,"mod":-0.5},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":3.125,"kou":2.75},"comments":{"からあげ":"他のカードで良い。良くない？","てかさ":"コストは重いが効果は非常に強力","逆廻":"コストが重い","マッチ":"超強力なデバフ。\nアプグレすると雑魚戦では、ほぼ永続デバフ"}},{"id":"S3_9","name":"溶鉱炉","char":"リージェント","cost":1,"type":"パワー","rarity":"アンコモン","effect":"ターン開始時、鍛造4","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.75,"kou":3.5},"comments":{"からあげ":"１枚完結ソブリンブレード","てかさ":"ソヴリンビルドだと欲しいが効果自体は弱い","逆廻":"日の目を浴びる前に戦闘が終わる","マッチ":"ソヴリン軸のダメージアップに強く貢献する。\nアプグレはしたい。"}},{"id":"S3_10","name":"ボーラ","char":"無色","cost":0,"type":"アタック","rarity":"レア","effect":"3ダメージを与える\n次のターン開始時、これを手札に戻す","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3.125,"kou":3.125},"comments":{"からあげ":"足りないときのとどめに","てかさ":"火力が無いので毎ターン撃ったところで..感はある","逆廻":"完全ノーコスト","マッチ":"数値は低いので、手裏剣などのシナジーがないなら、わざわざ取らない"}},{"id":"S3_11","name":"天の力","char":"リージェント","cost":2,"type":"アタック","rarity":"コモン","effect":"6ダメージを3回与える","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":2.5,"kou":1.25},"comments":{"からあげ":"汎用カードだけど他のカードが欲しくなる","てかさ":"強力なフロントロード　序盤はこのカードで解決しよう","逆廻":"このキャラにあっていない","マッチ":"地味だが、アプグレによるダメージの伸びは大きい。"}},{"id":"S3_12","name":"カラミティ","char":"無色","cost":3,"type":"パワー","rarity":"レア","effect":"アタックをプレイするたび、ランダムなアタックを1枚手札に加える","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":2,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":2.25,"kou":2},"comments":{"からあげ":"重いし加えたカードコスト下げろ","てかさ":"デッキが酷いことになる\nせめて加えたカードは1コス下げるとかしてくれない？","逆廻":"構築次第では1ターンキルが可能","マッチ":"序盤はコストが重く、後半はデッキ汚染が痛い、\nバフに期待。"}},{"id":"S3_13","name":"バッファー","char":"ディフェクト","cost":2,"type":"パワー","rarity":"レア","effect":"次にHPを失う時、それを1回無効化する","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}}},"overall":{"zen":3,"kou":3.5},"comments":{"からあげ":"1度しか使えないが最強の防御","てかさ":"UG優先度高め\nバッファを盾にセットアップを進めたりできる","逆廻":"コストが重い","マッチ":"単発の打点をこれだけで受けられる。連続攻撃には弱いので注意"}},{"id":"S3_14","name":"錬金術","char":"無色","cost":1,"type":"スキル","rarity":"レア","effect":"ランダムなポーションを1つ入手する\n廃棄","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3.875,"kou":3.75},"comments":{"からあげ":"ポーションは強いんだけどコストを払ってやりたいかと言えば違う","てかさ":"サイレントのカードが無色に変更\nポーション厳選できるのは強いよね","逆廻":"⁺報酬","マッチ":"戦闘終了後のアドを生み出すチートカード。\n同系統の他のカードと違い、その戦闘でアドに変換する事も可能"}},{"id":"S3_15","name":"走り書き","char":"無色","cost":1,"type":"スキル","rarity":"レア","effect":"手札がいっぱいになるまでカードを引く\n廃棄","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":2,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":2.875,"kou":3.75},"comments":{"からあげ":"ドローは出来れば良いというような物では無いと教えてくれる","てかさ":"このカードがここにあるということはウォッチャーは今後も来ないということ\n優秀なドローカード","逆廻":"構築に合えば実質もう1ターンのように動ける","マッチ":"公式オリカ。使うと幸せになれる。"}},{"id":"S3_16","name":"ジャックポット","char":"無色","cost":3,"type":"アタック","rarity":"レア","effect":"25ダメージを与える\nランダムなコスト0●のカードを3枚手札に加える","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":3,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":2,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":2,"mod":0}}},"overall":{"zen":3.625,"kou":2.875},"comments":{"からあげ":"ガチャでもダメージソースでも使いやすい\nただし重い","てかさ":"3コスは重いよー","逆廻":"分の良いロマンカード","マッチ":"序盤なら得られるアドバンテージは大きい。\n後半はデッキが汚れるため、注意、"}},{"id":"S3_17","name":"爪","char":"ディフェクト","cost":0,"type":"アタック","rarity":"コモン","effect":"3ダメージを与える\nこの戦闘中、すべての〈爪〉のダメージが2増加する","scores":{"zen":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":2,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":1.75,"kou":2.375},"comments":{"からあげ":"使えるように構築を左右させられる","てかさ":"スケール遅すぎ\n捨て札からわざわざ戻して使用回数を稼ぎたいとは思えない","逆廻":"0コストバンプカードが弱いわけない","マッチ":"数値は低く、スケーリングも遅い"}},{"id":"S3_18","name":"オール・フォー・ワン","char":"ディフェクト","cost":2,"type":"アタック","rarity":"レア","effect":"10ダメージを与える\n捨て札にあるすべての0●カードを手札に加える","scores":{"zen":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":3,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":1,"mod":0},"てかさ":{"base":4,"mod":0},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3,"kou":3.25},"comments":{"からあげ":"専用構築必須","てかさ":"0コスデッキの要","逆廻":"構築によっては必須級","マッチ":"0エナ軸の要。\n捨て札に0エナが溜まっていないと、ただの10点"}},{"id":"S3_19","name":"落星","char":"リージェント","cost":"0(✦2)","type":"アタック","rarity":"基本","effect":"7ダメージを与える\n脱力1を付与する\n弱体1を付与する","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":2,"mod":-0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":2.75,"kou":2.625},"comments":{"からあげ":"便利カード枠","てかさ":"効果自体は強いが、初期デッキだと畏敬を必ず使う必要があり不便　おまけにアプグレではダメージしか強化されない","逆廻":"前半は２枚１コストで１回の発動割に合わない","マッチ":"✦の消費は重いため、デッキの✦収支は気をつける必要あり\nデバフの維持は、他カードと組み合わせないと難しい"}},{"id":"S3_20","name":"フットワーク","char":"サイレント","cost":1,"type":"パワー","rarity":"アンコモン","effect":"敏捷2を得る","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":4,"mod":0.5},"逆廻":{"base":1,"mod":0},"マッチ":{"base":4,"mod":0}},"kou":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":5,"mod":0}}},"overall":{"zen":3.125,"kou":4},"comments":{"からあげ":"汎用性だけは評価できる","てかさ":"サイレントの貧弱なブロックを補ってくれる有能カード\n2枚ぐらいまでなら余裕でデッキに入れられる","逆廻":"これを使う場合長期戦前提だがゲーム的に合わない","マッチ":"サイレントのブロックはこのカードが前提でバランスが取られているともっぱらの噂"}},{"id":"S3_21","name":"無力化","char":"サイレント","cost":0,"type":"アタック","rarity":"基本","effect":"3ダメージを与える\n脱力1を付与する","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":1,"mod":0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":3.625,"kou":3.25},"comments":{"からあげ":"リスクほぼ無し脱力は強い","てかさ":"スターターとしては優秀。\nドロー枚数の多いが防御の弱いサイレントと相性の良いカード","逆廻":"ノーコストでダメージと軽減の両方が出来る","マッチ":"スターターにしては強力。\n序盤のダメージ調整から、後半のアーティファクト剥がしまでいぶし銀な活躍を見せる"}},{"id":"S3_22","name":"殺害","char":"サイレント","cost":3,"type":"アタック","rarity":"レア","effect":"1ダメージを与える\nこの戦闘中に引いたカード1枚につき、追加で1ダメージを与える","scores":{"zen":{"からあげ":{"base":3,"mod":0},"てかさ":{"base":2,"mod":0},"逆廻":{"base":1,"mod":0},"マッチ":{"base":1,"mod":0}},"kou":{"からあげ":{"base":2,"mod":0},"てかさ":{"base":4,"mod":-0.5},"逆廻":{"base":5,"mod":0},"マッチ":{"base":3,"mod":0}}},"overall":{"zen":1.75,"kou":3.375},"comments":{"からあげ":"サイレントのソブリンブレード","てかさ":"適当にデッキを回していたらいつの間にか最強になっている\n毒ビルドでないときの対ボススケール手段\nアプグレは早めにしたい","逆廻":"これ用に構築しなくてもボス戦ようにフィニッシャーになる","マッチ":"序盤は数値が低すぎて使い物にならない。\nディスカループが組めれば、文字通り相手を殺害出来る"}},{"id":"S3_23","name":"騙し討ち","char":"サイレント","cost":0,"type":"アタック","rarity":"アンコモン","effect":"天賦\n11ダメージを与える\n廃棄","scores":{"zen":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":5,"mod":0},"逆廻":{"base":4,"mod":0},"マッチ":{"base":5,"mod":0}},"kou":{"からあげ":{"base":5,"mod":0},"てかさ":{"base":1,"mod":0},"逆廻":{"base":3,"mod":0},"マッチ":{"base":1,"mod":0}}},"overall":{"zen":4.75,"kou":2.5},"comments":{"からあげ":"雑に入れて雑に使えるカード","てかさ":"1層エリート突破の貢献に役立ち、道中の被弾も減らす序盤は優秀なカード\n2層以降は天賦なのもあって使いづらくなっていく","逆廻":"スライスよりかはダメージが出る","マッチ":"スターターレリックとの噛み合いは凄まじい\n序盤のサイレントの相棒"}}]];
+window.REAL_DECK_META = {"set2char":"ネクロバインダー","generated":"2026-07-18","rev":2,"excluded":["ストライク","防御"]};
+
+</script>
+<script>
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD4VRqZjX3Z71ty1CDUTGeSHSDtfaICskg",
+  authDomain: "transmit-74706.firebaseapp.com",
+  databaseURL: "https://transmit-74706-default-rtdb.firebaseio.com",
+  projectId: "transmit-74706",
+  storageBucket: "transmit-74706.firebasestorage.app",
+  messagingSenderId: "949420550646",
+  appId: "1:949420550646:web:7006239a1e77ba0dc87fd7",
+  measurementId: "G-VHB7HWRZ53"
+};
+</script>
+<script>
+'use strict';
+/* =============== ローカル試遊版 UI v0.2（ホットシート） =============== */
+const E = window.Engine;
+const A = E.Actions;
+const PLAYERS = E.DEFAULT_CONFIG.players;
+const HALF_LABEL = { zen: '前半', kou: '後半' };
+
+let S = null;
+let undoStack = [];
+let ui = { solo: false, cover: null, gmOpen: false, gmUnlocked: false, deck: 'real', animOff: false };
+let seatSel = null;
+
+/* ---------- 効果音（WebAudio・全て失敗許容） ---------- */
+const Snd = {
+  on: true, ctx: null,
+  ac() { try { this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)(); if (this.ctx.state === 'suspended') this.ctx.resume(); return this.ctx; } catch (e) { return null; } },
+  tone(freq, dur, type = 'sine', gain = 0.12, when = 0) {
+    if (!this.on) return;
+    const c = this.ac(); if (!c) return;
+    try {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(0, c.currentTime + when);
+      g.gain.linearRampToValueAtTime(gain, c.currentTime + when + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + when + dur);
+      o.connect(g); g.connect(c.destination);
+      o.start(c.currentTime + when); o.stop(c.currentTime + when + dur + 0.05);
+    } catch (e) {}
+  },
+  click() { this.tone(880, 0.06, 'square', 0.05); },
+  commit() { this.tone(220, 0.1, 'triangle', 0.12); this.tone(140, 0.16, 'sine', 0.1, 0.03); },
+  swish() { this.tone(520, 0.16, 'sine', 0.07); this.tone(760, 0.2, 'sine', 0.06, 0.08); },
+  pop(i) { this.tone(500 + i * 180, 0.16, 'triangle', 0.14); this.tone(750 + i * 180, 0.22, 'sine', 0.08, 0.06); },
+  hit() { this.tone(1040, 0.12, 'sine', 0.14); this.tone(1560, 0.25, 'sine', 0.12, 0.1); },
+  miss() { this.tone(190, 0.2, 'sawtooth', 0.05); },
+  win() { [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.28, 'triangle', 0.12, i * 0.11)); },
+  fanfare() { [392, 523, 659, 784, 1046, 1318].forEach((f, i) => this.tone(f, 0.4, 'triangle', 0.12, i * 0.13)); },
+};
+
+/* ---------- 基本機構 ---------- */
+function dispatch(action) {
+  undoStack.push(S);
+  if (undoStack.length > 200) undoStack.shift();
+  try {
+    S = E.reduce(S, action);
+  } catch (e) {
+    undoStack.pop();
+    alert('操作エラー: ' + e.message);
+    render(); // ボタン無効化の復帰
+    return false;
+  }
+  render();
+  return true;
+}
+function pendingPlayers() {
+  if (!S) return [];
+  if (S.phase === 'commit') return PLAYERS.filter((p) => !S.committed[p]);
+  if (S.phase === 'declare') return PLAYERS.filter((p) => !S.declarations[p]);
+  if (S.phase === 'decisionPick') return PLAYERS.filter((p) => !S.decisionState.picks[p]);
+  if (S.phase === 'decisionDeclare') return PLAYERS.filter((p) => !(p in S.decisionState.guesses));
+  return [];
+}
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function cardTile(card, opts = {}) {
+  const cls = ['card', opts.sel ? 'sel' : '', opts.winner ? 'winner' : '', opts.static ? 'static' : '', opts.rv || ''].join(' ');
+  return `<div class="${cls}" ${opts.onclick ? `onclick="${opts.onclick}"` : ''}>
+    ${opts.owner ? `<div class="owner">${esc(opts.owner)}</div>` : ''}
+    <div class="nm">${esc(card.name)}</div>
+    <div class="meta">${esc(card.char || '')}${card.char ? '・' : ''}コスト${esc(card.cost)}・${esc(card.type)}</div>
+    ${opts.value !== undefined ? `<div class="val">${esc(opts.value)}</div>` : ''}
+    ${card.effect ? `<div class="fx">${esc(card.effect)}</div>` : ''}
+    ${opts.comment ? `<div class="comment ${opts.rvc || ''}">💬 ${esc(opts.comment)}</div>` : ''}
+  </div>`;
+}
+function scoreboard() {
+  if (!S || !S.scores || Object.keys(S.scores).length === 0) return '';
+  const max = Math.max(...Object.values(S.scores));
+  return `<div class="board">${PLAYERS.map((p) => `
+    <div class="score ${S.scores[p] === max && max > 0 ? 'leader' : ''}"><div class="nm">${esc(p)}</div><div class="pt">${S.scores[p]}</div></div>`).join('')}</div>`;
+}
+function stageLabel() {
+  if (!S || S.setIndex < 0) return '';
+  if (S.phase.startsWith('decision') || S.phase === 'final') return '決着ラウンド';
+  const set = S.config.sets[S.setIndex];
+  return `${set.label}（${S.roundIndex + 1}/${S.config.roundsPerSet}）`;
+}
+function frame(body) {
+  return `<header><h1>こたえあわせ（仮）</h1><div style="display:flex;align-items:center;gap:4px"><div class="stage">${stageLabel()}</div><button id="sndbtn" onclick="UI.toggleSnd()">${Snd.on ? '🔊' : '🔇'}</button></div></header>${S ? scoreboard() : ''}${body}`;
+}
+function render() {
+  const app = document.getElementById('app');
+  if (ui.onlineActive) { Online.render(); return; }
+  if (ui.cover) { renderCover(); return; }
+  document.getElementById('cover-root')?.remove();
+  const scrollY = window.scrollY; // 再描画でのスクロール飛び防止
+  let body = '';
+  if (!S) body = renderLobby();
+  else switch (S.phase) {
+    case 'basis': body = renderBasis(); break;
+    case 'commit': body = renderSeatGate('コミット'); break;
+    case 'faces': body = renderFaces(); break;
+    case 'declare': body = renderSeatGate('宣言'); break;
+    case 'scoresReady': body = renderScoresReady(); break;
+    case 'roundEnd': body = renderRoundEnd(); break;
+    case 'decisionPick': body = renderSeatGate('決着・札選択'); break;
+    case 'decisionBasis': body = renderDecisionBasis(); break;
+    case 'decisionDeclare': body = renderSeatGate('決着・予想'); break;
+    case 'decisionReady': body = renderDecisionReady(); break;
+    case 'final': body = renderFinal(); break;
+    default: body = `<div class="panel">未対応フェーズ: ${S.phase}</div>`;
+  }
+  const prevPhase = app.dataset.phase;
+  app.innerHTML = frame(body);
+  app.dataset.phase = S ? S.phase : 'lobby';
+  // 同一フェーズ内の再描画（選択・トグル等）はスクロール位置を維持、フェーズが変わったら先頭へ
+  if (prevPhase === app.dataset.phase) window.scrollTo(0, scrollY);
+  else window.scrollTo(0, 0);
+  renderGM();
+}
+function renderSeatOnly(p) {
+  const scrollY = window.scrollY;
+  document.getElementById('app').innerHTML = frame(seatScreen(p));
+  window.scrollTo(0, scrollY);
+  renderGM();
+}
+
+/* ---------- 各画面 ---------- */
+function renderLobby() {
+  const hasReal = !!window.REAL_DECKS;
+  return `<div class="panel center">
+    <h2>v0.6（ローカル・ホットシート）</h2>
+    <p class="muted">1台の端末を回して遊ぶ検証用ビルドです。</p>
+    <label>プレイ形式</label>
+    <select id="mode-sel" onchange="UI.onModeChange(this.value)">
+      <option value="online" ${ui.mode==='online'?'selected':''}>オンライン対戦（各自の端末で／推奨）</option>
+      <option value="hotseat" ${ui.mode==='hotseat'?'selected':''}>ホットシート（1台を回して3人＋GM）</option>
+      <option value="solo" ${ui.mode==='solo'?'selected':''}>ソロテスト（1人で全席を操作）</option>
+    </select>
+    <p class="muted" style="margin-top:6px">配札は「自分の点数での手札平均」が偏りすぎないよう、ほんのり平準化されます。</p>
+    <div id="mode-extra"></div>
+    <button class="primary big" onclick="UI.start()">${ui.mode==='online' ? 'オンラインを始める' : 'ゲーム開始'}</button>
+    <button onclick="UI.showRules()">ルールを読む</button>
+  </div>`;
+}
+function renderBasis() {
+  const set = S.config.sets[S.setIndex];
+  const fixed = set.fixedHalf;
+  return `<div class="panel center">
+    <h2>GM（マッチ）: 基準宣言</h2>
+    ${fixed
+      ? `<p>${esc(set.label)}の判定基準は <span class="half-tag">${HALF_LABEL[fixed]}</span> 固定です。</p>
+         <button class="primary big" onclick="UI.basis()">「このラウンドは【${HALF_LABEL[fixed]}】の強さで判定！」</button>`
+      : `<p>このラウンドの判定基準を宣言してください。</p>
+         <button class="primary" onclick="UI.basis('zen')">前半の強さで判定</button>
+         <button class="primary" onclick="UI.basis('kou')">後半の強さで判定</button>`}
+  </div>`;
+}
+function renderSeatGate(what) {
+  const q = pendingPlayers();
+  if (q.length === 0) return '<div class="panel">…</div>';
+  const p = q[0];
+  if (!ui.solo) {
+    return `<div class="panel center">
+      <h2>${esc(what)}フェイズ</h2>
+      <p>端末を <b style="color:var(--acc)">${esc(p)}</b> に渡してください。</p>
+      <p class="muted">残り: ${q.map(esc).join(' → ')}</p>
+      <button class="primary big" onclick="UI.openSeat('${p}')">${esc(p)} です（画面を開く）</button>
+    </div>`;
+  }
+  seatSel = null;
+  return seatScreen(p);
+}
+function seatScreen(p) {
+  if (S.phase === 'commit') return renderCommit(p);
+  if (S.phase === 'declare') return renderDeclare(p);
+  if (S.phase === 'decisionPick') return renderDecisionPick(p);
+  if (S.phase === 'decisionDeclare') return renderDecisionGuess(p);
+  return '';
+}
+function renderCommit(p) {
+  const hand = S.hands[p];
+  return `<div class="panel">
+    <h2>${esc(p)} の手札（1枚選んで伏せて出す）</h2>
+    <span class="half-tag">基準: ${HALF_LABEL[S.currentHalf]}</span>
+    <div class="cards" style="margin-top:10px">
+      ${hand.map((id) => cardTile(S.cardsById[id], { sel: seatSel === id, onclick: `UI.pick('${id}','${p}')` })).join('')}
+    </div>
+    <div class="center" style="margin-top:12px">
+      <button class="primary big" ${seatSel ? '' : 'disabled'} onclick="this.disabled=true;UI.commit('${p}')">この札を伏せて出す</button>
+    </div>
+  </div>`;
+}
+function renderFaces() {
+  const cards = PLAYERS.map((p) => ({ p, c: S.cardsById[S.committed[p]] }));
+  return `<div class="panel center">
+    <h2>一段目公開 — 札の表</h2>
+    <span class="half-tag">基準: ${HALF_LABEL[S.currentHalf]}</span>
+    <div class="cards" style="margin-top:10px">
+      ${cards.map(({ p, c }, i) => cardTile(c, { owner: p, static: true, rv: `rv rv${i + 1}` })).join('')}
+    </div>
+    <p class="muted">強さはまだ伏せられている。宣言フェイズへ。</p>
+    <button class="primary big" onclick="this.disabled=true;UI.toDeclare()">宣言フェイズへ（GM）</button>
+  </div>`;
+}
+function renderDeclare(p) {
+  const cards = PLAYERS.map((q) => ({ q, c: S.cardsById[S.committed[q]] }));
+  const others = PLAYERS.filter((q) => q !== p);
+  return `<div class="panel">
+    <h2>${esc(p)} の宣言</h2>
+    <div class="cards">${cards.map(({ q, c }) => cardTile(c, { owner: q + (q === p ? '（自分）' : ''), static: true })).join('')}</div>
+    <label>自分宣言：自分の札の強さをピタリ予想（的中 +${S.config.hitSelfPoints}点）</label>
+    <select id="d-self">
+      <option value="">宣言しない</option>
+      ${[1,2,3,4,5].map((v) => `<option value="${v}">${v}</option>`).join('')}
+    </select>
+    <label>横予想：他人の札の強さをピタリ予想（1件まで・的中 +${S.config.hitSidePoints}点）</label>
+    <select id="d-tgt">
+      <option value="">予想しない</option>
+      ${others.map((q) => `<option value="${q}">${esc(q)} の札</option>`).join('')}
+    </select>
+    <select id="d-val">
+      <option value="">--</option>
+      ${[1,2,3,4,5].map((v) => `<option value="${v}">${v}</option>`).join('')}
+    </select>
+    <p class="muted">※ 宣言は整数のみ。実際の強さに+/-が付いていても、数字が合っていれば的中。</p>
+    <div class="center"><button class="primary big" onclick="UI.declare('${p}', this)">宣言を確定</button></div>
+  </div>`;
+}
+function renderScoresReady() {
+  return `<div class="panel center">
+    <h2>全員の宣言が出そろった</h2>
+    <p class="muted">GMの合図で、強さとコメントが公開される。</p>
+    <button class="primary big" onclick="this.disabled=true;UI.reveal()">🃏 点数公開（GM）</button>
+  </div>`;
+}
+function renderRoundEnd() {
+  const r = S.roundResult;
+  const winnersTxt = r.winners.length === 1 ? `${r.winners[0]} の勝利！` : `${r.winners.join('・')} 山分け！`;
+  const anim = ui.animOff ? 'noanim' : '';
+  return `<div class="panel ${anim}">
+    <span class="half-tag">基準: ${HALF_LABEL[r.half]}</span>${r.tieBreakUsed ? `<span class="chip rv rv-after">タイブレーク: ${r.tieBreakUsed === 'overall' ? '隠し数値' : '完全同点・山分け'}</span>` : ''}
+    <div class="cards" style="margin-top:10px">
+      ${r.entries.map((e, i) => cardTile(S.cardsById[e.cardId], {
+        owner: e.player, static: true, winner: r.winners.includes(e.player),
+        value: E.scoreLabel(e.score), comment: e.comment, rv: `rv rv${i + 1}`,
+      })).join('')}
+    </div>
+    <div class="chips rv rv-after">
+      ${PLAYERS.map((p) => {
+        const d = r.declResults[p]; const parts = [];
+        if (d.self) parts.push(`<span class="chip ${d.self.hit?'hit':'miss'}">${esc(p)} 自分宣言${d.self.value} ${d.self.hit?'的中+'+S.config.hitSelfPoints:'外れ'}</span>`);
+        if (d.side) parts.push(`<span class="chip ${d.side.hit?'hit':'miss'}">${esc(p)}→${esc(d.side.target)} 予想${d.side.value} ${d.side.hit?'的中+'+S.config.hitSidePoints:'外れ(実際'+d.side.actualBase+')'}</span>`);
+        return parts.join('');
+      }).join('')}
+    </div>
+    <div class="banner rv rv-banner">${esc(winnersTxt)} <span class="muted">(+${r.winPoints}${r.winners.length>1?'を山分け(切上)':''}点)</span></div>
+    <div class="center" style="margin-top:12px"><button class="primary big" onclick="this.disabled=true;UI.next()">次へ（GM）</button></div>
+  </div>`;
+}
+function renderDecisionPick(p) {
+  const pool = S.reserved[p];
+  return `<div class="panel">
+    <h2>決着ラウンド — ${esc(p)} の選択</h2>
+    <p class="muted">各章で出さずに残した札（温存札）から、最後の1枚を選べ。<br>この札の強さの決まり方は…GMだけが知っている。</p>
+    <div class="cards">${pool.map((id) => cardTile(S.cardsById[id], { sel: seatSel === id, onclick: `UI.pick('${id}','${p}')` })).join('')}</div>
+    <div class="center" style="margin-top:12px"><button class="primary big" ${seatSel?'':'disabled'} onclick="this.disabled=true;UI.decisionPick('${p}')">この札に賭ける</button></div>
+  </div>`;
+}
+function renderDecisionBasis() {
+  return `<div class="panel center">
+    <h2>決着ラウンド — GMの基準宣言</h2>
+    <p>種明かし：この最後の札の強さは <b style="color:var(--acc)">GM・マッチの点数</b> で決まる。</p>
+    <button class="primary" onclick="UI.decisionBasis('zen')">前半の強さで判定</button>
+    <button class="primary" onclick="UI.decisionBasis('kou')">後半の強さで判定</button>
+  </div>`;
+}
+function renderDecisionGuess(p) {
+  const c = S.cardsById[S.decisionState.picks[p]];
+  return `<div class="panel">
+    <h2>${esc(p)} — マッチ予想</h2>
+    <div class="cards">${cardTile(c, { owner: p, static: true })}</div>
+    <label>マッチはこの札に何点を付けたか？（的中 +${S.config.decision.hitPoints}点）</label>
+    <select id="g-val">
+      <option value="">予想しない</option>
+      ${[1,2,3,4,5].map((v) => `<option value="${v}">${v}</option>`).join('')}
+    </select>
+    <div class="center" style="margin-top:12px"><button class="primary big" onclick="UI.decisionGuess('${p}', this)">確定</button></div>
+  </div>`;
+}
+function renderDecisionReady() {
+  return `<div class="panel center">
+    <h2>最後の公開</h2>
+    <button class="primary big" onclick="this.disabled=true;UI.decisionReveal()">🏆 決着（GM）</button>
+  </div>`;
+}
+function renderFinal() {
+  const res = S.decisionState?.result;
+  const ranked = [...PLAYERS].sort((a, b) => S.scores[b] - S.scores[a]);
+  const anim = ui.animOff ? 'noanim' : '';
+  return `<div class="panel center ${anim}">
+    <h2>最終結果</h2>
+    ${res ? `<div class="cards">${res.entries.map((e, i) => cardTile(S.cardsById[e.cardId], { owner: e.player, static: true, winner: res.winners.includes(e.player), value: E.scoreLabel(e.score), comment: e.comment, rv: `rv rv${i + 1}` })).join('')}</div>
+    <div class="chips rv rv-after">${PLAYERS.map((p) => { const g = res.guessResults[p]; return g ? `<span class="chip ${g.hit?'hit':'miss'}">${esc(p)} マッチ予想${g.value} ${g.hit?'的中+'+S.config.decision.hitPoints:'外れ'}</span>` : ''; }).join('')}</div>
+    <div class="banner rv rv-banner">決着: ${esc(res.winners.join('・'))} が制した！（マッチ基準・${HALF_LABEL[res.half]}）</div>` : ''}
+    <div style="font-size:24px;margin:16px 0" class="rv rv-banner">🏆 優勝: <b style="color:var(--acc)">${esc(ranked[0])}</b>（${S.scores[ranked[0]]}点）</div>
+    <button class="primary" onclick="UI.showTimeline()">全ラウンドのネタばらしを見る</button>
+    <button onclick="UI.showReserved()">温存札を公開する</button>
+  </div>`;
+}
+function renderCover() {
+  const p = ui.cover;
+  let root = document.getElementById('cover-root');
+  if (!root) { root = document.createElement('div'); root.id = 'cover-root'; document.body.appendChild(root); }
+  root.innerHTML = `<div class="cover">
+    <div class="muted">他の人は画面から目を離してください</div>
+    <div class="who">${esc(p)}</div>
+    <button class="primary big" style="max-width:340px" onclick="UI.enterSeat()">画面を開く</button>
+  </div>`;
+}
+
+/* ---------- GMパネル ---------- */
+function renderGM() {
+  const d = document.getElementById('gmdrawer');
+  d.className = ui.gmOpen ? 'open' : '';
+  const btn = document.querySelector('#gmbar button');
+  if (btn) { btn.style.borderColor = ui.gmOpen ? 'var(--acc)' : ''; btn.style.color = ui.gmOpen ? 'var(--acc)' : ''; }
+  if (!ui.gmOpen) { d.innerHTML = ''; return; }
+  if (!S) {
+    d.innerHTML = `<div class="gm-title">GM専用パネル <button style="float:right;font-size:11px;padding:4px 10px" onclick="UI.toggleGM()">閉じる</button></div>
+      <div class="muted">ゲーム未開始です。開始するとここに「現在の答え」が表示されます。</div>`;
+    return;
+  }
+  let rows = '';
+  const half = S.currentHalf || S.decisionState?.half;
+  const isDecision = S.phase.startsWith('decision');
+  const committed = isDecision ? (S.decisionState?.picks || {}) : S.committed;
+  for (const p of PLAYERS) {
+    const id = committed[p];
+    if (!id) continue;
+    const c = S.cardsById[id];
+    const rater = isDecision ? S.config.gmName : p;
+    const z = c.scores.zen[rater], k = c.scores.kou[rater];
+    rows += `<tr><td>${esc(p)}</td><td>${esc(c.name)}</td><td>${E.scoreLabel(z)}</td><td>${E.scoreLabel(k)}</td><td>${c.overall.zen.toFixed(2)}/${c.overall.kou.toFixed(2)}</td><td style="white-space:pre-wrap">${esc(c.comments?.[rater] ?? '')}</td></tr>`;
+  }
+  d.innerHTML = `<div class="gm-title">GM専用 — 現在の答え（判定者: ${isDecision ? 'マッチ' : '各自'} ／ 現基準: ${half ? HALF_LABEL[half] : '未宣言'}）<button style="float:right;font-size:11px;padding:4px 10px" onclick="UI.toggleGM()">閉じる</button></div>
+    ${rows ? `<table><tr><th>出した人</th><th>札</th><th>前半</th><th>後半</th><th>副基準(全体) 前/後</th><th>コメント</th></tr>${rows}</table>` : '<div class="muted">コミット待ち</div>'}
+    <div class="muted" style="margin-top:8px">同点時は副基準（4人平均の全体評価）が高い札が勝ち。それも同点なら山分け。／ フェーズ: ${S.phase} ／ Engine ${S.engineVersion}</div>`;
+}
+
+/* ---------- モーダル・ルール ---------- */
+function modal(html) {
+  const r = document.getElementById('modal-root');
+  r.innerHTML = `<div class="modal" onclick="if(event.target===this)UI.closeModal()"><div>${html}
+    <div class="center" style="margin-top:14px"><button onclick="UI.closeModal()">閉じる</button></div></div></div>`;
+}
+const RULES_HTML = `
+  <div class="rulebox">
+  <span class="genre">🃏 クイズ × カードゲーム</span>
+  <h2 style="margin-top:4px">遊びかた</h2>
+
+  <div class="goal-box">
+    <div class="lbl">🎯 勝利条件（ゴール）</div>
+    <div class="txt">3つの章＋決着ラウンドを通して、<u>いちばん多くポイントを集めた人の勝ち。</u></div>
+  </div>
+
+  <div class="rsec">🃏 どんなゲーム？</div>
+  <p>手札の札を1枚ずつ出し合う。ただし<b>札の「強さ」はどこにも書かれていない。</b>強さを読み、時に予想を宣言して、ポイントを稼ぐゲーム。</p>
+
+  <div class="rsec">🔄 1ラウンドの流れ</div>
+  <div class="flow">
+    <div class="step"><div class="num">1</div><div class="stxt">🎙️ <b>GMが基準を宣言</b>（「前半」か「後半」）</div></div>
+    <div class="arrow">▼</div>
+    <div class="step"><div class="num">2</div><div class="stxt">🂠 全員、手札から1枚を<b>同時に伏せて</b>出す</div></div>
+    <div class="arrow">▼</div>
+    <div class="step"><div class="num">3</div><div class="stxt">👀 札の<b>表（名前）だけ</b>公開。強さはまだ伏せたまま</div></div>
+    <div class="arrow">▼</div>
+    <div class="step"><div class="num">4</div><div class="stxt">💬 <b>予想タイム</b>（任意）：自分の札の強さ＋他人の札の強さを、数字で予想して宣言できる。当たればボーナス</div></div>
+    <div class="arrow">▼</div>
+    <div class="step"><div class="num">5</div><div class="stxt">✨ <b>強さを公開！</b> いちばん強い札を出した人がラウンド勝利＝ポイント獲得</div></div>
+  </div>
+
+  <div class="rsec">🏆 ポイント（得点表）</div>
+  <table class="sctbl">
+    <tr><th>できごと</th><th>第1章</th><th>第2章</th><th>第3章</th><th>決着</th></tr>
+    <tr><td>ラウンド勝利</td><td>3</td><td>4</td><td>5</td><td>6</td></tr>
+    <tr><td>予想が的中（自分・他人）</td><td colspan="3">各 +2</td><td>+3</td></tr>
+  </table>
+
+  <div class="rsec">🎴 全体の構成</div>
+  <p>第1章 → 第2章 → 第3章（各6ラウンド）→ <b>決着ラウンド</b>。各章のはじめに札が8枚配られ、6枚を使う。残した札は決着に持ち越す。</p>
+
+  <div class="callout">🔒 <b>このゲームで遊べるのは、今夜の一度きり。</b>札の強さは<b>すでに決まっていて</b>、その決まり方には法則がある——そしてそれは、<b>あなたたち自身と無関係ではない。</b>気づけるかどうかは、あなた次第。（理由は遊び終わる頃にわかる）</div>
+
+  <div class="rsec">📌 覚えておくこと</div>
+  <ul class="note-list">
+    <li>強さには +/− の中間値があるが、<b>予想は整数が合っていれば的中</b>（「4−」に「4」でOK）。</li>
+    <li>同点のときは、各札の<b>もう一つの隠し数値</b>で決着（これも法則の一部）。それでも並んだら山分け。</li>
+    <li><b>札の効果テキストはただの飾り。</b>このゲームでは一切機能せず、強さとも関係ない。</li>
+    <li>ゲーム中にスマホ・資料・検索へ頼るのは<b>紳士協定で禁止</b>。</li>
+  </ul>
+  </div>`;
+
+/* ---------- 操作 ---------- */
+function shuffled(arr) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function readSel(id) { const el = document.getElementById(id); return el && el.value ? el.value : null; }
+
+window.UI = {
+  onModeChange(v) {
+    ui.mode = v;
+    render(); // ロビー再描画（ボタン文言など）
+  },
+  start() {
+    ui.mode = readSel('mode-sel') || 'hotseat';
+    ui.deck = readSel('deck-sel') || (window.REAL_DECKS ? 'real' : 'dummy');
+    if (ui.mode === 'online') { Snd.click(); Online.openLobby(); return; }
+    ui.solo = ui.mode === 'solo';
+    const src = ui.deck === 'real' && window.REAL_DECKS ? window.REAL_DECKS : window.DUMMY_DECKS;
+    try {
+      // 平準化配札: 各自の「自分の点数」の手札平均差をほんのり縮める
+      S = E.createGame(src.map((d) => E.balanceDeal(d, PLAYERS, E.DEFAULT_CONFIG.handSize)), null, {});
+      S = E.reduce(S, { type: A.START_GAME });
+      undoStack = [];
+    } catch (e) { alert('初期化エラー: ' + e.message); return; }
+    Snd.click();
+    render();
+  },
+  toggleSnd() { Snd.on = !Snd.on; render(); },
+  basis(half) { Snd.click(); dispatch({ type: A.ANNOUNCE_BASIS, half }); },
+  openSeat(p) { Snd.click(); ui.cover = p; render(); },
+  enterSeat() {
+    const p = ui.cover; ui.cover = null;
+    document.getElementById('cover-root')?.remove();
+    seatSel = null;
+    Snd.click();
+    renderSeatOnly(p);
+  },
+  pick(id, p) { seatSel = id; Snd.click(); renderSeatOnly(p); },
+  commit(p) {
+    if (!seatSel) return;
+    const id = seatSel; seatSel = null;
+    if (dispatch({ type: A.COMMIT, player: p, cardId: id })) Snd.commit();
+  },
+  toDeclare() { if (dispatch({ type: A.REVEAL_FACES })) { Snd.swish(); } },
+  declare(p, btn) {
+    // DOMから直接読む（内部状態との乖離バグを構造的に排除）
+    const self = readSel('d-self');
+    const tgt = readSel('d-tgt');
+    const val = readSel('d-val');
+    if (tgt && !val) { alert('横予想の数字（1〜5）を選んでください'); return; }
+    if (!tgt && val) { alert('横予想の対象（誰の札か）を選んでください'); return; }
+    if (btn) btn.disabled = true;
+    const okd = dispatch({ type: A.DECLARE, player: p, self: self ? Number(self) : null, side: tgt ? { target: tgt, value: Number(val) } : null });
+    if (okd) Snd.commit();
+  },
+  reveal() {
+    if (!dispatch({ type: A.REVEAL_SCORES })) return;
+    const r = S.roundResult;
+    if (!ui.animOff) {
+      [0.25, 1.25, 2.25].forEach((t, i) => setTimeout(() => Snd.pop(i), t * 1000));
+      setTimeout(() => {
+        const anyHit = PLAYERS.some((p) => r.declResults[p].self?.hit || r.declResults[p].side?.hit);
+        const anyMiss = PLAYERS.some((p) => (r.declResults[p].self && !r.declResults[p].self.hit) || (r.declResults[p].side && !r.declResults[p].side.hit));
+        if (anyHit) Snd.hit(); else if (anyMiss) Snd.miss();
+      }, 3300);
+      setTimeout(() => Snd.win(), 3800);
+    }
+  },
+  next() { Snd.click(); dispatch({ type: A.NEXT }); },
+  decisionPick(p) {
+    if (!seatSel) return;
+    const id = seatSel; seatSel = null;
+    if (dispatch({ type: A.DECISION_PICK, player: p, cardId: id })) Snd.commit();
+  },
+  decisionBasis(h) { Snd.swish(); dispatch({ type: A.DECISION_ANNOUNCE, half: h }); },
+  decisionGuess(p, btn) {
+    const g = readSel('g-val');
+    if (btn) btn.disabled = true;
+    if (dispatch({ type: A.DECISION_DECLARE, player: p, guess: g ? Number(g) : null })) Snd.commit();
+  },
+  decisionReveal() {
+    if (!dispatch({ type: A.DECISION_REVEAL })) return;
+    if (!ui.animOff) {
+      [0.25, 1.25, 2.25].forEach((t, i) => setTimeout(() => Snd.pop(i), t * 1000));
+      setTimeout(() => Snd.fanfare(), 3800);
+    }
+  },
+  toggleGM() {
+    if (!ui.gmUnlocked) {
+      if (!confirm('GM専用パネルを開きます。プレイヤーは見ないでください。よろしいですか？')) return;
+      ui.gmUnlocked = true;
+    }
+    ui.gmOpen = !ui.gmOpen; renderGM();
+  },
+  undo() {
+    if (undoStack.length === 0) { alert('戻れる手がありません'); return; }
+    if (!confirm('直前の操作を1手巻き戻します（GM専用）。よろしいですか？')) return;
+    S = undoStack.pop(); render();
+  },
+  exportState() {
+    const blob = new Blob([JSON.stringify({ state: S, ts: new Date().toISOString() }, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'kotaeawase_state.json'; a.click();
+  },
+  showRules() { modal(RULES_HTML); },
+  closeModal() { document.getElementById('modal-root').innerHTML = ''; },
+  showTimeline() {
+    const rounds = S.history.filter((h) => h.kind === 'round');
+    modal(`<h2>全ラウンドの記録</h2><div class="timeline">${rounds.map((r) => `
+      <div class="round-log"><b>${S.config.sets[r.set].label} R${r.round + 1}</b> <span class="half-tag">${HALF_LABEL[r.half]}</span> → ${esc(r.winners.join('・'))}
+        ${r.entries.map((e) => `<div class="muted">${esc(e.player)}: ${esc(e.cardName)} = <b>${E.scoreLabel(e.score)}</b> ${e.comment ? '「' + esc(e.comment) + '」' : ''}</div>`).join('')}
+      </div>`).join('')}</div>`);
+  },
+  showReserved() {
+    modal(`<h2>温存札の公開</h2>${PLAYERS.map((p) => `<h2 style="color:var(--txt);font-size:13px">${esc(p)}</h2><div class="cards">${
+      S.reserved[p].filter((id) => id !== S.decisionState?.picks?.[p]).map((id) => {
+        const c = S.cardsById[id];
+        return cardTile(c, { static: true, value: `${E.scoreLabel(c.scores.zen[p])} / ${E.scoreLabel(c.scores.kou[p])}`, comment: c.comments?.[p] });
+      }).join('')}</div>`).join('')}
+      <p class="muted">表示は 前半/後半 の順。</p>`);
+  },
+};
+
+/* =========================================================
+ * オンライン対戦コントローラ
+ * ホスト権威（GM=ホスト）。プレイヤーは意図を送るだけ。net.js に依存。
+ * ======================================================= */
+const Online = {
+  db: null, code: null, seat: null, name: null, uid: null,
+  host: null, client: null, view: null, screen: 'role', role: null,
+  deckKey: 'real', roomInfo: { seats: {}, presence: {}, meta: {} }, _roomUnsub: null,
+  onlineSel: null,
+
+  makeUid() { return 'u' + Math.random().toString(36).slice(2, 9); },
+  makeCode() { const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; },
+  makeDb() {
+    if (window.__MOCK_DB__) return window.__MOCK_DB__; // 自己テスト用共有モック
+    if (window.__FB_FAIL__ || typeof firebase === 'undefined') throw new Error('オンライン機能の読み込みに失敗しました（ネット接続をご確認ください）。ホットシート/ソロは利用できます。');
+    return window.Net.createFirebaseDb(window.FIREBASE_CONFIG);
+  },
+
+  openLobby() {
+    ui.onlineActive = true;
+    this.uid = this.uid || this.makeUid();
+    this.screen = 'role';
+    document.getElementById('gmbar').style.display = 'none';
+    this.render();
+  },
+  exit() {
+    try { this.host && this.host.stop(); this.client && this.client.stop(); this._roomUnsub && this._roomUnsub(); } catch (e) {}
+    this.host = this.client = this.view = null; this._roomUnsub = null;
+    ui.onlineActive = false;
+    document.getElementById('gmbar').style.display = '';
+    render();
+  },
+
+  /* ---- ルーム作成/参加 ---- */
+  async doCreate() {
+    this.deckKey = 'real';
+    let db; try { db = this.makeDb(); } catch (e) { alert(e.message); this.exit(); return; }
+    this.db = db; this.code = this.makeCode(); this.seat = PLAYERS.length >= 0 ? E.DEFAULT_CONFIG.gmName : null;
+    this.seat = E.DEFAULT_CONFIG.gmName; this.role = 'gm'; this.name = this.seat;
+    try {
+      await window.Net.createRoom(db, this.code, { gmUid: this.uid, gmName: this.seat, deckKey: this.deckKey, now: this.now() });
+    } catch (e) { alert('作成失敗: ' + e.message); return; }
+    this.subscribeRoom();
+    this.subscribeView();
+    this.screen = 'wait';
+    Snd.click(); this.render();
+  },
+  async doJoin() {
+    const code = (document.getElementById('ol-code')?.value || '').toUpperCase().trim();
+    if (!code) { alert('部屋コードを入力してください'); return; }
+    let db; try { db = this.makeDb(); } catch (e) { alert(e.message); this.exit(); return; }
+    this.db = db; this.code = code; this.role = 'player';
+    const meta = await db.ref(`rooms/${code}/meta`).get();
+    if (!meta) { alert('その部屋は見つかりません'); return; }
+    this.subscribeRoom();
+    this.screen = 'seatpick';
+    Snd.click(); this.render();
+  },
+  async doClaim(seat) {
+    // オフライン保持者がいる席は引き継ぎ可（リロード復帰対応）
+    const db = this.db, code = this.code;
+    const cur = await db.ref(`rooms/${code}/seats/${seat}`).get();
+    if (cur && cur.uid && cur.uid !== this.uid) {
+      const online = await db.ref(`rooms/${code}/presence/${cur.uid}`).get();
+      if (online === true) { alert('その席は使用中です'); return; }
+    }
+    this.name = seat; // 名前＝選んだ席
+    await db.ref(`rooms/${code}/seats/${seat}`).set({ uid: this.uid, name: seat });
+    await window.Net.setPresence(db, code, this.uid);
+    this.seat = seat;
+    this.subscribeView();
+    this.screen = 'wait';
+    Snd.click(); this.render();
+  },
+  subscribeRoom() {
+    if (this._roomUnsub) this._roomUnsub();
+    this._roomUnsub = window.Net.watchRoom(this.db, this.code, (patch) => {
+      Object.assign(this.roomInfo, patch);
+      if (this.screen === 'wait' || this.screen === 'seatpick') this.render();
+    });
+  },
+  subscribeView() {
+    this.client = window.Net.RoomClient(this.db, this.code, this.seat);
+    this.client.onView((v) => { this.view = v; if (v) { if (this.screen !== 'game') { this.screen = 'game'; } this.render(); } });
+    this.client.onError && this.client.onError((e) => { if (e && e.step === (this.view && this.view.step)) { this.flashError('操作できませんでした。もう一度お試しください。'); } });
+  },
+  flashError(msg) { this._err = msg; this.render(); setTimeout(() => { this._err = null; }, 2500); },
+  now() { try { return firebase.database.ServerValue.TIMESTAMP; } catch (e) { return Date.now ? Date.now() : 0; } },
+
+  seatsPresent() {
+    const s = this.roomInfo.seats || {}, pr = this.roomInfo.presence || {};
+    return PLAYERS.filter((p) => s[p] && pr[s[p].uid] === true).length;
+  },
+
+  /* ---- GMがゲーム開始 ---- */
+  async startGame() {
+    if (this._starting || this.host) return; // 二度押し防止
+    this._starting = true;
+    const src = this.deckKey === 'real' && window.REAL_DECKS ? window.REAL_DECKS : window.DUMMY_DECKS;
+    const host = window.Net.RoomHost(this.db, this.code, { engine: E, deckSets: src, gmName: E.DEFAULT_CONFIG.gmName, now: this.now(), onPublish: () => {} });
+    try { await host.start(); await window.Net.startRoom(this.db, this.code); this.host = host; }
+    catch (e) { this._starting = false; alert('開始失敗: ' + e.message); return; }
+    Snd.win();
+  },
+  // GMアクション（安全ラッパ）
+  async gm(fn) { try { await fn(); } catch (e) { alert('操作エラー: ' + e.message); this.render(); } },
+
+  /* ---- プレイヤー操作 ---- */
+  async commit() { if (!this.onlineSel) return; const id = this.onlineSel; this.onlineSel = null; await this.client.sendIntent('commit', { cardId: id }); Snd.commit(); this.render(); },
+  async declare() {
+    const self = readSel('ol-self'); const tgt = readSel('ol-tgt'); const val = readSel('ol-val');
+    if (tgt && !val) { alert('横予想の数字を選んでください'); return; }
+    if (!tgt && val) { alert('横予想の対象を選んでください'); return; }
+    await this.client.sendIntent('declare', { self: self ? Number(self) : null, side: tgt ? { target: tgt, value: Number(val) } : null });
+    Snd.commit(); this.render();
+  },
+  async decisionPick() { if (!this.onlineSel) return; const id = this.onlineSel; this.onlineSel = null; await this.client.sendIntent('decisionPick', { cardId: id }); Snd.commit(); this.render(); },
+  async decisionGuess() { const g = readSel('ol-guess'); await this.client.sendIntent('decisionGuess', { guess: g ? Number(g) : null }); Snd.commit(); this.render(); },
+  selCard(id) { this.onlineSel = id; Snd.click(); this.render(); },
+
+  /* ================= 描画 ================= */
+  card(id) { return (this.view && this.view.cardMeta && this.view.cardMeta[id]) || { id, name: '?', cost: '-', type: '-', effect: '' }; },
+  render() {
+    const app = document.getElementById('app');
+    let body;
+    if (this.screen === 'role') body = this.renderRole();
+    else if (this.screen === 'joinform') body = this.renderJoinForm();
+    else if (this.screen === 'seatpick') body = this.renderSeatPick();
+    else if (this.screen === 'wait') body = this.renderWait();
+    else if (this.screen === 'game') body = this.renderGame();
+    else body = '<div class="panel">…</div>';
+    const err = this._err ? `<div class="banner-warn">⚠ ${esc(this._err)}</div>` : '';
+    app.innerHTML = `<header><h1>こたえあわせ（仮）</h1><div style="display:flex;align-items:center;gap:4px">
+      <div class="stage">${this.screen === 'game' && this.view ? esc(this.stageV()) : 'オンライン'}</div>
+      <button id="sndbtn" onclick="UI.toggleSnd()">${Snd.on ? '🔊' : '🔇'}</button></div></header>
+      ${this.view && this.screen === 'game' ? this.scoreV() : ''}${err}${body}`;
+  },
+  stageV() {
+    const v = this.view; if (!v) return 'オンライン';
+    if (v.phase.startsWith('decision') || v.phase === 'final') return '決着ラウンド';
+    const set = v.config.sets[v.setIndex];
+    return `${set.label}（${v.roundIndex + 1}/${v.config.roundsPerSet}）`;
+  },
+  scoreV() {
+    const v = this.view, mx = Math.max(...Object.values(v.scores));
+    return `<div class="board">${v.config.players.map((p) => `<div class="score ${v.scores[p] === mx && mx > 0 ? 'leader' : ''}"><div class="nm">${esc(p)}${p === this.seat ? ' (あなた)' : ''}</div><div class="pt">${v.scores[p]}</div></div>`).join('')}</div>`;
+  },
+  renderRole() {
+    const hasReal = !!window.REAL_DECKS;
+    return `<div class="panel center">
+      <h2>オンライン対戦</h2>
+      <p class="muted">各自の端末で参加します。GM（マッチ）が部屋を作り、3人が参加コードで入室します。</p>
+      <div style="margin:14px 0">
+        <div class="rsec" style="justify-content:center">🎙️ GM（マッチ）として部屋を作る</div>
+        <button class="primary big" onclick="Online.doCreate()">部屋を作成</button>
+      </div>
+      <hr style="border-color:var(--line)">
+      <div style="margin:14px 0">
+        <div class="rsec" style="justify-content:center">🎮 プレイヤーとして参加する</div>
+        <button class="primary big" onclick="Online.screen='joinform';Online.render()">参加コードを入力</button>
+      </div>
+      <button onclick="Online.exit()">戻る</button>
+      <button onclick="UI.showRules()">ルール</button>
+    </div>`;
+  },
+  renderJoinForm() {
+    return `<div class="panel center">
+      <h2>部屋に参加</h2>
+      <label>参加コード（4文字）</label>
+      <input type="text" id="ol-code" maxlength="4" style="text-transform:uppercase;text-align:center;letter-spacing:6px;font-family:monospace" placeholder="ABCD">
+      <p class="muted" style="margin-top:8px">次の画面で自分（からあげ／てかさ／逆廻）を選びます。</p>
+      <button class="primary big" onclick="Online.doJoin()">参加する</button>
+      <button onclick="Online.screen='role';Online.render()">戻る</button>
+    </div>`;
+  },
+  renderSeatPick() {
+    const s = this.roomInfo.seats || {}, pr = this.roomInfo.presence || {};
+    return `<div class="panel">
+      <h2>あなたは誰？（座席を選ぶ）</h2>
+      <p class="muted">部屋 <span class="rc" style="font-size:16px">${esc(this.code)}</span></p>
+      ${PLAYERS.map((p) => {
+        const taken = s[p] && s[p].uid;
+        const online = taken && pr[s[p].uid] === true;
+        const canTake = !taken || !online;
+        return `<div class="seatrow"><span><span class="dot ${online ? 'on' : 'off'}"></span>${esc(p)}${taken ? `（${esc(s[p].name)}${online ? '' : '・オフライン'}）` : '（空席）'}</span>
+          <button class="${canTake ? 'primary' : ''}" ${canTake ? '' : 'disabled'} onclick="Online.doClaim('${p}')">${taken && !online ? '引き継ぐ' : 'この席に座る'}</button></div>`;
+      }).join('')}
+      <button onclick="Online.screen='role';Online.render()">戻る</button>
+    </div>`;
+  },
+  renderWait() {
+    const s = this.roomInfo.seats || {}, pr = this.roomInfo.presence || {};
+    const present = this.seatsPresent();
+    const isGM = this.seat === E.DEFAULT_CONFIG.gmName;
+    const gmSeat = E.DEFAULT_CONFIG.gmName;
+    const gmOnline = s[gmSeat] && pr[s[gmSeat].uid] === true;
+    return `<div class="panel">
+      <h2>待機ロビー</h2>
+      <p class="center">参加コード<br><span class="rc">${esc(this.code)}</span></p>
+      <p class="muted center">この4文字を3人に共有してください。</p>
+      <div class="seatrow"><span><span class="dot ${gmOnline ? 'on' : 'off'}"></span>🎙️ GM: ${esc(gmSeat)}</span><span class="muted">${this.seat === gmSeat ? 'あなた' : ''}</span></div>
+      ${PLAYERS.map((p) => { const t = s[p] && s[p].uid, on = t && pr[s[p].uid] === true; return `<div class="seatrow ${p === this.seat ? 'me' : ''}"><span><span class="dot ${on ? 'on' : 'off'}"></span>${esc(p)}</span><span class="muted">${t ? esc(s[p].name) + (on ? '' : '・切断中') : '空席'}${p === this.seat ? ' (あなた)' : ''}</span></div>`; }).join('')}
+      ${isGM
+        ? `<div class="center" style="margin-top:14px">
+            <p class="muted">${present}/3 人が参加中${present < 3 ? '（全員そろうと開始できます）' : ''}</p>
+            <button class="primary big" ${present >= 3 ? '' : 'disabled'} onclick="Online.startGame()">全員そろった — ゲーム開始</button>
+           </div>`
+        : `<div class="waitbox"><div class="spin">⏳</div><p class="muted">GMの開始を待っています…</p></div>`}
+      <button onclick="Online.exit()">退出</button>
+    </div>`;
+  },
+
+  /* ---- ゲーム画面（ビュー駆動） ---- */
+  renderGame() {
+    const v = this.view;
+    return v.isGM ? this.renderGM(v) : this.renderPlayer(v);
+  },
+  waiting(msg, sub) { return `<div class="panel waitbox"><div class="spin">⏳</div><h2>${esc(msg)}</h2>${sub ? `<p class="muted">${esc(sub)}</p>` : ''}</div>`; },
+  committedProgress(v) {
+    return `<div class="chips center" style="justify-content:center">${v.config.players.map((p) => `<span class="chip ${v.committedSeats[p] ? 'hit' : ''}">${esc(p)} ${v.committedSeats[p] ? '✓' : '…'}</span>`).join('')}</div>`;
+  },
+  declaredProgress(v) {
+    return `<div class="chips center" style="justify-content:center">${v.config.players.map((p) => `<span class="chip ${v.declaredSeats[p] ? 'hit' : ''}">${esc(p)} ${v.declaredSeats[p] ? '✓' : '…'}</span>`).join('')}</div>`;
+  },
+  facesBoard(v) {
+    if (!v.committedCards) return '';
+    return `<div class="cards" style="margin-top:10px">${v.config.players.map((p) => cardTile(this.card(v.committedCards[p]), { owner: p + (p === this.seat ? '（自分）' : ''), static: true })).join('')}</div>`;
+  },
+  resultBoard(r) {
+    return `<div class="cards" style="margin-top:10px">${r.entries.map((e) => cardTile(this.card(e.cardId), { owner: e.player, static: true, winner: r.winners.includes(e.player), value: E.scoreLabel(e.score), comment: e.comment })).join('')}</div>
+      <div class="chips">${r.entries.map((e) => '').join('')}${(r.declResults ? Object.keys(r.declResults) : []).map((p) => { const d = r.declResults[p]; let x = ''; if (d.self) x += `<span class="chip ${d.self.hit ? 'hit' : 'miss'}">${esc(p)} 自分${d.self.value} ${d.self.hit ? '的中' : '外'}</span>`; if (d.side) x += `<span class="chip ${d.side.hit ? 'hit' : 'miss'}">${esc(p)}→${esc(d.side.target)} ${d.side.value} ${d.side.hit ? '的中' : '外(実' + d.side.actualBase + ')'}</span>`; return x; }).join('')}</div>`;
+  },
+
+  renderPlayer(v) {
+    const me = this.seat, half = v.currentHalf;
+    switch (v.phase) {
+      case 'basis': return this.waiting('GMが基準を宣言しています', 'まもなく始まります');
+      case 'commit':
+        if (v.committedSeats[me]) return `<div class="panel">${this.committedProgress(v)}${this.waiting('全員のコミット待ち')}</div>`;
+        return `<div class="panel"><h2>手札から1枚を伏せて出す</h2><span class="half-tag">基準: ${half === 'zen' ? '前半' : '後半'}</span>
+          <div class="cards" style="margin-top:10px">${v.myHand.map((id) => cardTile(this.card(id), { sel: this.onlineSel === id, onclick: `Online.selCard('${id}')` })).join('')}</div>
+          <div class="center" style="margin-top:12px"><button class="primary big" ${this.onlineSel ? '' : 'disabled'} onclick="Online.commit()">この札を伏せて出す</button></div></div>`;
+      case 'faces': return `<div class="panel center"><h2>一段目公開 — 札の表</h2><span class="half-tag">基準: ${half === 'zen' ? '前半' : '後半'}</span>${this.facesBoard(v)}<p class="muted">強さはまだ伏せられている。GMの操作を待っています…</p></div>`;
+      case 'declare': {
+        if (v.declaredSeats[me]) return `<div class="panel">${this.declaredProgress(v)}${this.waiting('全員の宣言待ち')}</div>`;
+        const others = v.config.players.filter((q) => q !== me);
+        return `<div class="panel"><h2>予想タイム</h2>${this.facesBoard(v)}
+          <label>自分宣言：自分の札の強さ（的中 +${v.config.hitSelfPoints}）</label>
+          <select id="ol-self"><option value="">宣言しない</option>${[1,2,3,4,5].map((n) => `<option value="${n}">${n}</option>`).join('')}</select>
+          <label>横予想：他人の札の強さ（1件・的中 +${v.config.hitSidePoints}）</label>
+          <select id="ol-tgt"><option value="">予想しない</option>${others.map((q) => `<option value="${q}">${esc(q)} の札</option>`).join('')}</select>
+          <select id="ol-val"><option value="">--</option>${[1,2,3,4,5].map((n) => `<option value="${n}">${n}</option>`).join('')}</select>
+          <p class="muted">※数字が合っていれば的中（+/-は不問）。</p>
+          <div class="center"><button class="primary big" onclick="Online.declare()">宣言を確定</button></div></div>`;
+      }
+      case 'scoresReady': return this.waiting('GMの点数公開待ち');
+      case 'roundEnd': {
+        const r = v.roundResult;
+        const wt = r.winners.length === 1 ? `${r.winners[0]} の勝利！` : `${r.winners.join('・')} 山分け！`;
+        return `<div class="panel"><div class="banner">${esc(wt)} <span class="muted">(+${r.winPoints})</span></div><span class="half-tag">基準: ${r.half === 'zen' ? '前半' : '後半'}</span>${this.resultBoard(r)}<p class="muted center">GMの合図を待っています…</p></div>`;
+      }
+      case 'decisionPick':
+        if (v.decision.pickedSeats[me]) return `<div class="panel">${this.waiting('全員の札選択待ち')}</div>`;
+        return `<div class="panel"><h2>決着ラウンド — 最後の1枚を選ぶ</h2><p class="muted">残しておいた温存札から選べ。強さの決まり方はGMだけが知っている。</p>
+          <div class="cards">${v.myReserved.map((id) => cardTile(this.card(id), { sel: this.onlineSel === id, onclick: `Online.selCard('${id}')` })).join('')}</div>
+          <div class="center" style="margin-top:12px"><button class="primary big" ${this.onlineSel ? '' : 'disabled'} onclick="Online.decisionPick()">この札に賭ける</button></div></div>`;
+      case 'decisionBasis': return this.waiting('GMが最後の基準を宣言しています');
+      case 'decisionDeclare': {
+        if (v.decision.guessedSeats[me]) return this.waiting('全員の予想待ち');
+        return `<div class="panel"><h2>マッチ予想</h2>${v.decision.myPick ? `<div class="cards">${cardTile(this.card(v.decision.myPick), { owner: me, static: true })}</div>` : ''}
+          <label>マッチはこの札に何点？（的中 +${v.config.decision.hitPoints}）</label>
+          <select id="ol-guess"><option value="">予想しない</option>${[1,2,3,4,5].map((n) => `<option value="${n}">${n}</option>`).join('')}</select>
+          <div class="center" style="margin-top:12px"><button class="primary big" onclick="Online.decisionGuess()">確定</button></div></div>`;
+      }
+      case 'decisionReady': return this.waiting('最後の公開を待っています');
+      case 'final': return this.renderFinalV(v);
+      default: return this.waiting('…');
+    }
+  },
+  gmAnswerPanel(v) {
+    if (!v.gm || !Object.keys(v.gm.answers).length) return '';
+    const rows = Object.entries(v.gm.answers).map(([p, a]) => `<tr><td>${esc(p)}</td><td>${esc(this.card(a.cardId).name)}</td><td>${E.scoreLabel(a.zen)}</td><td>${E.scoreLabel(a.kou)}</td><td>${a.overallZen.toFixed(2)}/${a.overallKou.toFixed(2)}</td></tr>`).join('');
+    return `<details style="margin-top:10px"><summary style="color:var(--acc);cursor:pointer">🔑 GM専用：現在の答え（プレイヤーに見せない）</summary>
+      <table style="margin-top:6px"><tr><th>出した人</th><th>札</th><th>前半</th><th>後半</th><th>副基準 前/後</th></tr>${rows}</table></details>`;
+  },
+  renderGM(v) {
+    const half = v.currentHalf, set = v.config.sets[v.setIndex];
+    const ctrlBar = `<div class="center" style="margin-top:10px"><button onclick="Online.gm(()=>Online.host.undo())">⟲ 1手戻す</button><button onclick="Online.gm(()=>Online.host.resync())">再同期</button><button onclick="UI.showRules()">ルール</button></div>`;
+    let main = '';
+    switch (v.phase) {
+      case 'basis':
+        main = set.fixedHalf
+          ? `<h2>基準宣言</h2><p>${esc(set.label)}は <span class="half-tag">${set.fixedHalf === 'zen' ? '前半' : '後半'}</span> 固定。</p><button class="primary big" onclick="Online.gm(()=>Online.host.announceBasis())">「${set.fixedHalf === 'zen' ? '前半' : '後半'}の強さで判定！」</button>`
+          : `<h2>基準宣言</h2><button class="primary" onclick="Online.gm(()=>Online.host.announceBasis('zen'))">前半で判定</button><button class="primary" onclick="Online.gm(()=>Online.host.announceBasis('kou'))">後半で判定</button>`;
+        break;
+      case 'commit': main = `<h2>コミット待ち</h2><span class="half-tag">基準: ${half === 'zen' ? '前半' : '後半'}</span>${this.committedProgress(v)}<p class="muted center">全員が出すと自動で表公開に進みます</p><div class="center" style="margin-top:8px"><button onclick="Online.gm(()=>Online.host.forceComplete())">⏭ 未提出者を自動で埋めて進む</button></div>`; break;
+      case 'faces': main = `<h2>一段目公開</h2>${this.facesBoard(v)}<div class="center" style="margin-top:12px"><button class="primary big" onclick="Online.gm(()=>Online.host.revealFaces())">宣言フェイズへ進める</button></div>`; break;
+      case 'declare': main = `<h2>宣言待ち</h2>${this.facesBoard(v)}${this.declaredProgress(v)}<p class="muted center">全員宣言すると点数公開に進めます</p><div class="center" style="margin-top:8px"><button onclick="Online.gm(()=>Online.host.forceComplete())">⏭ 未提出者を自動で埋めて進む</button></div>`; break;
+      case 'scoresReady': main = `<h2>全員の宣言完了</h2><div class="center"><button class="primary big" onclick="Online.gm(()=>Online.host.revealScores())">🃏 点数を公開</button></div>`; break;
+      case 'roundEnd': { const r = v.roundResult; const wt = r.winners.length === 1 ? `${r.winners[0]} の勝利！` : `${r.winners.join('・')} 山分け！`; main = `<div class="banner">${esc(wt)} (+${r.winPoints})</div>${this.resultBoard(r)}<div class="center" style="margin-top:12px"><button class="primary big" onclick="Online.gm(()=>Online.host.next())">次へ</button></div>`; break; }
+      case 'decisionPick': main = `<h2>決着 — 札選択待ち</h2><div class="chips center" style="justify-content:center">${v.config.players.map((p) => `<span class="chip ${v.decision.pickedSeats[p] ? 'hit' : ''}">${esc(p)} ${v.decision.pickedSeats[p] ? '✓' : '…'}</span>`).join('')}</div><div class="center" style="margin-top:8px"><button onclick="Online.gm(()=>Online.host.forceComplete())">⏭ 未提出者を自動で埋めて進む</button></div>`; break;
+      case 'decisionBasis': main = `<h2>決着の基準宣言</h2><p>この札の強さは <b style="color:var(--acc)">マッチの点数</b> で決まる。</p><button class="primary" onclick="Online.gm(()=>Online.host.decisionAnnounce('zen'))">前半で判定</button><button class="primary" onclick="Online.gm(()=>Online.host.decisionAnnounce('kou'))">後半で判定</button>`; break;
+      case 'decisionDeclare': main = `<h2>マッチ予想待ち</h2><div class="chips center" style="justify-content:center">${v.config.players.map((p) => `<span class="chip ${v.decision.guessedSeats[p] ? 'hit' : ''}">${esc(p)} ${v.decision.guessedSeats[p] ? '✓' : '…'}</span>`).join('')}</div><div class="center" style="margin-top:8px"><button onclick="Online.gm(()=>Online.host.forceComplete())">⏭ 未提出者を自動で埋めて進む</button></div>`; break;
+      case 'decisionReady': main = `<h2>最後の公開</h2><div class="center"><button class="primary big" onclick="Online.gm(()=>Online.host.decisionReveal())">🏆 決着</button></div>`; break;
+      case 'final': return this.renderFinalV(v);
+      default: main = '…';
+    }
+    return `<div class="panel">${main}${this.gmAnswerPanel(v)}</div>${ctrlBar}`;
+  },
+  renderFinalV(v) {
+    const res = v.decision && v.decision.result;
+    const ranked = [...v.config.players].sort((a, b) => v.scores[b] - v.scores[a]);
+    return `<div class="panel center"><h2>最終結果</h2>
+      ${res ? `<div class="banner">決着: ${esc(res.winners.join('・'))} が制した！</div>
+        <div class="cards">${res.entries.map((e) => cardTile(this.card(e.cardId), { owner: e.player, static: true, winner: res.winners.includes(e.player), value: E.scoreLabel(e.score), comment: e.comment })).join('')}</div>
+        <div class="chips">${Object.keys(res.guessResults || {}).map((p) => { const g = res.guessResults[p]; return g ? `<span class="chip ${g.hit ? 'hit' : 'miss'}">${esc(p)} マッチ予想${g.value} ${g.hit ? '的中' : '外'}</span>` : ''; }).join('')}</div>` : ''}
+      <div style="font-size:24px;margin:16px 0">🏆 優勝: <b style="color:var(--acc)">${esc(ranked[0])}</b>（${v.scores[ranked[0]]}点）</div>
+      <button class="primary" onclick="Online.showTimelineV()">全ラウンドのネタばらし</button>
+      <button onclick="Online.exit()">終了して戻る</button></div>`;
+  },
+  showTimelineV() {
+    const v = this.view; const rounds = (v.history || []).filter((h) => h.kind === 'round');
+    modal(`<h2>全ラウンドの記録</h2><div class="timeline">${rounds.map((r) => `<div class="round-log"><b>${v.config.sets[r.set].label} R${r.round + 1}</b> <span class="half-tag">${r.half === 'zen' ? '前半' : '後半'}</span> → ${esc(r.winners.join('・'))}${r.entries.map((e) => `<div class="muted">${esc(e.player)}: ${esc(e.cardName)} = <b>${E.scoreLabel(e.score)}</b>${e.comment ? ' 「' + esc(e.comment) + '」' : ''}</div>`).join('')}</div>`).join('')}</div>`);
+  },
+};
+window.Online = Online;
+
+/* ===== オンラインUI自己テスト（モックDBで全走行＋全座席×全フェーズ描画） ===== */
+window.__onlineSelfTest = async function (seed) {
+  seed = seed || 42;
+  const N = window.Net, EE = window.Engine;
+  const P = EE.DEFAULT_CONFIG.players, GM = EE.DEFAULT_CONFIG.gmName;
+  let checks = 0, errors = [];
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  function rngf(s) { s = s >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
+  const rng = rngf(seed);
+  const db = N.createMockDb();
+  const code = 'SELF';
+  const decks = window.DUMMY_DECKS;
+  await N.createRoom(db, code, { gmUid: 'g', gmName: GM, deckKey: 'dummy', now: 1 });
+  for (let i = 0; i < P.length; i++) { await N.claimSeat(db, code, P[i], 'u' + i, P[i]); await N.setPresence(db, code, 'u' + i); }
+  const host = N.RoomHost(db, code, { engine: EE, deckSets: decks, gmName: GM, now: 1 });
+  const clients = {}; for (const s of P) { clients[s] = N.RoomClient(db, code, s); clients[s].onView(() => {}); }
+  await host.start(); await tick();
+
+  // 各座席のビューを Online.render に流して描画エラーを検出
+  const seenPhases = new Set();
+  async function renderAllSeats(tag) {
+    for (const seat of [...P, GM]) {
+      const v = await db.ref(`rooms/${code}/views/${seat}`).get();
+      if (!v) continue;
+      try {
+        Online.db = db; Online.code = code; Online.seat = seat; Online.view = v; Online.screen = 'game'; ui.onlineActive = true;
+        Online.render();
+        const html = document.getElementById('app').innerHTML;
+        if (/undefined|NaN|\[object Object\]/.test(html)) errors.push(`${tag}/${seat}: 不正な描画(${html.match(/undefined|NaN|\[object Object\]/)})`);
+        checks++;
+      } catch (e) { errors.push(`${tag}/${seat}: 例外 ${e.message}`); }
+    }
+    seenPhases.add(host.state.phase);
+  }
+
+  let guard = 0;
+  while (host.state.phase !== 'final' && guard++ < 400) {
+    const st = host.state;
+    await renderAllSeats(st.phase);
+    switch (st.phase) {
+      case 'basis': await host.announceBasis(st.config.sets[st.setIndex].fixedHalf || (rng() < .5 ? 'zen' : 'kou')); break;
+      case 'commit': for (const seat of P) { const v = await db.ref(`rooms/${code}/views/${seat}`).get(); await clients[seat].sendIntent('commit', { cardId: v.myHand[Math.floor(rng() * v.myHand.length)] }); await tick(); } break;
+      case 'faces': await host.revealFaces(); break;
+      case 'declare': for (const seat of P) { const others = P.filter((q) => q !== seat); await clients[seat].sendIntent('declare', { self: rng() < .7 ? 1 + Math.floor(rng() * 5) : null, side: rng() < .5 ? { target: others[Math.floor(rng() * 2)], value: 1 + Math.floor(rng() * 5) } : null }); await tick(); } break;
+      case 'scoresReady': await host.revealScores(); break;
+      case 'roundEnd': await host.next(); break;
+      case 'decisionPick': for (const seat of P) { const v = await db.ref(`rooms/${code}/views/${seat}`).get(); await clients[seat].sendIntent('decisionPick', { cardId: v.myReserved[Math.floor(rng() * v.myReserved.length)] }); await tick(); } break;
+      case 'decisionBasis': await host.decisionAnnounce(rng() < .5 ? 'zen' : 'kou'); break;
+      case 'decisionDeclare': for (const seat of P) await clients[seat].sendIntent('decisionGuess', { guess: rng() < .8 ? 1 + Math.floor(rng() * 5) : null }); await tick(); break;
+      case 'decisionReady': await host.decisionReveal(); break;
+    }
+    await tick();
+  }
+  await renderAllSeats('final');
+  host.stop(); Object.values(clients).forEach((c) => c.stop());
+  ui.onlineActive = false; Online.view = null;
+  return { ok: errors.length === 0 && host.state.phase === 'final', phase: host.state.phase, checks, phases: [...seenPhases], errors, rounds: host.state.history.filter((h) => h.kind === 'round').length };
+};
+
+render();
+</script>
+</body>
+</html>

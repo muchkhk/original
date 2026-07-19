@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>こたえあわせ（仮）</title>
+<style>
+  :root{
+    --bg:#101418; --panel:#1a2027; --panel2:#232b34; --line:#33404d;
+    --txt:#e8edf2; --dim:#8fa0b0; --acc:#ffb84d; --acc2:#5ec8ff; --win:#7dd87d; --bad:#ff7d7d;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;line-height:1.6;}
+  #app{max-width:760px;margin:0 auto;padding:12px 12px 90px;}
+  header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--line);margin-bottom:10px;}
+  header h1{font-size:16px;margin:0;color:var(--acc);letter-spacing:2px;white-space:nowrap;}
+  .stage{font-size:12px;color:var(--dim);text-align:right;}
+  #sndbtn,#rulesbtn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 6px;margin:0;}
+  .verbadge{font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:6px;padding:1px 5px;}
+  .board{display:flex;gap:8px;margin:8px 0 14px;}
+  .score{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;text-align:center;}
+  .score .nm{font-size:12px;color:var(--dim);} .score .pt{font-size:22px;font-weight:700;}
+  .score.leader{border-color:var(--acc);}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px;}
+  .center{text-align:center;}
+  h2{font-size:15px;margin:0 0 10px;color:var(--acc2);}
+  button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:12px 18px;font-size:15px;cursor:pointer;margin:4px;transition:transform .06s, filter .12s;}
+  button:active{transform:scale(.965);filter:brightness(1.15);}
+  button:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.1);box-shadow:0 3px 10px rgba(255,184,77,.2);transition:transform .12s, filter .12s, box-shadow .12s;}
+  button.primary{background:var(--acc);color:#20180a;font-weight:700;border:none;box-shadow:0 2px 10px rgba(255,184,77,.25);}
+  button.big{width:100%;padding:16px;font-size:17px;}
+  button:disabled{opacity:.35;cursor:default;transform:none;}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;}
+  .card{background:var(--panel2);border:1.5px solid var(--line);border-radius:10px;padding:10px;cursor:pointer;position:relative;}
+  .card.sel{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc);}
+  .card.static{cursor:default;}
+  .card .nm{font-weight:700;font-size:13px;margin-bottom:4px;}
+  .card .meta{font-size:11px;color:var(--dim);}
+  .card .fx{font-size:10.5px;margin-top:6px;white-space:pre-wrap;color:#77879a;font-style:italic;}
+  .card .fx::before{content:"（飾り）";color:#5a6a7a;font-size:9.5px;margin-right:2px;}
+  .card .owner{position:absolute;top:-9px;right:8px;background:var(--acc2);color:#06202e;font-size:11px;font-weight:700;border-radius:8px;padding:0 8px;}
+  .card .val{font-size:30px;font-weight:800;text-align:center;margin:6px 0 2px;color:var(--acc);}
+  .card.winner{border-color:var(--win);box-shadow:0 0 0 2px var(--win);}
+  .comment{background:#141a20;border-left:3px solid var(--acc2);border-radius:0 8px 8px 0;padding:6px 10px;font-size:12px;margin-top:8px;color:#b9c7d4;white-space:pre-wrap;}
+  .cover{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:50;gap:18px;padding:20px;text-align:center;}
+  .cover .who{font-size:26px;font-weight:800;color:var(--acc);}
+  select{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:16px;}
+  label{font-size:13px;color:var(--dim);display:block;margin:10px 0 4px;}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .chip{font-size:12px;border-radius:99px;padding:3px 10px;border:1px solid var(--line);}
+  .chip.hit{background:#153a15;border-color:var(--win);color:var(--win);}
+  .chip.miss{background:#3a1515;border-color:var(--bad);color:var(--bad);}
+  .banner{font-size:20px;font-weight:800;text-align:center;margin:12px 0;color:var(--win);}
+  .half-tag{display:inline-block;background:var(--panel2);border:1px solid var(--acc2);color:var(--acc2);border-radius:8px;padding:2px 12px;font-size:13px;font-weight:700;}
+  #gmbar{position:fixed;bottom:0;left:0;right:0;background:#0b0e11;border-top:1px solid var(--line);display:flex;justify-content:center;gap:8px;padding:8px;z-index:60;}
+  #gmbar button{font-size:12px;padding:8px 14px;margin:0;}
+  #gmdrawer{position:fixed;bottom:52px;left:0;right:0;max-height:55vh;overflow:auto;background:#0e1319;border-top:2px solid var(--acc);padding:14px;z-index:59;display:none;}
+  #gmdrawer.open{display:block;}
+  .gm-title{color:var(--acc);font-weight:700;font-size:13px;margin-bottom:8px;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;justify-content:center;align-items:center;z-index:70;padding:16px;}
+  .modal>div{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:560px;max-height:80vh;overflow:auto;padding:20px;}
+  .timeline .round-log{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;background:var(--panel2);}
+  .muted{color:var(--dim);font-size:12px;}
+  .rulebox p{margin:8px 0;} .rulebox li{margin:6px 0;}
+  /* --- ルール説明の視覚化 --- */
+  .goal-box{background:linear-gradient(135deg,#2a2415,#1f2a1a);border:1.5px solid var(--acc);border-radius:12px;padding:14px 16px;margin:6px 0 16px;}
+  .goal-box .lbl{font-size:12px;color:var(--acc);font-weight:700;letter-spacing:1px;}
+  .goal-box .txt{font-size:16px;font-weight:700;margin-top:4px;}
+  .rsec{margin:16px 0 6px;font-size:14px;font-weight:700;color:var(--acc2);display:flex;align-items:center;gap:6px;}
+  .flow{display:flex;flex-direction:column;gap:0;margin:8px 0;}
+  .flow .step{display:flex;gap:10px;align-items:flex-start;padding:8px 0;}
+  .flow .num{flex:0 0 26px;height:26px;border-radius:50%;background:var(--acc);color:#20180a;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px;}
+  .flow .stxt{font-size:13.5px;padding-top:2px;} .flow .stxt b{color:var(--txt);}
+  .flow .arrow{color:var(--dim);margin-left:12px;font-size:12px;line-height:.6;}
+  .sctbl{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px;}
+  .sctbl th{background:var(--panel2);color:var(--acc2);} .sctbl td,.sctbl th{border:1px solid var(--line);padding:6px 8px;text-align:center;}
+  .callout{background:#141a20;border-left:3px solid var(--acc);border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;}
+  .genre{display:inline-block;background:var(--panel2);border:1px solid var(--acc2);color:var(--acc2);border-radius:99px;padding:2px 12px;font-size:12px;font-weight:700;margin-bottom:8px;}
+  .note-list{list-style:none;padding:0;margin:6px 0;} .note-list li{padding:4px 0 4px 22px;position:relative;font-size:12.5px;color:#b9c7d4;}
+  .note-list li::before{content:"▸";position:absolute;left:6px;color:var(--acc2);}
+  /* --- オンライン --- */
+  .seatrow{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:6px 0;}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;}
+  .dot.on{background:var(--win);box-shadow:0 0 6px var(--win);} .dot.off{background:#555;}
+  .seatrow.me{border-color:var(--acc);}
+  .waitbox{text-align:center;padding:24px 12px;} .waitbox .spin{font-size:30px;animation:pulse 1.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.35;}50%{opacity:1;}}
+  .rc{font-family:monospace;font-size:26px;letter-spacing:6px;color:var(--acc);font-weight:800;}
+  input[type=text]{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:16px;width:100%;}
+  .banner-warn{background:#3a2a15;border:1px solid var(--acc);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--acc);margin:8px 0;}
+  /* 段階公開アニメ */
+  @keyframes rvIn{from{opacity:0;transform:translateY(14px) scale(.95);}to{opacity:1;transform:none;}}
+  .rv{opacity:0;animation:rvIn .55s cubic-bezier(.2,.9,.3,1.2) forwards;}
+  .rv1{animation-delay:.25s;} .rv2{animation-delay:1.25s;} .rv3{animation-delay:2.25s;}
+  .rv-after{animation-delay:3.3s;} .rv-banner{animation-delay:3.8s;}
+  .noanim .rv{animation-delay:0s !important;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="gmbar">
+  <button onclick="UI.toggleGM()">GM専用パネル</button>
+  <button onclick="UI.undo()">⟲ 1手戻す（GM）</button>
+  <button onclick="UI.exportState()">状態保存</button>
+  <button onclick="UI.showRules()">ルール</button>
+</div>
+<div id="gmdrawer"></div>
+<div id="modal-root"></div>
+
+<!-- Firebase SDK（オンライン対戦用。読み込めなくてもホットシート/ソロは動作） -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" onerror="window.__FB_FAIL__=1"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js" onerror="window.__FB_FAIL__=1"></script>
+<!-- __ENGINE__ -->
+<!-- __NET__ -->
+<!-- __DUMMY__ -->
+<!-- __REAL__ -->
+<script>
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD4VRqZjX3Z71ty1CDUTGeSHSDtfaICskg",
+  authDomain: "transmit-74706.firebaseapp.com",
+  databaseURL: "https://transmit-74706-default-rtdb.firebaseio.com",
+  projectId: "transmit-74706",
+  storageBucket: "transmit-74706.firebasestorage.app",
+  messagingSenderId: "949420550646",
+  appId: "1:949420550646:web:7006239a1e77ba0dc87fd7",
+  measurementId: "G-VHB7HWRZ53"
+};
+</script>
+<script>
+'use strict';
+/* =============== ローカル試遊版 UI v0.2（ホットシート） =============== */
+const E = window.Engine;
+const A = E.Actions;
+const PLAYERS = E.DEFAULT_CONFIG.players;
+const HALF_LABEL = { zen: '前半', kou: '後半' };
+/* ---------- 版番号（唯一の定義。titleもヘッダーバッジもここから生成） ---------- */
+const VER = 'v0.7';
+document.title = `こたえあわせ（仮）- ${VER}`;
+function verNum(v) { const m = /v?(\d+)\.(\d+)/.exec(String(v || '')); return m ? Number(m[1]) * 1000 + Number(m[2]) : -1; }
+/* ---------- 同点決着（tieBreakUsed）の表示文言（単一定義。ホットシート/オンライン/ネタばらし共用） ---------- */
+function tieBreakText(t) {
+  if (t === 'overall') return '同点 → 副基準（全体評価）で決着';
+  if (t === 'split') return '副基準も同値 → 山分け';
+  return '';
+}
+
+let S = null;
+let undoStack = [];
+let ui = { solo: false, cover: null, gmOpen: false, gmUnlocked: false, deck: 'real', animOff: false };
+let seatSel = null;
+
+/* ---------- 効果音（WebAudio・全て失敗許容） ---------- */
+const Snd = {
+  on: true, ctx: null,
+  ac() { try { this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)(); if (this.ctx.state === 'suspended') this.ctx.resume(); return this.ctx; } catch (e) { return null; } },
+  tone(freq, dur, type = 'sine', gain = 0.12, when = 0) {
+    if (!this.on) return;
+    const c = this.ac(); if (!c) return;
+    try {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(0, c.currentTime + when);
+      g.gain.linearRampToValueAtTime(gain, c.currentTime + when + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + when + dur);
+      o.connect(g); g.connect(c.destination);
+      o.start(c.currentTime + when); o.stop(c.currentTime + when + dur + 0.05);
+    } catch (e) {}
+  },
+  click() { this.tone(880, 0.06, 'square', 0.05); },
+  commit() { this.tone(220, 0.1, 'triangle', 0.12); this.tone(140, 0.16, 'sine', 0.1, 0.03); },
+  swish() { this.tone(520, 0.16, 'sine', 0.07); this.tone(760, 0.2, 'sine', 0.06, 0.08); },
+  pop(i) { this.tone(500 + i * 180, 0.16, 'triangle', 0.14); this.tone(750 + i * 180, 0.22, 'sine', 0.08, 0.06); },
+  hit() { this.tone(1040, 0.12, 'sine', 0.14); this.tone(1560, 0.25, 'sine', 0.12, 0.1); },
+  miss() { this.tone(190, 0.2, 'sawtooth', 0.05); },
+  win() { [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.28, 'triangle', 0.12, i * 0.11)); },
+  fanfare() { [392, 523, 659, 784, 1046, 1318].forEach((f, i) => this.tone(f, 0.4, 'triangle', 0.12, i * 0.13)); },
+  yourTurn() { this.tone(784, 0.12, 'sine', 0.11); this.tone(1047, 0.16, 'sine', 0.1, 0.1); },
+};
+try { const m = localStorage.getItem('kotaeawase:muted'); if (m !== null) Snd.on = m !== '1'; } catch (e) {}
+
+/* ---------- 通知バナー（ブロッキングダイアログの代替。埋め込みiframeではダイアログが黙って握り潰されるため使わない） ---------- */
+let bannerMsg = null, bannerTimer = null;
+function flashBanner(msg) {
+  bannerMsg = msg;
+  render();
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => { bannerMsg = null; render(); }, 4000);
+}
+/* ---------- 確認モーダル（ブロッキング確認ダイアログの代替） ---------- */
+let _confirmCb = null;
+function confirmModal(msg, onYes) {
+  _confirmCb = onYes;
+  const r = document.getElementById('modal-root');
+  r.innerHTML = `<div class="modal" onclick="if(event.target===this)UI.confirmNo()"><div>
+    <p>${esc(msg)}</p>
+    <div class="center" style="margin-top:14px">
+      <button onclick="UI.confirmNo()">やめる</button>
+      <button class="primary" onclick="UI.confirmYes()">実行する</button>
+    </div>
+  </div></div>`;
+}
+
+/* ---------- 基本機構 ---------- */
+function dispatch(action) {
+  undoStack.push(S);
+  if (undoStack.length > 200) undoStack.shift();
+  try {
+    S = E.reduce(S, action);
+  } catch (e) {
+    undoStack.pop();
+    flashBanner('操作エラー: ' + e.message); // ボタン無効化の復帰も兼ねる（内部でrender()する）
+    return false;
+  }
+  render();
+  return true;
+}
+function pendingPlayers() {
+  if (!S) return [];
+  if (S.phase === 'commit') return PLAYERS.filter((p) => !S.committed[p]);
+  if (S.phase === 'declare') return PLAYERS.filter((p) => !S.declarations[p]);
+  if (S.phase === 'decisionPick') return PLAYERS.filter((p) => !S.decisionState.picks[p]);
+  if (S.phase === 'decisionDeclare') return PLAYERS.filter((p) => !(p in S.decisionState.guesses));
+  return [];
+}
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function cardTile(card, opts = {}) {
+  const cls = ['card', opts.sel ? 'sel' : '', opts.winner ? 'winner' : '', opts.static ? 'static' : '', opts.rv || ''].join(' ');
+  return `<div class="${cls}" ${opts.onclick ? `onclick="${opts.onclick}"` : ''}>
+    ${opts.owner ? `<div class="owner">${esc(opts.owner)}</div>` : ''}
+    <div class="nm">${esc(card.name)}</div>
+    <div class="meta">${esc(card.char || '')}${card.char ? '・' : ''}コスト${esc(card.cost)}・${esc(card.type)}</div>
+    ${opts.value !== undefined ? `<div class="val">${esc(opts.value)}</div>` : ''}
+    ${card.effect ? `<div class="fx">${esc(card.effect)}</div>` : ''}
+    ${opts.comment ? `<div class="comment ${opts.rvc || ''}">💬 ${esc(opts.comment)}</div>` : ''}
+  </div>`;
+}
+function scoreboard() {
+  if (!S || !S.scores || Object.keys(S.scores).length === 0) return '';
+  const max = Math.max(...Object.values(S.scores));
+  return `<div class="board">${PLAYERS.map((p) => `
+    <div class="score ${S.scores[p] === max && max > 0 ? 'leader' : ''}"><div class="nm">${esc(p)}</div><div class="pt">${S.scores[p]}</div></div>`).join('')}</div>`;
+}
+function stageLabel() {
+  if (!S || S.setIndex < 0) return '';
+  if (S.phase.startsWith('decision') || S.phase === 'final') return '決着ラウンド';
+  const set = S.config.sets[S.setIndex];
+  return `${set.label}（${S.roundIndex + 1}/${S.config.roundsPerSet}）`;
+}
+function frame(body) {
+  return `<header><h1>こたえあわせ（仮）</h1><div style="display:flex;align-items:center;gap:4px"><span class="verbadge">${VER}</span><div class="stage">${stageLabel()}</div><button id="rulesbtn" onclick="UI.showRules()" title="ルール">❓</button><button id="sndbtn" onclick="UI.toggleSnd()">${Snd.on ? '🔊' : '🔇'}</button></div></header>${bannerMsg ? `<div class="banner-warn">⚠ ${esc(bannerMsg)}</div>` : ''}${S ? scoreboard() : ''}${body}`;
+}
+function render() {
+  const app = document.getElementById('app');
+  if (ui.onlineActive) { Online.render(); return; }
+  if (ui.cover) { renderCover(); return; }
+  document.getElementById('cover-root')?.remove();
+  const scrollY = window.scrollY; // 再描画でのスクロール飛び防止
+  let body = '';
+  if (!S) body = renderLobby();
+  else switch (S.phase) {
+    case 'basis': body = renderBasis(); break;
+    case 'commit': body = renderSeatGate('コミット'); break;
+    case 'faces': body = renderFaces(); break;
+    case 'declare': body = renderSeatGate('宣言'); break;
+    case 'scoresReady': body = renderScoresReady(); break;
+    case 'roundEnd': body = renderRoundEnd(); break;
+    case 'decisionPick': body = renderSeatGate('決着・札選択'); break;
+    case 'decisionBasis': body = renderDecisionBasis(); break;
+    case 'decisionDeclare': body = renderSeatGate('決着・予想'); break;
+    case 'decisionReady': body = renderDecisionReady(); break;
+    case 'final': body = renderFinal(); break;
+    default: body = `<div class="panel">未対応フェーズ: ${S.phase}</div>`;
+  }
+  const prevPhase = app.dataset.phase;
+  app.innerHTML = frame(body);
+  app.dataset.phase = S ? S.phase : 'lobby';
+  // 同一フェーズ内の再描画（選択・トグル等）はスクロール位置を維持、フェーズが変わったら先頭へ
+  if (prevPhase === app.dataset.phase) window.scrollTo(0, scrollY);
+  else window.scrollTo(0, 0);
+  renderGM();
+}
+function renderSeatOnly(p) {
+  const scrollY = window.scrollY;
+  document.getElementById('app').innerHTML = frame(seatScreen(p));
+  window.scrollTo(0, scrollY);
+  renderGM();
+}
+
+/* ---------- 各画面 ---------- */
+function renderLobby() {
+  const hasReal = !!window.REAL_DECKS;
+  return `<div class="panel center">
+    <h2>v0.6（ローカル・ホットシート）</h2>
+    <p class="muted">1台の端末を回して遊ぶ検証用ビルドです。</p>
+    <label>プレイ形式</label>
+    <select id="mode-sel" onchange="UI.onModeChange(this.value)">
+      <option value="online" ${ui.mode==='online'?'selected':''}>オンライン対戦（各自の端末で／推奨）</option>
+      <option value="hotseat" ${ui.mode==='hotseat'?'selected':''}>ホットシート（1台を回して3人＋GM）</option>
+      <option value="solo" ${ui.mode==='solo'?'selected':''}>ソロテスト（1人で全席を操作）</option>
+    </select>
+    <p class="muted" style="margin-top:6px">配札は「自分の点数での手札平均」が偏りすぎないよう、ほんのり平準化されます。</p>
+    <div id="mode-extra"></div>
+    <button class="primary big" onclick="UI.start()">${ui.mode==='online' ? 'オンラインを始める' : 'ゲーム開始'}</button>
+    <button onclick="UI.showRules()">ルールを読む</button>
+  </div>`;
+}
+function renderBasis() {
+  const set = S.config.sets[S.setIndex];
+  const fixed = set.fixedHalf;
+  return `<div class="panel center">
+    <h2>GM（マッチ）: 基準宣言</h2>
+    ${fixed
+      ? `<p>${esc(set.label)}の判定基準は <span class="half-tag">${HALF_LABEL[fixed]}</span> 固定です。</p>
+         <button class="primary big" onclick="UI.basis()">「このラウンドは【${HALF_LABEL[fixed]}】の強さで判定！」</button>`
+      : `<p>このラウンドの判定基準を宣言してください。</p>
+         <button class="primary" onclick="UI.basis('zen')">前半の強さで判定</button>
+         <button class="primary" onclick="UI.basis('kou')">後半の強さで判定</button>`}
+  </div>`;
+}
+function renderSeatGate(what) {
+  const q = pendingPlayers();
+  if (q.length === 0) return '<div class="panel">…</div>';
+  const p = q[0];
+  if (!ui.solo) {
+    return `<div class="panel center">
+      <h2>${esc(what)}フェイズ</h2>
+      <p>端末を <b style="color:var(--acc)">${esc(p)}</b> に渡してください。</p>
+      <p class="muted">残り: ${q.map(esc).join(' → ')}</p>
+      <button class="primary big" onclick="UI.openSeat('${p}')">${esc(p)} です（画面を開く）</button>
+    </div>`;
+  }
+  seatSel = null;
+  return seatScreen(p);
+}
+function seatScreen(p) {
+  if (S.phase === 'commit') return renderCommit(p);
+  if (S.phase === 'declare') return renderDeclare(p);
+  if (S.phase === 'decisionPick') return renderDecisionPick(p);
+  if (S.phase === 'decisionDeclare') return renderDecisionGuess(p);
+  return '';
+}
+function renderCommit(p) {
+  const hand = S.hands[p];
+  return `<div class="panel">
+    <h2>${esc(p)} の手札（1枚選んで伏せて出す）</h2>
+    <span class="half-tag">基準: ${HALF_LABEL[S.currentHalf]}</span>
+    <div class="cards" style="margin-top:10px">
+      ${hand.map((id) => cardTile(S.cardsById[id], { sel: seatSel === id, onclick: `UI.pick('${id}','${p}')` })).join('')}
+    </div>
+    <div class="center" style="margin-top:12px">
+      <button class="primary big" ${seatSel ? '' : 'disabled'} onclick="this.disabled=true;UI.commit('${p}')">この札を伏せて出す</button>
+    </div>
+  </div>`;
+}
+function renderFaces() {
+  const cards = PLAYERS.map((p) => ({ p, c: S.cardsById[S.committed[p]] }));
+  return `<div class="panel center">
+    <h2>一段目公開 — 札の表</h2>
+    <span class="half-tag">基準: ${HALF_LABEL[S.currentHalf]}</span>
+    <div class="cards" style="margin-top:10px">
+      ${cards.map(({ p, c }, i) => cardTile(c, { owner: p, static: true, rv: `rv rv${i + 1}` })).join('')}
+    </div>
+    <p class="muted">強さはまだ伏せられている。宣言フェイズへ。</p>
+    <button class="primary big" onclick="this.disabled=true;UI.toDeclare()">宣言フェイズへ（GM）</button>
+  </div>`;
+}
+function renderDeclare(p) {
+  const cards = PLAYERS.map((q) => ({ q, c: S.cardsById[S.committed[q]] }));
+  const others = PLAYERS.filter((q) => q !== p);
+  return `<div class="panel">
+    <h2>${esc(p)} の宣言</h2>
+    <div class="cards">${cards.map(({ q, c }) => cardTile(c, { owner: q + (q === p ? '（自分）' : ''), static: true })).join('')}</div>
+    <label>自分宣言：自分の札の強さをピタリ予想（的中 +${S.config.hitSelfPoints}点）</label>
+    <select id="d-self">
+      <option value="">宣言しない</option>
+      ${[1,2,3,4,5].map((v) => `<option value="${v}">${v}</option>`).join('')}
+    </select>
+    <label>横予想：他人の札の強さをピタリ予想（1件まで・的中 +${S.config.hitSidePoints}点）</label>
+    <select id="d-tgt">
+      <option value="">予想しない</option>
+      ${others.map((q) => `<option value="${q}">${esc(q)} の札</option>`).join('')}
+    </select>
+    <select id="d-val">
+      <option value="">--</option>
+      ${[1,2,3,4,5].map((v) => `<option value="${v}">${v}</option>`).join('')}
+    </select>
+    <p class="muted">※ 宣言は整数のみ。実際の強さに+/-が付いていても、数字が合っていれば的中。</p>
+    <div class="center"><button class="primary big" onclick="UI.declare('${p}', this)">宣言を確定</button></div>
+  </div>`;
+}
+function renderScoresReady() {
+  return `<div class="panel center">
+    <h2>全員の宣言が出そろった</h2>
+    <p class="muted">GMの合図で、強さとコメントが公開される。</p>
+    <button class="primary big" onclick="this.disabled=true;UI.reveal()">🃏 点数公開（GM）</button>
+  </div>`;
+}
+function renderRoundEnd() {
+  const r = S.roundResult;
+  const winnersTxt = r.winners.length === 1 ? `${r.winners[0]} の勝利！` : `${r.winners.join('・')} 山分け！`;
+  const anim = ui.animOff ? 'noanim' : '';
+  return `<div class="panel ${anim}">
+    <span class="half-tag">基準: ${HALF_LABEL[r.half]}</span>${r.tieBreakUsed ? `<span class="chip rv rv-after">${esc(tieBreakText(r.tieBreakUsed))}</span>` : ''}
+    <div class="cards" style="margin-top:10px">
+      ${r.entries.map((e, i) => cardTile(S.cardsById[e.cardId], {
+        owner: e.player, static: true, winner: r.winners.includes(e.player),
+        value: E.scoreLabel(e.score), comment: e.comment, rv: `rv rv${i + 1}`,
+      })).join('')}
+    </div>
+    <div class="chips rv rv-after">
+      ${PLAYERS.map((p) => {
+        const d = r.declResults[p]; const parts = [];
+        if (d.self) parts.push(`<span class="chip ${d.self.hit?'hit':'miss'}">${esc(p)} 自分宣言${d.self.value} ${d.self.hit?'的中+'+S.config.hitSelfPoints:'外れ'}</span>`);
+        if (d.side) parts.push(`<span class="chip ${d.side.hit?'hit':'miss'}">${esc(p)}→${esc(d.side.target)} 予想${d.side.value} ${d.side.hit?'的中+'+S.config.hitSidePoints:'外れ(実際'+d.side.actualBase+')'}</span>`);
+        return parts.join('');
+      }).join('')}
+    </div>
+    <div class="banner rv rv-banner">${esc(winnersTxt)} <span class="muted">(+${r.winPoints}${r.winners.length>1?'を山分け(切上)':''}点)</span></div>
+    <div class="center" style="margin-top:12px"><button class="primary big" onclick="this.disabled=true;UI.next()">次へ（GM）</button></div>
+  </div>`;
+}
+function renderDecisionPick(p) {
+  const pool = S.reserved[p];
+  return `<div class="panel">
+    <h2>決着ラウンド — ${esc(p)} の選択</h2>
+    <p class="muted">残しておいた温存札から、最後の1枚を選べ。<br><b style="color:var(--acc)">この1枚の強さは「マッチ（GM）が付けた点数」で決まる。</b><br>ただし前半で判定するか後半で判定するかは、全員が選び終わってから発表される。</p>
+    <div class="cards">${pool.map((id) => cardTile(S.cardsById[id], { sel: seatSel === id, onclick: `UI.pick('${id}','${p}')` })).join('')}</div>
+    <div class="center" style="margin-top:12px"><button class="primary big" ${seatSel?'':'disabled'} onclick="this.disabled=true;UI.decisionPick('${p}')">この札に賭ける</button></div>
+  </div>`;
+}
+function renderDecisionBasis() {
+  return `<div class="panel center">
+    <h2>決着ラウンド — GMの基準宣言</h2>
+    <p>種明かし：この最後の札の強さは <b style="color:var(--acc)">GM・マッチの点数</b> で決まる。</p>
+    <button class="primary" onclick="UI.decisionBasis('zen')">前半の強さで判定</button>
+    <button class="primary" onclick="UI.decisionBasis('kou')">後半の強さで判定</button>
+  </div>`;
+}
+function renderDecisionGuess(p) {
+  const c = S.cardsById[S.decisionState.picks[p]];
+  return `<div class="panel">
+    <h2>${esc(p)} — マッチ予想</h2>
+    <div class="cards">${cardTile(c, { owner: p, static: true })}</div>
+    <label>マッチはこの札に何点を付けたか？（的中 +${S.config.decision.hitPoints}点）</label>
+    <select id="g-val">
+      <option value="">予想しない</option>
+      ${[1,2,3,4,5].map((v) => `<option value="${v}">${v}</option>`).join('')}
+    </select>
+    <div class="center" style="margin-top:12px"><button class="primary big" onclick="UI.decisionGuess('${p}', this)">確定</button></div>
+  </div>`;
+}
+function renderDecisionReady() {
+  return `<div class="panel center">
+    <h2>最後の公開</h2>
+    <button class="primary big" onclick="this.disabled=true;UI.decisionReveal()">🏆 決着（GM）</button>
+  </div>`;
+}
+function renderFinal() {
+  const res = S.decisionState?.result;
+  const ranked = [...PLAYERS].sort((a, b) => S.scores[b] - S.scores[a]);
+  const anim = ui.animOff ? 'noanim' : '';
+  return `<div class="panel center ${anim}">
+    <h2>最終結果</h2>
+    ${res ? `<div class="cards">${res.entries.map((e, i) => cardTile(S.cardsById[e.cardId], { owner: e.player, static: true, winner: res.winners.includes(e.player), value: E.scoreLabel(e.score), comment: e.comment, rv: `rv rv${i + 1}` })).join('')}</div>
+    <div class="chips rv rv-after">${res.tieBreakUsed ? `<span class="chip">${esc(tieBreakText(res.tieBreakUsed))}</span>` : ''}${PLAYERS.map((p) => { const g = res.guessResults[p]; return g ? `<span class="chip ${g.hit?'hit':'miss'}">${esc(p)} マッチ予想${g.value} ${g.hit?'的中+'+S.config.decision.hitPoints:'外れ'}</span>` : ''; }).join('')}</div>
+    <div class="banner rv rv-banner">決着: ${esc(res.winners.join('・'))} が制した！（マッチ基準・${HALF_LABEL[res.half]}）</div>` : ''}
+    <div style="font-size:24px;margin:16px 0" class="rv rv-banner">🏆 優勝: <b style="color:var(--acc)">${esc(ranked[0])}</b>（${S.scores[ranked[0]]}点）</div>
+    <button class="primary" onclick="UI.showTimeline()">全ラウンドのネタばらしを見る</button>
+    <button onclick="UI.showReserved()">温存札を公開する</button>
+  </div>`;
+}
+function renderCover() {
+  const p = ui.cover;
+  let root = document.getElementById('cover-root');
+  if (!root) { root = document.createElement('div'); root.id = 'cover-root'; document.body.appendChild(root); }
+  root.innerHTML = `<div class="cover">
+    <div class="muted">他の人は画面から目を離してください</div>
+    <div class="who">${esc(p)}</div>
+    <button class="primary big" style="max-width:340px" onclick="UI.enterSeat()">画面を開く</button>
+  </div>`;
+}
+
+/* ---------- GMパネル ---------- */
+function renderGM() {
+  const d = document.getElementById('gmdrawer');
+  d.className = ui.gmOpen ? 'open' : '';
+  const btn = document.querySelector('#gmbar button');
+  if (btn) { btn.style.borderColor = ui.gmOpen ? 'var(--acc)' : ''; btn.style.color = ui.gmOpen ? 'var(--acc)' : ''; }
+  if (!ui.gmOpen) { d.innerHTML = ''; return; }
+  if (!S) {
+    d.innerHTML = `<div class="gm-title">GM専用パネル <button style="float:right;font-size:11px;padding:4px 10px" onclick="UI.toggleGM()">閉じる</button></div>
+      <div class="muted">ゲーム未開始です。開始するとここに「現在の答え」が表示されます。</div>`;
+    return;
+  }
+  let rows = '';
+  const half = S.currentHalf || S.decisionState?.half;
+  const isDecision = S.phase.startsWith('decision');
+  const committed = isDecision ? (S.decisionState?.picks || {}) : S.committed;
+  for (const p of PLAYERS) {
+    const id = committed[p];
+    if (!id) continue;
+    const c = S.cardsById[id];
+    const rater = isDecision ? S.config.gmName : p;
+    const z = c.scores.zen[rater], k = c.scores.kou[rater];
+    rows += `<tr><td>${esc(p)}</td><td>${esc(c.name)}</td><td>${E.scoreLabel(z)}</td><td>${E.scoreLabel(k)}</td><td>${c.overall.zen.toFixed(2)}/${c.overall.kou.toFixed(2)}</td><td style="white-space:pre-wrap">${esc(c.comments?.[rater] ?? '')}</td></tr>`;
+  }
+  d.innerHTML = `<div class="gm-title">GM専用 — 現在の答え（判定者: ${isDecision ? 'マッチ' : '各自'} ／ 現基準: ${half ? HALF_LABEL[half] : '未宣言'}）<button style="float:right;font-size:11px;padding:4px 10px" onclick="UI.toggleGM()">閉じる</button></div>
+    ${rows ? `<table><tr><th>出した人</th><th>札</th><th>前半</th><th>後半</th><th>副基準(全体) 前/後</th><th>コメント</th></tr>${rows}</table>` : '<div class="muted">コミット待ち</div>'}
+    <div class="muted" style="margin-top:8px">同点時は副基準（4人平均の全体評価）が高い札が勝ち。それも同点なら山分け。／ フェーズ: ${S.phase} ／ Engine ${S.engineVersion}</div>`;
+}
+
+/* ---------- モーダル・ルール ---------- */
+function modal(html) {
+  const r = document.getElementById('modal-root');
+  r.innerHTML = `<div class="modal" onclick="if(event.target===this)UI.closeModal()"><div>${html}
+    <div class="center" style="margin-top:14px"><button onclick="UI.closeModal()">閉じる</button></div></div></div>`;
+}
+const RULES_HTML = `
+  <div class="rulebox">
+  <span class="genre">🃏 クイズ × カードゲーム</span>
+  <h2 style="margin-top:4px">遊びかた</h2>
+
+  <div class="goal-box">
+    <div class="lbl">🎯 勝利条件（ゴール）</div>
+    <div class="txt">3つの章＋決着ラウンドを通して、<u>いちばん多くポイントを集めた人の勝ち。</u></div>
+  </div>
+
+  <div class="rsec">🃏 どんなゲーム？</div>
+  <p>手札の札を1枚ずつ出し合う。ただし<b>札の「強さ」はどこにも書かれていない。</b>強さを読み、時に予想を宣言して、ポイントを稼ぐゲーム。</p>
+
+  <div class="rsec">🔄 1ラウンドの流れ</div>
+  <div class="flow">
+    <div class="step"><div class="num">1</div><div class="stxt">🎙️ <b>GMが基準を宣言</b>（「前半」か「後半」）</div></div>
+    <div class="arrow">▼</div>
+    <div class="step"><div class="num">2</div><div class="stxt">🂠 全員、手札から1枚を<b>同時に伏せて</b>出す</div></div>
+    <div class="arrow">▼</div>
+    <div class="step"><div class="num">3</div><div class="stxt">👀 札の<b>表（名前）だけ</b>公開。強さはまだ伏せたまま</div></div>
+    <div class="arrow">▼</div>
+    <div class="step"><div class="num">4</div><div class="stxt">💬 <b>予想タイム</b>（任意）：自分の札の強さ＋他人の札の強さを、数字で予想して宣言できる。当たればボーナス</div></div>
+    <div class="arrow">▼</div>
+    <div class="step"><div class="num">5</div><div class="stxt">✨ <b>強さを公開！</b> いちばん強い札を出した人がラウンド勝利＝ポイント獲得</div></div>
+  </div>
+
+  <div class="rsec">🏆 ポイント（得点表）</div>
+  <table class="sctbl">
+    <tr><th>できごと</th><th>第1章</th><th>第2章</th><th>第3章</th><th>決着</th></tr>
+    <tr><td>ラウンド勝利</td><td>3</td><td>4</td><td>5</td><td>6</td></tr>
+    <tr><td>予想が的中（自分・他人）</td><td colspan="3">各 +2</td><td>+3</td></tr>
+  </table>
+
+  <div class="rsec">🎴 全体の構成</div>
+  <p>第1章 → 第2章 → 第3章（各6ラウンド）→ <b>決着ラウンド</b>。各章のはじめに札が8枚配られ、6枚を使う。残した札は決着に持ち越す。</p>
+
+  <div class="callout">🔒 <b>このゲームで遊べるのは、今夜の一度きり。</b>札の強さは<b>すでに決まっていて</b>、その決まり方には法則がある——そしてそれは、<b>あなたたち自身と無関係ではない。</b>気づけるかどうかは、あなた次第。（理由は遊び終わる頃にわかる）</div>
+
+  <div class="rsec">📌 覚えておくこと</div>
+  <ul class="note-list">
+    <li>強さには +/− の中間値があるが、<b>予想は整数が合っていれば的中</b>（「4−」に「4」でOK）。</li>
+    <li>同点のときは、各札の<b>もう一つの隠し数値</b>で決着（これも法則の一部）。それでも並んだら山分け。</li>
+    <li><b>札の効果テキストはただの飾り。</b>このゲームでは一切機能せず、強さとも関係ない。</li>
+    <li>ゲーム中にスマホ・資料・検索へ頼るのは<b>紳士協定で禁止</b>。</li>
+  </ul>
+  </div>`;
+
+/* ---------- 操作 ---------- */
+function shuffled(arr) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function readSel(id) { const el = document.getElementById(id); return el && el.value ? el.value : null; }
+
+window.UI = {
+  onModeChange(v) {
+    ui.mode = v;
+    render(); // ロビー再描画（ボタン文言など）
+  },
+  start() {
+    ui.mode = readSel('mode-sel') || 'hotseat';
+    ui.deck = readSel('deck-sel') || (window.REAL_DECKS ? 'real' : 'dummy');
+    if (ui.mode === 'online') { Snd.click(); Online.openLobby(); return; }
+    ui.solo = ui.mode === 'solo';
+    const src = ui.deck === 'real' && window.REAL_DECKS ? window.REAL_DECKS : window.DUMMY_DECKS;
+    try {
+      // 平準化配札: 各自の「自分の点数」の手札平均差をほんのり縮める
+      S = E.createGame(src.map((d) => E.balanceDeal(d, PLAYERS, E.DEFAULT_CONFIG.handSize)), null, {});
+      S = E.reduce(S, { type: A.START_GAME });
+      undoStack = [];
+    } catch (e) { flashBanner('初期化エラー: ' + e.message); return; }
+    Snd.click();
+    render();
+  },
+  toggleSnd() { Snd.on = !Snd.on; try { localStorage.setItem('kotaeawase:muted', Snd.on ? '0' : '1'); } catch (e) {} render(); },
+  basis(half) { Snd.click(); dispatch({ type: A.ANNOUNCE_BASIS, half }); },
+  openSeat(p) { Snd.click(); ui.cover = p; render(); },
+  enterSeat() {
+    const p = ui.cover; ui.cover = null;
+    document.getElementById('cover-root')?.remove();
+    seatSel = null;
+    Snd.click();
+    renderSeatOnly(p);
+  },
+  pick(id, p) { seatSel = id; Snd.click(); renderSeatOnly(p); },
+  commit(p) {
+    if (!seatSel) return;
+    const id = seatSel; seatSel = null;
+    if (dispatch({ type: A.COMMIT, player: p, cardId: id })) Snd.commit();
+  },
+  toDeclare() { if (dispatch({ type: A.REVEAL_FACES })) { Snd.swish(); } },
+  declare(p, btn) {
+    // DOMから直接読む（内部状態との乖離バグを構造的に排除）
+    const self = readSel('d-self');
+    const tgt = readSel('d-tgt');
+    const val = readSel('d-val');
+    if (tgt && !val) { flashBanner('横予想の数字（1〜5）を選んでください'); return; }
+    if (!tgt && val) { flashBanner('横予想の対象（誰の札か）を選んでください'); return; }
+    if (btn) btn.disabled = true;
+    const okd = dispatch({ type: A.DECLARE, player: p, self: self ? Number(self) : null, side: tgt ? { target: tgt, value: Number(val) } : null });
+    if (okd) Snd.commit();
+  },
+  reveal() {
+    if (!dispatch({ type: A.REVEAL_SCORES })) return;
+    const r = S.roundResult;
+    if (!ui.animOff) {
+      [0.25, 1.25, 2.25].forEach((t, i) => setTimeout(() => Snd.pop(i), t * 1000));
+      setTimeout(() => {
+        const anyHit = PLAYERS.some((p) => r.declResults[p].self?.hit || r.declResults[p].side?.hit);
+        const anyMiss = PLAYERS.some((p) => (r.declResults[p].self && !r.declResults[p].self.hit) || (r.declResults[p].side && !r.declResults[p].side.hit));
+        if (anyHit) Snd.hit(); else if (anyMiss) Snd.miss();
+      }, 3300);
+      setTimeout(() => Snd.win(), 3800);
+    }
+  },
+  next() { Snd.click(); dispatch({ type: A.NEXT }); },
+  decisionPick(p) {
+    if (!seatSel) return;
+    const id = seatSel; seatSel = null;
+    if (dispatch({ type: A.DECISION_PICK, player: p, cardId: id })) Snd.commit();
+  },
+  decisionBasis(h) { Snd.swish(); dispatch({ type: A.DECISION_ANNOUNCE, half: h }); },
+  decisionGuess(p, btn) {
+    const g = readSel('g-val');
+    if (btn) btn.disabled = true;
+    if (dispatch({ type: A.DECISION_DECLARE, player: p, guess: g ? Number(g) : null })) Snd.commit();
+  },
+  decisionReveal() {
+    if (!dispatch({ type: A.DECISION_REVEAL })) return;
+    if (!ui.animOff) {
+      [0.25, 1.25, 2.25].forEach((t, i) => setTimeout(() => Snd.pop(i), t * 1000));
+      setTimeout(() => Snd.fanfare(), 3800);
+    }
+  },
+  toggleGM() {
+    if (!ui.gmUnlocked) {
+      confirmModal('GM専用パネルを開きます。プレイヤーは見ないでください。よろしいですか？', () => {
+        ui.gmUnlocked = true; ui.gmOpen = true; renderGM();
+      });
+      return;
+    }
+    ui.gmOpen = !ui.gmOpen; renderGM();
+  },
+  confirmYes() { const cb = _confirmCb; _confirmCb = null; document.getElementById('modal-root').innerHTML = ''; cb && cb(); },
+  confirmNo() { _confirmCb = null; document.getElementById('modal-root').innerHTML = ''; },
+  undo() {
+    if (undoStack.length === 0) { flashBanner('戻れる手がありません'); return; }
+    confirmModal('直前の操作を1手巻き戻します（GM専用）。よろしいですか？', () => { S = undoStack.pop(); render(); });
+  },
+  exportState() {
+    const blob = new Blob([JSON.stringify({ state: S, ts: new Date().toISOString() }, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'kotaeawase_state.json'; a.click();
+  },
+  showRules() { modal(RULES_HTML); },
+  closeModal() { document.getElementById('modal-root').innerHTML = ''; },
+  showTimeline() {
+    const rounds = S.history.filter((h) => h.kind === 'round');
+    modal(`<h2>全ラウンドの記録</h2><div class="timeline">${rounds.map((r) => `
+      <div class="round-log"><b>${S.config.sets[r.set].label} R${r.round + 1}</b> <span class="half-tag">${HALF_LABEL[r.half]}</span> → ${esc(r.winners.join('・'))}${r.tieBreakUsed ? ` <span class="muted">（${esc(tieBreakText(r.tieBreakUsed))}）</span>` : ''}
+        ${r.entries.map((e) => `<div class="muted">${esc(e.player)}: ${esc(e.cardName)} = <b>${E.scoreLabel(e.score)}</b> ${e.comment ? '「' + esc(e.comment) + '」' : ''}</div>`).join('')}
+      </div>`).join('')}</div>`);
+  },
+  showReserved() {
+    modal(`<h2>温存札の公開</h2>${PLAYERS.map((p) => `<h2 style="color:var(--txt);font-size:13px">${esc(p)}</h2><div class="cards">${
+      S.reserved[p].filter((id) => id !== S.decisionState?.picks?.[p]).map((id) => {
+        const c = S.cardsById[id];
+        return cardTile(c, { static: true, value: `${E.scoreLabel(c.scores.zen[p])} / ${E.scoreLabel(c.scores.kou[p])}`, comment: c.comments?.[p] });
+      }).join('')}</div>`).join('')}
+      <p class="muted">表示は 前半/後半 の順。</p>`);
+  },
+};
+
+/* =========================================================
+ * オンライン対戦コントローラ
+ * ホスト権威（GM=ホスト）。プレイヤーは意図を送るだけ。net.js に依存。
+ * ======================================================= */
+const Online = {
+  db: null, code: null, seat: null, name: null, uid: null,
+  host: null, client: null, view: null, screen: 'role', role: null,
+  deckKey: 'real', roomInfo: { seats: {}, presence: {}, meta: {} }, _roomUnsub: null,
+  onlineSel: null,
+
+  makeUid() { return 'u' + Math.random().toString(36).slice(2, 9); },
+  makeCode() { const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; },
+  makeDb() {
+    if (window.__MOCK_DB__) return window.__MOCK_DB__; // 自己テスト用共有モック
+    if (window.__FB_FAIL__ || typeof firebase === 'undefined') throw new Error('オンライン機能の読み込みに失敗しました（ネット接続をご確認ください）。ホットシート/ソロは利用できます。');
+    return window.Net.createFirebaseDb(window.FIREBASE_CONFIG);
+  },
+
+  openLobby() {
+    ui.onlineActive = true;
+    this.uid = this.uid || this.makeUid();
+    this.screen = 'role';
+    document.getElementById('gmbar').style.display = 'none';
+    this.render();
+  },
+  exit() {
+    try { this.host && this.host.stop(); this.client && this.client.stop(); this._roomUnsub && this._roomUnsub(); this._presenceUnsub && this._presenceUnsub(); } catch (e) {}
+    this.host = this.client = this.view = null; this._roomUnsub = null; this._presenceUnsub = null;
+    ui.onlineActive = false;
+    document.getElementById('gmbar').style.display = '';
+    render();
+  },
+
+  /* ---- ルーム作成/参加 ---- */
+  async doCreate() {
+    this.deckKey = 'real';
+    let db; try { db = this.makeDb(); } catch (e) { this.flashError(e.message); return; }
+    this.db = db; this.code = this.makeCode(); this.seat = PLAYERS.length >= 0 ? E.DEFAULT_CONFIG.gmName : null;
+    this.seat = E.DEFAULT_CONFIG.gmName; this.role = 'gm'; this.name = this.seat;
+    try {
+      await window.Net.createRoom(db, this.code, { gmUid: this.uid, gmName: this.seat, deckKey: this.deckKey, now: this.now(), ver: VER });
+    } catch (e) { this.flashError('作成失敗: ' + e.message); return; }
+    this._presenceUnsub = window.Net.keepPresence(db, this.code, this.uid);
+    this.subscribeRoom();
+    this.subscribeView();
+    this.screen = 'wait';
+    Snd.click(); this.render();
+  },
+  async doJoin() {
+    const code = (document.getElementById('ol-code')?.value || '').toUpperCase().trim();
+    if (!code) { this.flashError('部屋コードを入力してください'); return; }
+    let db; try { db = this.makeDb(); } catch (e) { this.flashError(e.message); return; }
+    this.db = db; this.code = code; this.role = 'player';
+    const meta = await db.ref(`rooms/${code}/meta`).get();
+    if (!meta) { this.flashError('その部屋は見つかりません'); return; }
+    if (meta.ver && meta.ver !== VER) { this.showVerMismatch(meta.ver); return; }
+    this.subscribeRoom();
+    this.screen = 'seatpick';
+    Snd.click(); this.render();
+  },
+  async doClaim(seat) {
+    // オフライン保持者がいる席は引き継ぎ可（リロード復帰対応）
+    const db = this.db, code = this.code;
+    const cur = await db.ref(`rooms/${code}/seats/${seat}`).get();
+    if (cur && cur.uid && cur.uid !== this.uid) {
+      const online = await db.ref(`rooms/${code}/presence/${cur.uid}`).get();
+      if (online === true) { this.flashError('その席は使用中です'); return; }
+    }
+    this.name = seat; // 名前＝選んだ席
+    await db.ref(`rooms/${code}/seats/${seat}`).set({ uid: this.uid, name: seat });
+    this._presenceUnsub = window.Net.keepPresence(db, code, this.uid);
+    this.seat = seat;
+    this.subscribeView();
+    this.screen = 'wait';
+    Snd.click(); this.render();
+  },
+  showVerMismatch(roomVer) {
+    const older = verNum(roomVer) < verNum(VER);
+    this._verMismatchMsg = older
+      ? `この部屋は古い版（${roomVer}）で作られています。部屋を作り直してください。`
+      : `部屋の方が新しい版（${roomVer}）です。ページが古い版です。再読み込みしてください（Ctrl+F5 / スマホは再読み込み）。`;
+    this.screen = 'verMismatch';
+    this.render();
+  },
+  renderVerMismatch() {
+    return `<div class="panel center">
+      <h2>版が一致しません</h2>
+      <div class="banner-warn">⚠ ${esc(this._verMismatchMsg || '')}</div>
+      <p class="muted">このページの版: ${esc(VER)}</p>
+      <button onclick="Online.screen='role';Online.render()">戻る</button>
+    </div>`;
+  },
+  subscribeRoom() {
+    if (this._roomUnsub) this._roomUnsub();
+    this._roomUnsub = window.Net.watchRoom(this.db, this.code, (patch) => {
+      Object.assign(this.roomInfo, patch);
+      if (this.screen === 'wait' || this.screen === 'seatpick') this.render();
+    });
+  },
+  subscribeView() {
+    this.client = window.Net.RoomClient(this.db, this.code, this.seat);
+    this.client.onView((v) => {
+      const was = this._lastNeedsInput;
+      const nowNeeds = this.needsMyInput(v);
+      if (nowNeeds && !was) Snd.yourTurn();
+      this._lastNeedsInput = nowNeeds;
+      this.view = v; if (v) { if (this.screen !== 'game') { this.screen = 'game'; } this.render(); }
+    });
+    this.client.onError && this.client.onError((e) => { if (e && e.step === (this.view && this.view.step)) { this.flashError('操作できませんでした。もう一度お試しください。'); } });
+  },
+  /* 自分の入力待ちに変わった瞬間だけ手番通知音を鳴らすための判定（§5-1） */
+  needsMyInput(v) {
+    if (!v || v.isGM) return false;
+    if (v.phase === 'commit') return !v.committedSeats[this.seat];
+    if (v.phase === 'declare') return !v.declaredSeats[this.seat];
+    if (v.phase === 'decisionPick') return !v.decision.pickedSeats[this.seat];
+    if (v.phase === 'decisionDeclare') return !v.decision.guessedSeats[this.seat];
+    return false;
+  },
+  flashError(msg) { this._err = msg; this.render(); setTimeout(() => { this._err = null; }, 2500); },
+  now() { try { return firebase.database.ServerValue.TIMESTAMP; } catch (e) { return Date.now ? Date.now() : 0; } },
+
+  seatsPresent() {
+    const s = this.roomInfo.seats || {}, pr = this.roomInfo.presence || {};
+    return PLAYERS.filter((p) => s[p] && pr[s[p].uid] === true).length;
+  },
+
+  /* ---- GMがゲーム開始 ---- */
+  async startGame() {
+    if (this._starting || this.host) return; // 二度押し防止
+    this._starting = true;
+    const src = this.deckKey === 'real' && window.REAL_DECKS ? window.REAL_DECKS : window.DUMMY_DECKS;
+    const host = window.Net.RoomHost(this.db, this.code, { engine: E, deckSets: src, gmName: E.DEFAULT_CONFIG.gmName, now: this.now(), onPublish: () => {}, hostUid: this.uid });
+    try { await host.start(); await window.Net.startRoom(this.db, this.code); this.host = host; }
+    catch (e) { this._starting = false; this.flashError('開始失敗: ' + e.message); return; }
+    Snd.win();
+  },
+  /* ---- GM復帰（§2-1）: 端末のローカル保存から、または状態ファイルから ---- */
+  async doResumeGM() {
+    const code = (document.getElementById('ol-resume-code')?.value || '').toUpperCase().trim();
+    if (!code) { this.flashError('部屋コードを入力してください'); return; }
+    let db; try { db = this.makeDb(); } catch (e) { this.flashError(e.message); return; }
+    const meta = await db.ref(`rooms/${code}/meta`).get();
+    if (!meta) { this.flashError('その部屋は見つかりません'); return; }
+    this.db = db; this.code = code;
+    if (meta.ver && meta.ver !== VER) { this.showVerMismatch(meta.ver); return; }
+    const store = window.Net.defaultLocalStore();
+    const saved = store.get(window.Net.hostStoreKey(code));
+    this.role = 'gm'; this.seat = E.DEFAULT_CONFIG.gmName; this.name = this.seat;
+    if (!saved || !saved.phase) {
+      this._resumeCode = code;
+      this.screen = 'gmResumeFile';
+      this.render();
+      return;
+    }
+    await this._startGmHost(null);
+  },
+  async resumeFromFile(inputEl) {
+    const file = inputEl.files && inputEl.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const state = parsed && parsed.state ? parsed.state : parsed;
+      if (!state || !state.phase) throw new Error('状態ファイルの形式が不正です');
+      this.role = 'gm'; this.seat = E.DEFAULT_CONFIG.gmName; this.name = this.seat;
+      await this._startGmHost(state);
+    } catch (e) { this.flashError('読み込み失敗: ' + e.message); }
+  },
+  async _startGmHost(preloadedState) {
+    if (this.host) { try { this.host.stop(); } catch (e) {} this.host = null; }
+    const db = this.db, code = this.code;
+    try { await db.ref(`rooms/${code}/meta/hostUid`).set(this.uid); } catch (e) {} // 二重ホスト防止: 自分を最新のhostUidにする
+    this._presenceUnsub = window.Net.keepPresence(db, code, this.uid);
+    this.subscribeView();
+    const src = this.deckKey === 'real' && window.REAL_DECKS ? window.REAL_DECKS : window.DUMMY_DECKS;
+    const host = window.Net.RoomHost(db, code, { engine: E, deckSets: src, gmName: E.DEFAULT_CONFIG.gmName, now: this.now(), onPublish: () => {}, hostUid: this.uid });
+    try { await host.start(preloadedState); } catch (e) { this.flashError('復帰失敗: ' + e.message); return; }
+    this.host = host;
+    Snd.win();
+  },
+  exportState() {
+    if (!this.host) return;
+    const blob = new Blob([JSON.stringify({ state: this.host.state, ts: new Date().toISOString() }, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `kotaeawase_${this.code}_state.json`; a.click();
+  },
+  // GMアクション（安全ラッパ）
+  async gm(fn) { try { await fn(); } catch (e) { this.flashError('操作エラー: ' + e.message); } },
+
+  /* ---- プレイヤー操作 ---- */
+  async commit() { if (!this.onlineSel) return; const id = this.onlineSel; this.onlineSel = null; await this.client.sendIntent('commit', { cardId: id }); Snd.commit(); this.render(); },
+  async declare() {
+    const self = readSel('ol-self'); const tgt = readSel('ol-tgt'); const val = readSel('ol-val');
+    if (tgt && !val) { this.flashError('横予想の数字を選んでください'); return; }
+    if (!tgt && val) { this.flashError('横予想の対象を選んでください'); return; }
+    await this.client.sendIntent('declare', { self: self ? Number(self) : null, side: tgt ? { target: tgt, value: Number(val) } : null });
+    Snd.commit(); this.render();
+  },
+  async decisionPick() { if (!this.onlineSel) return; const id = this.onlineSel; this.onlineSel = null; await this.client.sendIntent('decisionPick', { cardId: id }); Snd.commit(); this.render(); },
+  async decisionGuess() { const g = readSel('ol-guess'); await this.client.sendIntent('decisionGuess', { guess: g ? Number(g) : null }); Snd.commit(); this.render(); },
+  selCard(id) { this.onlineSel = id; Snd.click(); this.render(); },
+
+  /* ================= 描画 ================= */
+  card(id) { return (this.view && this.view.cardMeta && this.view.cardMeta[id]) || { id, name: '?', cost: '-', type: '-', effect: '' }; },
+  render() {
+    const app = document.getElementById('app');
+    let body;
+    if (this.screen === 'role') body = this.renderRole();
+    else if (this.screen === 'joinform') body = this.renderJoinForm();
+    else if (this.screen === 'seatpick') body = this.renderSeatPick();
+    else if (this.screen === 'wait') body = this.renderWait();
+    else if (this.screen === 'game') body = this.renderGame();
+    else if (this.screen === 'gmResumeCode') body = this.renderGmResumeCode();
+    else if (this.screen === 'gmResumeFile') body = this.renderGmResumeFile();
+    else if (this.screen === 'verMismatch') body = this.renderVerMismatch();
+    else body = '<div class="panel">…</div>';
+    const err = this._err ? `<div class="banner-warn">⚠ ${esc(this._err)}</div>` : '';
+    app.innerHTML = `<header><h1>こたえあわせ（仮）</h1><div style="display:flex;align-items:center;gap:4px">
+      <span class="verbadge">${VER}</span>
+      <div class="stage">${this.screen === 'game' && this.view ? esc(this.stageV()) : 'オンライン'}</div>
+      <button id="rulesbtn" onclick="UI.showRules()" title="ルール">❓</button>
+      <button id="sndbtn" onclick="UI.toggleSnd()">${Snd.on ? '🔊' : '🔇'}</button></div></header>
+      ${this.view && this.screen === 'game' ? this.scoreV() : ''}${err}${body}`;
+  },
+  stageV() {
+    const v = this.view; if (!v) return 'オンライン';
+    if (v.phase.startsWith('decision') || v.phase === 'final') return '決着ラウンド';
+    const set = v.config.sets[v.setIndex];
+    return `${set.label}（${v.roundIndex + 1}/${v.config.roundsPerSet}）`;
+  },
+  scoreV() {
+    const v = this.view, mx = Math.max(...Object.values(v.scores));
+    return `<div class="board">${v.config.players.map((p) => `<div class="score ${v.scores[p] === mx && mx > 0 ? 'leader' : ''}"><div class="nm">${esc(p)}${p === this.seat ? ' (あなた)' : ''}</div><div class="pt">${v.scores[p]}</div></div>`).join('')}</div>`;
+  },
+  renderRole() {
+    const hasReal = !!window.REAL_DECKS;
+    return `<div class="panel center">
+      <h2>オンライン対戦</h2>
+      <p class="muted">各自の端末で参加します。GM（マッチ）が部屋を作り、3人が参加コードで入室します。</p>
+      <div style="margin:14px 0">
+        <div class="rsec" style="justify-content:center">🎙️ GM（マッチ）として部屋を作る</div>
+        <button class="primary big" onclick="Online.doCreate()">部屋を作成</button>
+      </div>
+      <hr style="border-color:var(--line)">
+      <div style="margin:14px 0">
+        <div class="rsec" style="justify-content:center">🎮 プレイヤーとして参加する</div>
+        <button class="primary big" onclick="Online.screen='joinform';Online.render()">参加コードを入力</button>
+      </div>
+      <hr style="border-color:var(--line)">
+      <div style="margin:14px 0">
+        <div class="rsec" style="justify-content:center">🔄 GMとして部屋に復帰</div>
+        <p class="muted" style="font-size:11.5px">リロード・タブ誤閉じ・スマホのバックグラウンド落ちからの復帰用</p>
+        <button onclick="Online.screen='gmResumeCode';Online.render()">GMとして部屋に復帰</button>
+      </div>
+      <button onclick="Online.exit()">戻る</button>
+      <button onclick="UI.showRules()">ルール</button>
+    </div>`;
+  },
+  renderGmResumeCode() {
+    return `<div class="panel center">
+      <h2>GMとして部屋に復帰</h2>
+      <label>部屋コード（4文字）</label>
+      <input type="text" id="ol-resume-code" maxlength="4" style="text-transform:uppercase;text-align:center;letter-spacing:6px;font-family:monospace" placeholder="ABCD">
+      <p class="muted" style="margin-top:8px">この端末に保存された続きがあれば、そのまま復帰します。</p>
+      <button class="primary big" onclick="Online.doResumeGM()">復帰する</button>
+      <button onclick="Online.screen='role';Online.render()">戻る</button>
+    </div>`;
+  },
+  renderGmResumeFile() {
+    return `<div class="panel center">
+      <h2>この端末に保存データがありません</h2>
+      <p class="muted">部屋 <span class="rc" style="font-size:16px">${esc(this._resumeCode || '')}</span> の続きが、この端末には見つかりませんでした（別端末・ストレージ削除など）。</p>
+      <p class="muted">GM画面の「状態保存」で書き出した状態ファイル（.json）があれば、読み込んで復帰できます。</p>
+      <input type="file" id="ol-resume-file" accept=".json" onchange="Online.resumeFromFile(this)">
+      <div style="margin-top:14px"><button onclick="Online.screen='role';Online.render()">戻る</button></div>
+    </div>`;
+  },
+  renderJoinForm() {
+    return `<div class="panel center">
+      <h2>部屋に参加</h2>
+      <label>参加コード（4文字）</label>
+      <input type="text" id="ol-code" maxlength="4" style="text-transform:uppercase;text-align:center;letter-spacing:6px;font-family:monospace" placeholder="ABCD">
+      <p class="muted" style="margin-top:8px">次の画面で自分（からあげ／てかさ／逆廻）を選びます。</p>
+      <button class="primary big" onclick="Online.doJoin()">参加する</button>
+      <button onclick="Online.screen='role';Online.render()">戻る</button>
+    </div>`;
+  },
+  renderSeatPick() {
+    const s = this.roomInfo.seats || {}, pr = this.roomInfo.presence || {};
+    return `<div class="panel">
+      <h2>あなたは誰？（座席を選ぶ）</h2>
+      <p class="muted">部屋 <span class="rc" style="font-size:16px">${esc(this.code)}</span></p>
+      ${PLAYERS.map((p) => {
+        const taken = s[p] && s[p].uid;
+        const online = taken && pr[s[p].uid] === true;
+        const canTake = !taken || !online;
+        return `<div class="seatrow"><span><span class="dot ${online ? 'on' : 'off'}"></span>${esc(p)}${taken ? `（${esc(s[p].name)}${online ? '' : '・オフライン'}）` : '（空席）'}</span>
+          <button class="${canTake ? 'primary' : ''}" ${canTake ? '' : 'disabled'} onclick="Online.doClaim('${p}')">${taken && !online ? '引き継ぐ' : 'この席に座る'}</button></div>`;
+      }).join('')}
+      <button onclick="Online.screen='role';Online.render()">戻る</button>
+    </div>`;
+  },
+  renderWait() {
+    const s = this.roomInfo.seats || {}, pr = this.roomInfo.presence || {};
+    const present = this.seatsPresent();
+    const isGM = this.seat === E.DEFAULT_CONFIG.gmName;
+    const gmSeat = E.DEFAULT_CONFIG.gmName;
+    const gmOnline = s[gmSeat] && pr[s[gmSeat].uid] === true;
+    return `<div class="panel">
+      <h2>待機ロビー</h2>
+      <p class="center">参加コード<br><span class="rc">${esc(this.code)}</span></p>
+      <p class="muted center">この4文字を3人に共有してください。</p>
+      <div class="seatrow"><span><span class="dot ${gmOnline ? 'on' : 'off'}"></span>🎙️ GM: ${esc(gmSeat)}</span><span class="muted">${this.seat === gmSeat ? 'あなた' : ''}</span></div>
+      ${PLAYERS.map((p) => { const t = s[p] && s[p].uid, on = t && pr[s[p].uid] === true; return `<div class="seatrow ${p === this.seat ? 'me' : ''}"><span><span class="dot ${on ? 'on' : 'off'}"></span>${esc(p)}</span><span class="muted">${t ? esc(s[p].name) + (on ? '' : '・切断中') : '空席'}${p === this.seat ? ' (あなた)' : ''}</span></div>`; }).join('')}
+      ${isGM
+        ? `<div class="center" style="margin-top:14px">
+            <p class="muted">${present}/3 人が参加中${present < 3 ? '（全員そろうと開始できます）' : ''}</p>
+            <button class="primary big" ${present >= 3 ? '' : 'disabled'} onclick="Online.startGame()">全員そろった — ゲーム開始</button>
+           </div>`
+        : `<div class="waitbox"><div class="spin">⏳</div><p class="muted">GMの開始を待っています…</p></div>`}
+      <button onclick="Online.exit()">退出</button>
+    </div>`;
+  },
+
+  /* ---- ゲーム画面（ビュー駆動） ---- */
+  renderGame() {
+    const v = this.view;
+    return v.isGM ? this.renderGM(v) : this.renderPlayer(v);
+  },
+  waiting(msg, sub) { return `<div class="panel waitbox"><div class="spin">⏳</div><h2>${esc(msg)}</h2>${sub ? `<p class="muted">${esc(sub)}</p>` : ''}</div>`; },
+  committedProgress(v) {
+    return `<div class="chips center" style="justify-content:center">${v.config.players.map((p) => `<span class="chip ${v.committedSeats[p] ? 'hit' : ''}">${esc(p)} ${v.committedSeats[p] ? '✓' : '…'}</span>`).join('')}</div>`;
+  },
+  declaredProgress(v) {
+    return `<div class="chips center" style="justify-content:center">${v.config.players.map((p) => `<span class="chip ${v.declaredSeats[p] ? 'hit' : ''}">${esc(p)} ${v.declaredSeats[p] ? '✓' : '…'}</span>`).join('')}</div>`;
+  },
+  facesBoard(v) {
+    if (!v.committedCards) return '';
+    return `<div class="cards" style="margin-top:10px">${v.config.players.map((p) => cardTile(this.card(v.committedCards[p]), { owner: p + (p === this.seat ? '（自分）' : ''), static: true })).join('')}</div>`;
+  },
+  resultBoard(r) {
+    return `<div class="cards" style="margin-top:10px">${r.entries.map((e) => cardTile(this.card(e.cardId), { owner: e.player, static: true, winner: r.winners.includes(e.player), value: E.scoreLabel(e.score), comment: e.comment })).join('')}</div>
+      <div class="chips">${r.tieBreakUsed ? `<span class="chip">${esc(tieBreakText(r.tieBreakUsed))}</span>` : ''}${r.entries.map((e) => '').join('')}${(r.declResults ? Object.keys(r.declResults) : []).map((p) => { const d = r.declResults[p]; let x = ''; if (d.self) x += `<span class="chip ${d.self.hit ? 'hit' : 'miss'}">${esc(p)} 自分${d.self.value} ${d.self.hit ? '的中' : '外'}</span>`; if (d.side) x += `<span class="chip ${d.side.hit ? 'hit' : 'miss'}">${esc(p)}→${esc(d.side.target)} ${d.side.value} ${d.side.hit ? '的中' : '外(実' + d.side.actualBase + ')'}</span>`; return x; }).join('')}</div>`;
+  },
+
+  renderPlayer(v) {
+    const me = this.seat, half = v.currentHalf;
+    switch (v.phase) {
+      case 'basis': return this.waiting('GMが基準を宣言しています', 'まもなく始まります');
+      case 'commit':
+        if (v.committedSeats[me]) return `<div class="panel">${this.committedProgress(v)}${this.waiting('全員のコミット待ち')}</div>`;
+        return `<div class="panel"><h2>手札から1枚を伏せて出す</h2><span class="half-tag">基準: ${half === 'zen' ? '前半' : '後半'}</span>
+          <div class="cards" style="margin-top:10px">${v.myHand.map((id) => cardTile(this.card(id), { sel: this.onlineSel === id, onclick: `Online.selCard('${id}')` })).join('')}</div>
+          <div class="center" style="margin-top:12px"><button class="primary big" ${this.onlineSel ? '' : 'disabled'} onclick="Online.commit()">この札を伏せて出す</button></div></div>`;
+      case 'faces': return `<div class="panel center"><h2>一段目公開 — 札の表</h2><span class="half-tag">基準: ${half === 'zen' ? '前半' : '後半'}</span>${this.facesBoard(v)}<p class="muted">強さはまだ伏せられている。GMの操作を待っています…</p></div>`;
+      case 'declare': {
+        if (v.declaredSeats[me]) return `<div class="panel">${this.declaredProgress(v)}${this.waiting('全員の宣言待ち')}</div>`;
+        const others = v.config.players.filter((q) => q !== me);
+        return `<div class="panel"><h2>予想タイム</h2>${this.facesBoard(v)}
+          <label>自分宣言：自分の札の強さ（的中 +${v.config.hitSelfPoints}）</label>
+          <select id="ol-self"><option value="">宣言しない</option>${[1,2,3,4,5].map((n) => `<option value="${n}">${n}</option>`).join('')}</select>
+          <label>横予想：他人の札の強さ（1件・的中 +${v.config.hitSidePoints}）</label>
+          <select id="ol-tgt"><option value="">予想しない</option>${others.map((q) => `<option value="${q}">${esc(q)} の札</option>`).join('')}</select>
+          <select id="ol-val"><option value="">--</option>${[1,2,3,4,5].map((n) => `<option value="${n}">${n}</option>`).join('')}</select>
+          <p class="muted">※数字が合っていれば的中（+/-は不問）。</p>
+          <div class="center"><button class="primary big" onclick="Online.declare()">宣言を確定</button></div></div>`;
+      }
+      case 'scoresReady': return this.waiting('GMの点数公開待ち');
+      case 'roundEnd': {
+        const r = v.roundResult;
+        const wt = r.winners.length === 1 ? `${r.winners[0]} の勝利！` : `${r.winners.join('・')} 山分け！`;
+        return `<div class="panel"><div class="banner">${esc(wt)} <span class="muted">(+${r.winPoints})</span></div><span class="half-tag">基準: ${r.half === 'zen' ? '前半' : '後半'}</span>${this.resultBoard(r)}<p class="muted center">GMの合図を待っています…</p></div>`;
+      }
+      case 'decisionPick':
+        if (v.decision.pickedSeats[me]) return `<div class="panel">${this.waiting('全員の札選択待ち')}</div>`;
+        return `<div class="panel"><h2>決着ラウンド — 最後の1枚を選ぶ</h2><p class="muted">残しておいた温存札から、最後の1枚を選べ。<br><b style="color:var(--acc)">この1枚の強さは「マッチ（GM）が付けた点数」で決まる。</b><br>ただし前半で判定するか後半で判定するかは、全員が選び終わってから発表される。</p>
+          <div class="cards">${v.myReserved.map((id) => cardTile(this.card(id), { sel: this.onlineSel === id, onclick: `Online.selCard('${id}')` })).join('')}</div>
+          <div class="center" style="margin-top:12px"><button class="primary big" ${this.onlineSel ? '' : 'disabled'} onclick="Online.decisionPick()">この札に賭ける</button></div></div>`;
+      case 'decisionBasis': return this.waiting('GMが最後の基準を宣言しています');
+      case 'decisionDeclare': {
+        if (v.decision.guessedSeats[me]) return this.waiting('全員の予想待ち');
+        return `<div class="panel"><h2>マッチ予想</h2>${v.decision.myPick ? `<div class="cards">${cardTile(this.card(v.decision.myPick), { owner: me, static: true })}</div>` : ''}
+          <label>マッチはこの札に何点？（的中 +${v.config.decision.hitPoints}）</label>
+          <select id="ol-guess"><option value="">予想しない</option>${[1,2,3,4,5].map((n) => `<option value="${n}">${n}</option>`).join('')}</select>
+          <div class="center" style="margin-top:12px"><button class="primary big" onclick="Online.decisionGuess()">確定</button></div></div>`;
+      }
+      case 'decisionReady': return this.waiting('最後の公開を待っています');
+      case 'final': return this.renderFinalV(v);
+      default: return this.waiting('…');
+    }
+  },
+  gmAnswerPanel(v) {
+    if (!v.gm || !Object.keys(v.gm.answers).length) return '';
+    const rows = Object.entries(v.gm.answers).map(([p, a]) => `<tr><td>${esc(p)}</td><td>${esc(this.card(a.cardId).name)}</td><td>${E.scoreLabel(a.zen)}</td><td>${E.scoreLabel(a.kou)}</td><td>${a.overallZen.toFixed(2)}/${a.overallKou.toFixed(2)}</td></tr>`).join('');
+    return `<details style="margin-top:10px"><summary style="color:var(--acc);cursor:pointer">🔑 GM専用：現在の答え（プレイヤーに見せない）</summary>
+      <table style="margin-top:6px"><tr><th>出した人</th><th>札</th><th>前半</th><th>後半</th><th>副基準 前/後</th></tr>${rows}</table></details>`;
+  },
+  renderGM(v) {
+    const half = v.currentHalf, set = v.config.sets[v.setIndex];
+    const ctrlBar = `<div class="center" style="margin-top:10px"><button onclick="Online.gm(()=>Online.host.undo())">⟲ 1手戻す</button><button onclick="Online.gm(()=>Online.host.resync())">再同期</button><button onclick="UI.showRules()">ルール</button><button onclick="Online.exportState()">状態保存</button><label style="display:inline-block;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:12px 18px;font-size:15px;cursor:pointer;margin:4px">状態ファイルから復帰<input type="file" accept=".json" style="display:none" onchange="Online.resumeFromFile(this)"></label></div>`;
+    let main = '';
+    switch (v.phase) {
+      case 'basis':
+        main = set.fixedHalf
+          ? `<h2>基準宣言</h2><p>${esc(set.label)}は <span class="half-tag">${set.fixedHalf === 'zen' ? '前半' : '後半'}</span> 固定。</p><button class="primary big" onclick="Online.gm(()=>Online.host.announceBasis())">「${set.fixedHalf === 'zen' ? '前半' : '後半'}の強さで判定！」</button>`
+          : `<h2>基準宣言</h2><button class="primary" onclick="Online.gm(()=>Online.host.announceBasis('zen'))">前半で判定</button><button class="primary" onclick="Online.gm(()=>Online.host.announceBasis('kou'))">後半で判定</button>`;
+        break;
+      case 'commit': main = `<h2>コミット待ち</h2><span class="half-tag">基準: ${half === 'zen' ? '前半' : '後半'}</span>${this.committedProgress(v)}<p class="muted center">全員が出すと自動で表公開に進みます</p><div class="center" style="margin-top:8px"><button onclick="Online.gm(()=>Online.host.forceComplete())">⏭ 未提出者を自動で埋めて進む</button></div>`; break;
+      case 'faces': main = `<h2>一段目公開</h2>${this.facesBoard(v)}<div class="center" style="margin-top:12px"><button class="primary big" onclick="Online.gm(()=>Online.host.revealFaces())">宣言フェイズへ進める</button></div>`; break;
+      case 'declare': main = `<h2>宣言待ち</h2>${this.facesBoard(v)}${this.declaredProgress(v)}<p class="muted center">全員宣言すると点数公開に進めます</p><div class="center" style="margin-top:8px"><button onclick="Online.gm(()=>Online.host.forceComplete())">⏭ 未提出者を自動で埋めて進む</button></div>`; break;
+      case 'scoresReady': main = `<h2>全員の宣言完了</h2><div class="center"><button class="primary big" onclick="Online.gm(()=>Online.host.revealScores())">🃏 点数を公開</button></div>`; break;
+      case 'roundEnd': { const r = v.roundResult; const wt = r.winners.length === 1 ? `${r.winners[0]} の勝利！` : `${r.winners.join('・')} 山分け！`; main = `<div class="banner">${esc(wt)} (+${r.winPoints})</div>${this.resultBoard(r)}<div class="center" style="margin-top:12px"><button class="primary big" onclick="Online.gm(()=>Online.host.next())">次へ</button></div>`; break; }
+      case 'decisionPick': main = `<h2>決着 — 札選択待ち</h2><div class="chips center" style="justify-content:center">${v.config.players.map((p) => `<span class="chip ${v.decision.pickedSeats[p] ? 'hit' : ''}">${esc(p)} ${v.decision.pickedSeats[p] ? '✓' : '…'}</span>`).join('')}</div><div class="center" style="margin-top:8px"><button onclick="Online.gm(()=>Online.host.forceComplete())">⏭ 未提出者を自動で埋めて進む</button></div>`; break;
+      case 'decisionBasis': main = `<h2>決着の基準宣言</h2><p>この札の強さは <b style="color:var(--acc)">マッチの点数</b> で決まる。</p><button class="primary" onclick="Online.gm(()=>Online.host.decisionAnnounce('zen'))">前半で判定</button><button class="primary" onclick="Online.gm(()=>Online.host.decisionAnnounce('kou'))">後半で判定</button>`; break;
+      case 'decisionDeclare': main = `<h2>マッチ予想待ち</h2><div class="chips center" style="justify-content:center">${v.config.players.map((p) => `<span class="chip ${v.decision.guessedSeats[p] ? 'hit' : ''}">${esc(p)} ${v.decision.guessedSeats[p] ? '✓' : '…'}</span>`).join('')}</div><div class="center" style="margin-top:8px"><button onclick="Online.gm(()=>Online.host.forceComplete())">⏭ 未提出者を自動で埋めて進む</button></div>`; break;
+      case 'decisionReady': main = `<h2>最後の公開</h2><div class="center"><button class="primary big" onclick="Online.gm(()=>Online.host.decisionReveal())">🏆 決着</button></div>`; break;
+      case 'final': return this.renderFinalV(v);
+      default: main = '…';
+    }
+    return `<div class="panel">${main}${this.gmAnswerPanel(v)}</div>${ctrlBar}`;
+  },
+  renderFinalV(v) {
+    const res = v.decision && v.decision.result;
+    const ranked = [...v.config.players].sort((a, b) => v.scores[b] - v.scores[a]);
+    return `<div class="panel center"><h2>最終結果</h2>
+      ${res ? `<div class="banner">決着: ${esc(res.winners.join('・'))} が制した！</div>
+        <div class="cards">${res.entries.map((e) => cardTile(this.card(e.cardId), { owner: e.player, static: true, winner: res.winners.includes(e.player), value: E.scoreLabel(e.score), comment: e.comment })).join('')}</div>
+        <div class="chips">${res.tieBreakUsed ? `<span class="chip">${esc(tieBreakText(res.tieBreakUsed))}</span>` : ''}${Object.keys(res.guessResults || {}).map((p) => { const g = res.guessResults[p]; return g ? `<span class="chip ${g.hit ? 'hit' : 'miss'}">${esc(p)} マッチ予想${g.value} ${g.hit ? '的中' : '外'}</span>` : ''; }).join('')}</div>` : ''}
+      <div style="font-size:24px;margin:16px 0">🏆 優勝: <b style="color:var(--acc)">${esc(ranked[0])}</b>（${v.scores[ranked[0]]}点）</div>
+      <button class="primary" onclick="Online.showTimelineV()">全ラウンドのネタばらし</button>
+      <button onclick="Online.exit()">終了して戻る</button></div>`;
+  },
+  showTimelineV() {
+    const v = this.view; const rounds = (v.history || []).filter((h) => h.kind === 'round');
+    modal(`<h2>全ラウンドの記録</h2><div class="timeline">${rounds.map((r) => `<div class="round-log"><b>${v.config.sets[r.set].label} R${r.round + 1}</b> <span class="half-tag">${r.half === 'zen' ? '前半' : '後半'}</span> → ${esc(r.winners.join('・'))}${r.tieBreakUsed ? ` <span class="muted">（${esc(tieBreakText(r.tieBreakUsed))}）</span>` : ''}${r.entries.map((e) => `<div class="muted">${esc(e.player)}: ${esc(e.cardName)} = <b>${E.scoreLabel(e.score)}</b>${e.comment ? ' 「' + esc(e.comment) + '」' : ''}</div>`).join('')}</div>`).join('')}</div>`);
+  },
+};
+window.Online = Online;
+
+/* ===== オンラインUI自己テスト（モックDBで全走行＋全座席×全フェーズ描画） ===== */
+window.__onlineSelfTest = async function (seed) {
+  seed = seed || 42;
+  const N = window.Net, EE = window.Engine;
+  const P = EE.DEFAULT_CONFIG.players, GM = EE.DEFAULT_CONFIG.gmName;
+  let checks = 0, errors = [];
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  function rngf(s) { s = s >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
+  const rng = rngf(seed);
+  const db = N.createMockDb();
+  const code = 'SELF';
+  const decks = window.DUMMY_DECKS;
+  await N.createRoom(db, code, { gmUid: 'g', gmName: GM, deckKey: 'dummy', now: 1 });
+  for (let i = 0; i < P.length; i++) { await N.claimSeat(db, code, P[i], 'u' + i, P[i]); await N.setPresence(db, code, 'u' + i); }
+  const host = N.RoomHost(db, code, { engine: EE, deckSets: decks, gmName: GM, now: 1 });
+  const clients = {}; for (const s of P) { clients[s] = N.RoomClient(db, code, s); clients[s].onView(() => {}); }
+  await host.start(); await tick();
+
+  // 各座席のビューを Online.render に流して描画エラーを検出
+  const seenPhases = new Set();
+  async function renderAllSeats(tag) {
+    for (const seat of [...P, GM]) {
+      const v = await db.ref(`rooms/${code}/views/${seat}`).get();
+      if (!v) continue;
+      try {
+        Online.db = db; Online.code = code; Online.seat = seat; Online.view = v; Online.screen = 'game'; ui.onlineActive = true;
+        Online.render();
+        const html = document.getElementById('app').innerHTML;
+        if (/undefined|NaN|\[object Object\]/.test(html)) errors.push(`${tag}/${seat}: 不正な描画(${html.match(/undefined|NaN|\[object Object\]/)})`);
+        checks++;
+      } catch (e) { errors.push(`${tag}/${seat}: 例外 ${e.message}`); }
+    }
+    seenPhases.add(host.state.phase);
+  }
+
+  let guard = 0;
+  while (host.state.phase !== 'final' && guard++ < 400) {
+    const st = host.state;
+    await renderAllSeats(st.phase);
+    switch (st.phase) {
+      case 'basis': await host.announceBasis(st.config.sets[st.setIndex].fixedHalf || (rng() < .5 ? 'zen' : 'kou')); break;
+      case 'commit': for (const seat of P) { const v = await db.ref(`rooms/${code}/views/${seat}`).get(); await clients[seat].sendIntent('commit', { cardId: v.myHand[Math.floor(rng() * v.myHand.length)] }); await tick(); } break;
+      case 'faces': await host.revealFaces(); break;
+      case 'declare': for (const seat of P) { const others = P.filter((q) => q !== seat); await clients[seat].sendIntent('declare', { self: rng() < .7 ? 1 + Math.floor(rng() * 5) : null, side: rng() < .5 ? { target: others[Math.floor(rng() * 2)], value: 1 + Math.floor(rng() * 5) } : null }); await tick(); } break;
+      case 'scoresReady': await host.revealScores(); break;
+      case 'roundEnd': await host.next(); break;
+      case 'decisionPick': for (const seat of P) { const v = await db.ref(`rooms/${code}/views/${seat}`).get(); await clients[seat].sendIntent('decisionPick', { cardId: v.myReserved[Math.floor(rng() * v.myReserved.length)] }); await tick(); } break;
+      case 'decisionBasis': await host.decisionAnnounce(rng() < .5 ? 'zen' : 'kou'); break;
+      case 'decisionDeclare': for (const seat of P) await clients[seat].sendIntent('decisionGuess', { guess: rng() < .8 ? 1 + Math.floor(rng() * 5) : null }); await tick(); break;
+      case 'decisionReady': await host.decisionReveal(); break;
+    }
+    await tick();
+  }
+  await renderAllSeats('final');
+  host.stop(); Object.values(clients).forEach((c) => c.stop());
+  ui.onlineActive = false; Online.view = null;
+  return { ok: errors.length === 0 && host.state.phase === 'final', phase: host.state.phase, checks, phases: [...seenPhases], errors, rounds: host.state.history.filter((h) => h.kind === 'round').length };
+};
+
+render();
+</script>
+</body>
+</html>
