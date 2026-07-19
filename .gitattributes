@@ -1,0 +1,5 @@
+# Hash-locked Markdown sources use two trailing spaces as intentional hard breaks.
+docs/info_game_knowledge_pack_v2/* -whitespace
+docs/情報系新作_連続KILL横断監査_v1.0.md -whitespace
+docs/情報系新作_探索方針改訂_v2.0.md -whitespace
+docs/情報系新作_現役KILLゲート_v2.0.md -whitespace

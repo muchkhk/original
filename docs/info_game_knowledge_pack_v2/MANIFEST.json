@@ -1,0 +1,42 @@
+{
+  "pack_version": "v2.0",
+  "status": "ACTIVE/CANONICAL",
+  "created_date": "2026-07-19",
+  "files": [
+    {
+      "filename": "00_README_FIRST.md",
+      "size_bytes": 1321,
+      "sha256": "b64ecdbe4bdbadc631b643cc9f3306c056218deb27497ced81c3985ef6c316e6"
+    },
+    {
+      "filename": "01_連続KILL横断監査_v1.0.md",
+      "size_bytes": 15181,
+      "sha256": "b92c1e20c104791df3c40703fad762c3083a242d5ff915c13ef823152defb34e"
+    },
+    {
+      "filename": "02_探索方針改訂_v2.0.md",
+      "size_bytes": 8615,
+      "sha256": "02f6175dd606ce5e9a4e969a5af9cdce6e22c75f26d559becbf2700f2001b7b7"
+    },
+    {
+      "filename": "03_現役KILLゲート_v2.0.md",
+      "size_bytes": 6434,
+      "sha256": "f1518ec2bc92d401fc2083a6c7139e56c4d3d23783c9eebb910cc38cd0f7f7a3"
+    },
+    {
+      "filename": "04_旧KILL系譜マトリクス_v1.0.md",
+      "size_bytes": 20088,
+      "sha256": "405a12b3c27d70e022c51a7682ba24bde3129e9dc3b1c0edfb0d7d7f7bf50cfa"
+    },
+    {
+      "filename": "05_試行2_GPT向け引き継ぎ報告書.md",
+      "size_bytes": 5954,
+      "sha256": "7198686d4d43c262162d3643af9b170e6342cd1f31cf414646bbfa955e553b9a"
+    },
+    {
+      "filename": "06_Work_Codex作業開始プロトコル_v2.0.md",
+      "size_bytes": 2836,
+      "sha256": "336d113653bc3874218b545ed05b9a6b04fbc2a0f0b9e24e2a420adb55dc55ad"
+    }
+  ]
+}

@@ -40,5 +40,35 @@
     "title": "魔女の調合 v1.3 受入試験",
     "sub": "4環境・6ラウンド・切断再接続の最終記録",
     "icon": "✅"
+  },
+  {
+    "file": "情報系新作_現行入口.md",
+    "title": "情報系新作 現行入口",
+    "sub": "連続KILL監査・探索方針v2・現役ゲートv2・必須知見パック",
+    "icon": "🚦"
+  },
+  {
+    "file": "情報系新作_連続KILL横断監査_v1.0.md",
+    "title": "連続KILL横断監査",
+    "sub": "21停止単位と閉鎖済み超系譜の横断監査",
+    "icon": "🧭"
+  },
+  {
+    "file": "情報系新作_探索方針改訂_v2.0.md",
+    "title": "情報系新作 探索方針v2",
+    "sub": "情報OFF土台・人間マイクロテストを先行する現行方針",
+    "icon": "🧱"
+  },
+  {
+    "file": "情報系新作_現役KILLゲート_v2.0.md",
+    "title": "情報系新作 現役KILLゲートv2",
+    "sub": "X0/X1/B1/I1/S0を先行するACTIVEゲート",
+    "icon": "⛔"
+  },
+  {
+    "file": "info_game_knowledge_pack_v2/00_README_FIRST.md",
+    "title": "Work/Codex必須知見パックv2",
+    "sub": "ACTIVE/CANONICAL・ハッシュ検証済みの開始資料",
+    "icon": "📦"
   }
 ]
