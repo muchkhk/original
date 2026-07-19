@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>こたえあわせ（仮）- v0.5</title>
+<title>こたえあわせ（仮）- v0.6</title>
 <style>
   :root{
     --bg:#101418; --panel:#1a2027; --panel2:#232b34; --line:#33404d;
@@ -611,6 +611,11 @@ function viewFor(state, seat) {
   const cfg = state.config;
   const isGM = seat === cfg.gmName;
   const P = cfg.players;
+  // Firebase等が空オブジェクト/配列/nullを削除して読み戻すケースへの防御
+  const committed = state.committed || {};
+  const declarations = state.declarations || {};
+  const hands = state.hands || {};
+  const reserved = state.reserved || {};
   const phase = state.phase;
   const facesShown = ['faces', 'declare', 'scoresReady', 'roundEnd'].includes(phase);
   const cardMeta = {}; // id -> メタのみ（点数なし）
@@ -634,12 +639,12 @@ function viewFor(state, seat) {
   };
 
   for (const p of P) {
-    v.committedSeats[p] = !!state.committed[p];
-    v.declaredSeats[p] = !!state.declarations[p];
+    v.committedSeats[p] = !!committed[p];
+    v.declaredSeats[p] = !!declarations[p];
   }
-  if (facesShown && Object.keys(state.committed).length) {
+  if (facesShown && Object.keys(committed).length) {
     v.committedCards = {};
-    for (const p of P) if (state.committed[p]) { addMeta(state.committed[p]); v.committedCards[p] = state.committed[p]; }
+    for (const p of P) if (committed[p]) { addMeta(committed[p]); v.committedCards[p] = committed[p]; }
   }
   if (phase === 'roundEnd' && state.roundResult) {
     v.roundResult = sanitizeResult(state.roundResult, cfg, addMeta);
@@ -648,14 +653,14 @@ function viewFor(state, seat) {
   v.history = state.history.map((h) => h.kind === 'decision' ? sanitizeDecision(h, cfg, addMeta) : sanitizeResult(h, cfg, addMeta));
 
   // 自分の手札（GMは手札なし）
-  if (!isGM && state.hands[seat]) { v.myHand = state.hands[seat].map((id) => { addMeta(id); return id; }); }
+  if (!isGM && hands[seat]) { v.myHand = hands[seat].map((id) => { addMeta(id); return id; }); }
   // 決着
   if (state.decisionState) {
     const ds = state.decisionState;
     const d = { half: ds.half, pickedSeats: {}, guessedSeats: {}, result: null, myPick: null };
     for (const p of P) { d.pickedSeats[p] = !!ds.picks[p]; d.guessedSeats[p] = (p in ds.guesses); }
-    if (!isGM && state.reserved[seat]) v.myReserved = state.reserved[seat].map((id) => { addMeta(id); return id; });
-    if (isGM) v.gmReserved = Object.fromEntries(P.map((p) => [p, (state.reserved[p] || []).map((id) => { addMeta(id); return id; })]));
+    if (!isGM && reserved[seat]) v.myReserved = reserved[seat].map((id) => { addMeta(id); return id; });
+    if (isGM) v.gmReserved = Object.fromEntries(P.map((p) => [p, (reserved[p] || []).map((id) => { addMeta(id); return id; })]));
     if (!isGM && ds.picks[seat]) { addMeta(ds.picks[seat]); d.myPick = ds.picks[seat]; }
     if (phase === 'final' && ds.result) d.result = sanitizeDecision({ kind: 'decision', ...ds.result }, cfg, addMeta);
     // 決着の札公開（picks）はfinalでのみ全公開。それ以前は自分のpickのみ。
@@ -676,7 +681,7 @@ function viewFor(state, seat) {
       v.gm.answers[p] = { cardId: id, rater, zen: c.scores.zen[rater], kou: c.scores.kou[rater], overallZen: c.overall.zen, overallKou: c.overall.kou, comment: c.comments?.[rater] ?? null };
     }
     // GMは全員の手札も把握（進行補助）。メタのみ＋自分点(=各自の点)を付す。
-    for (const p of P) v.gm.hands[p] = (state.hands[p] || []).map((id) => { addMeta(id); const c = state.cardsById[id]; return { id, zen: c.scores.zen[p], kou: c.scores.kou[p] }; });
+    for (const p of P) v.gm.hands[p] = (hands[p] || []).map((id) => { addMeta(id); const c = state.cardsById[id]; return { id, zen: c.scores.zen[p], kou: c.scores.kou[p] }; });
   }
 
   v.cardMeta = cardMeta;
@@ -817,6 +822,40 @@ function createFirebaseDb(config) {
   return { ref: (path) => wrap(db.ref(path)), _isMock: false, _serverTime: firebase.database.ServerValue ? firebase.database.ServerValue.TIMESTAMP : 0 };
 }
 
+/* ---------------- Firebase読み戻しの正規化 ----------------
+ * RTDBは空オブジェクト/空配列/null値のキーを保存しない。hostStateを読み戻すと
+ * committed:{} 等が丸ごと消え、viewFor/reduce が undefined を座席名で索引して落ちる。
+ * 復帰時に状態の器を再構築する。 */
+function hydrateState(state) {
+  if (!state || !state.config) return state;
+  const P = state.config.players || [];
+  state.committed = state.committed || {};
+  state.declarations = state.declarations || {};
+  state.hands = state.hands || {};
+  state.reserved = state.reserved || {};
+  state.scores = state.scores || {};
+  state.history = state.history || [];
+  for (const p of P) {
+    if (!Array.isArray(state.hands[p])) state.hands[p] = state.hands[p] ? Object.values(state.hands[p]) : [];
+    if (!Array.isArray(state.reserved[p])) state.reserved[p] = state.reserved[p] ? Object.values(state.reserved[p]) : [];
+    if (typeof state.scores[p] !== 'number') state.scores[p] = 0;
+  }
+  // deckSets は配列の配列。RTDBが疎配列をオブジェクト化した場合に備え正規化
+  if (state.deckSets && !Array.isArray(state.deckSets)) state.deckSets = Object.values(state.deckSets);
+  if (Array.isArray(state.deckSets)) state.deckSets = state.deckSets.map((d) => Array.isArray(d) ? d : (d ? Object.values(d) : []));
+  // 決着フェーズでは decisionState 全体（picks:{},guesses:{},half:null,result:null）が
+  // 空になり丸ごと消えることがある。フェーズから必要性を判断して器を復元。
+  const inDecision = state.phase && (state.phase.startsWith('decision') || state.phase === 'final');
+  if (!state.decisionState && inDecision) state.decisionState = { picks: {}, guesses: {}, half: null, result: null };
+  if (state.decisionState) {
+    state.decisionState.picks = state.decisionState.picks || {};
+    state.decisionState.guesses = state.decisionState.guesses || {};
+    if (!('half' in state.decisionState)) state.decisionState.half = null;
+    if (!('result' in state.decisionState)) state.decisionState.result = null;
+  }
+  return state;
+}
+
 /* ---------------- ステップタグ（フェーズ混入防止） ---------------- */
 function stepOf(state) {
   const p = state.phase;
@@ -836,7 +875,7 @@ function RoomHost(db, code, opts) {
 
   async function loadOrCreate() {
     const saved = await db.ref(`${base}/hostState`).get();
-    if (saved && saved.phase) { self.state = saved; return 'resumed'; }
+    if (saved && saved.phase) { self.state = hydrateState(saved); return 'resumed'; }
     const balanced = self.deckSets.map((d) => E.balanceDeal(d, E.DEFAULT_CONFIG.players, E.DEFAULT_CONFIG.handSize));
     self.state = E.reduce(E.createGame(balanced, null, {}), { type: E.Actions.START_GAME });
     return 'created';
@@ -962,7 +1001,7 @@ function watchRoom(db, code, cb) {
 async function startRoom(db, code) { await db.ref(`rooms/${code}/meta/started`).set(true); }
 
 /* ---------------- エクスポート ---------------- */
-const NetAPI = { createMockDb, createFirebaseDb, RoomHost, RoomClient, createRoom, claimSeat, setPresence, watchRoom, startRoom, stepOf, makeId };
+const NetAPI = { createMockDb, createFirebaseDb, RoomHost, RoomClient, createRoom, claimSeat, setPresence, watchRoom, startRoom, stepOf, makeId, hydrateState };
 if (typeof module !== 'undefined' && module.exports) module.exports = NetAPI;
 if (typeof window !== 'undefined') window.Net = NetAPI;
 
@@ -1120,13 +1159,8 @@ function renderSeatOnly(p) {
 function renderLobby() {
   const hasReal = !!window.REAL_DECKS;
   return `<div class="panel center">
-    <h2>v0.5（ローカル・ホットシート）</h2>
+    <h2>v0.6（ローカル・ホットシート）</h2>
     <p class="muted">1台の端末を回して遊ぶ検証用ビルドです。</p>
-    <label>使用デッキ</label>
-    <select id="deck-sel">
-      ${hasReal ? `<option value="real" ${ui.deck==='real'?'selected':''}>本番デッキ（実カード名・GM確認用）</option>` : ''}
-      <option value="dummy" ${ui.deck==='dummy'?'selected':''}>ダミーデッキ(検証用・偽名札)</option>
-    </select>
     <label>プレイ形式</label>
     <select id="mode-sel" onchange="UI.onModeChange(this.value)">
       <option value="online" ${ui.mode==='online'?'selected':''}>オンライン対戦（各自の端末で／推奨）</option>
@@ -1552,7 +1586,7 @@ const Online = {
 
   /* ---- ルーム作成/参加 ---- */
   async doCreate() {
-    this.deckKey = readSel('ol-deck') || 'real';
+    this.deckKey = 'real';
     let db; try { db = this.makeDb(); } catch (e) { alert(e.message); this.exit(); return; }
     this.db = db; this.code = this.makeCode(); this.seat = PLAYERS.length >= 0 ? E.DEFAULT_CONFIG.gmName : null;
     this.seat = E.DEFAULT_CONFIG.gmName; this.role = 'gm'; this.name = this.seat;
@@ -1566,11 +1600,9 @@ const Online = {
   },
   async doJoin() {
     const code = (document.getElementById('ol-code')?.value || '').toUpperCase().trim();
-    const name = (document.getElementById('ol-name')?.value || '').trim();
     if (!code) { alert('部屋コードを入力してください'); return; }
-    if (!name) { alert('名前を入力してください'); return; }
     let db; try { db = this.makeDb(); } catch (e) { alert(e.message); this.exit(); return; }
-    this.db = db; this.code = code; this.name = name; this.role = 'player';
+    this.db = db; this.code = code; this.role = 'player';
     const meta = await db.ref(`rooms/${code}/meta`).get();
     if (!meta) { alert('その部屋は見つかりません'); return; }
     this.subscribeRoom();
@@ -1585,7 +1617,8 @@ const Online = {
       const online = await db.ref(`rooms/${code}/presence/${cur.uid}`).get();
       if (online === true) { alert('その席は使用中です'); return; }
     }
-    await db.ref(`rooms/${code}/seats/${seat}`).set({ uid: this.uid, name: this.name });
+    this.name = seat; // 名前＝選んだ席
+    await db.ref(`rooms/${code}/seats/${seat}`).set({ uid: this.uid, name: seat });
     await window.Net.setPresence(db, code, this.uid);
     this.seat = seat;
     this.subscribeView();
@@ -1614,10 +1647,12 @@ const Online = {
 
   /* ---- GMがゲーム開始 ---- */
   async startGame() {
+    if (this._starting || this.host) return; // 二度押し防止
+    this._starting = true;
     const src = this.deckKey === 'real' && window.REAL_DECKS ? window.REAL_DECKS : window.DUMMY_DECKS;
-    this.host = window.Net.RoomHost(this.db, this.code, { engine: E, deckSets: src, gmName: E.DEFAULT_CONFIG.gmName, now: this.now(), onPublish: () => {} });
-    try { await this.host.start(); await window.Net.startRoom(this.db, this.code); }
-    catch (e) { alert('開始失敗: ' + e.message); return; }
+    const host = window.Net.RoomHost(this.db, this.code, { engine: E, deckSets: src, gmName: E.DEFAULT_CONFIG.gmName, now: this.now(), onPublish: () => {} });
+    try { await host.start(); await window.Net.startRoom(this.db, this.code); this.host = host; }
+    catch (e) { this._starting = false; alert('開始失敗: ' + e.message); return; }
     Snd.win();
   },
   // GMアクション（安全ラッパ）
@@ -1670,8 +1705,6 @@ const Online = {
       <p class="muted">各自の端末で参加します。GM（マッチ）が部屋を作り、3人が参加コードで入室します。</p>
       <div style="margin:14px 0">
         <div class="rsec" style="justify-content:center">🎙️ GM（マッチ）として部屋を作る</div>
-        <label style="text-align:center">使用デッキ</label>
-        <select id="ol-deck">${hasReal ? '<option value="real">本番デッキ（実カード名）</option>' : ''}<option value="dummy">ダミーデッキ（検証用）</option></select>
         <button class="primary big" onclick="Online.doCreate()">部屋を作成</button>
       </div>
       <hr style="border-color:var(--line)">
@@ -1688,8 +1721,7 @@ const Online = {
       <h2>部屋に参加</h2>
       <label>参加コード（4文字）</label>
       <input type="text" id="ol-code" maxlength="4" style="text-transform:uppercase;text-align:center;letter-spacing:6px;font-family:monospace" placeholder="ABCD">
-      <label style="margin-top:10px">あなたの名前</label>
-      <input type="text" id="ol-name" placeholder="からあげ / てかさ / 逆廻">
+      <p class="muted" style="margin-top:8px">次の画面で自分（からあげ／てかさ／逆廻）を選びます。</p>
       <button class="primary big" onclick="Online.doJoin()">参加する</button>
       <button onclick="Online.screen='role';Online.render()">戻る</button>
     </div>`;
@@ -1697,8 +1729,8 @@ const Online = {
   renderSeatPick() {
     const s = this.roomInfo.seats || {}, pr = this.roomInfo.presence || {};
     return `<div class="panel">
-      <h2>座席を選ぶ</h2>
-      <p class="muted">部屋 <span class="rc" style="font-size:16px">${esc(this.code)}</span> ／ あなた: ${esc(this.name)}</p>
+      <h2>あなたは誰？（座席を選ぶ）</h2>
+      <p class="muted">部屋 <span class="rc" style="font-size:16px">${esc(this.code)}</span></p>
       ${PLAYERS.map((p) => {
         const taken = s[p] && s[p].uid;
         const online = taken && pr[s[p].uid] === true;
