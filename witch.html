@@ -171,7 +171,7 @@
      ③ 古ければ「?v=新版」という別URLへ飛ぶ → キャッシュが原理的に効かない
    ============================================================ */
 (function(){
-  const PAGE_VER = "1.6";
+  const PAGE_VER = "1.7";
 
   // ① 残存 Service Worker を解除（過去の実験などで残っていると、強制リロードすら効かなくなる）
   if ("serviceWorker" in navigator) {
@@ -633,6 +633,7 @@ let _roomRefs=[], _hbTimer=null, _serverOffset=0;
 // render() が参照する再描画またぎの状態をすべて初期化する。
 let SOLO={active:false}, soloCuts=[];
 let NSOLO={active:false}, nsoloCuts=[];
+let TAKEOVER={active:false};
 let _inJoin="", _lobbyRounds=null, _lobbyAdv=false;
 let localCuts=[];
 
@@ -741,12 +742,173 @@ async function restoreSavedRoom(){
     if(!state.exists){ forgetRoom(); showError("前回の部屋が見つかりませんでした（期限切れ、または削除された可能性があります）。"); return; }
     if(saved.kind==="spectator"){ resumeSpectatorRoom(saved.code,state); return; }
     const seat=findSeatByUid(state.seats,myUid);
-    if(seat===null){ forgetRoom(); showError("前回の部屋にあなたの席がないため、再接続できませんでした。"); return; }
+    if(seat===null){
+      forgetRoom();
+      // 保存していた席番号に、既に別UIDが座っていれば「引き継ぎ済み」と分かる（無言failさせない・実態に合わせる）。
+      const takenOver = saved.seat!=null && state.seats && state.seats[saved.seat] && state.seats[saved.seat].uid && state.seats[saved.seat].uid!==myUid;
+      showError(takenOver
+        ? "あなたの席は、進行役の承認により別の参加者に引き継がれました。観戦するか、空いている席があれば引き継ぎを申請できます。"
+        : "前回の部屋にあなたの席がないため、再接続できませんでした。");
+      return;
+    }
     resumePlayerRoom(saved.code,state,seat);
   }catch(e){
     // 一時的な通信エラーでは復帰情報を消さない。
     showError("前回の部屋への再接続に失敗しました："+e.message);
   }
+}
+
+// ============ 席の引き継ぎ（ホスト承認方式） ============
+// UID消失（P0-1）で開始済み部屋に戻れなくなったプレイヤーのための復帰導線。
+// なりすまし判定は、既に全好みを読める信頼済みゲームマスターであるホストに委ねる
+// （ホストの信頼境界はこれ以上増えない）。ホスト不在中は機能しない（採点停止と同じ制約）。
+function takeoverRoomPath(p){ return "roomsV2/"+TAKEOVER.code+(p?"/"+p:""); }
+let _takeoverRefs=[];
+function clearTakeoverSubs(){
+  _takeoverRefs.forEach(([p,cb])=>{ try{_db.ref(takeoverRoomPath(p)).off("value",cb);}catch(e){} });
+  _takeoverRefs=[];
+}
+function takeoverCandidateSeats(){
+  const seats=(TAKEOVER.seats)||{}; const r=[];
+  for(let s=0;s<4;s++){ if(seats[s]&&!seatActiveIn(seats,s)) r.push(s); }
+  return r;
+}
+function checkTakeoverSeated(){
+  if(!TAKEOVER.active||TAKEOVER.phase!=="pending")return;
+  const seats=TAKEOVER.seats||{};
+  for(const s of Object.keys(seats)){
+    if(seats[s]&&seats[s].uid===myUid){
+      const seat=parseInt(s), code=TAKEOVER.code;
+      clearTakeoverSubs(); TAKEOVER={active:false};
+      finishTakeoverJoin(code,seat);
+      return;
+    }
+  }
+}
+async function finishTakeoverJoin(code,seat){
+  try{ const state=await readRoomState(code); resumePlayerRoom(code,state,seat); }
+  catch(e){ showError("引き継ぎ後の復帰に失敗："+e.message); }
+}
+function subscribeTakeoverObserve(){
+  clearTakeoverSubs();
+  const onMeta=_db.ref(takeoverRoomPath("meta")).on("value",s=>{ TAKEOVER.meta=s.val(); touch(); });
+  const onSeats=_db.ref(takeoverRoomPath("seats")).on("value",s=>{ TAKEOVER.seats=s.val()||{}; checkTakeoverSeated(); touch(); });
+  const onMyReq=_db.ref(takeoverRoomPath("takeoverRequests/"+myUid)).on("value",s=>{ TAKEOVER.myRequest=s.val(); touch(); });
+  _takeoverRefs=[["meta",onMeta],["seats",onSeats],["takeoverRequests/"+myUid,onMyReq]];
+}
+function enterTakeoverFlow(code,state){
+  TAKEOVER={active:true,code,phase:"choose",meta:state.meta,seats:state.seats||{},myRequest:null,chosenSeat:null};
+  subscribeTakeoverObserve();
+  render();
+}
+async function submitTakeoverRequest(seat){
+  const nameEl=document.getElementById("takeoverName");
+  const name=((nameEl&&nameEl.value)||"").replace(/[<>&"'`]/g,"").trim().slice(0,12);
+  if(!name){ showError("名前を入力してください。"); return; }
+  myName=name; localStorage.setItem("witch_name",name);
+  try{
+    await withRetry(()=>_db.ref(takeoverRoomPath("takeoverRequests/"+myUid)).set({seat,name,ts:now(),status:"pending"}));
+    TAKEOVER.chosenSeat=seat; TAKEOVER.phase="pending"; render();
+  }catch(e){ showError("引き継ぎ申請の送信に失敗："+e.message); }
+}
+function cancelTakeoverRequest(){
+  if(TAKEOVER.active&&TAKEOVER.myRequest){ _db.ref(takeoverRoomPath("takeoverRequests/"+myUid)).remove().catch(()=>{}); }
+  clearTakeoverSubs(); TAKEOVER={active:false}; render();
+}
+function retryTakeoverChoice(){
+  if(TAKEOVER.myRequest){ _db.ref(takeoverRoomPath("takeoverRequests/"+myUid)).remove().catch(()=>{}); }
+  TAKEOVER.myRequest=null; TAKEOVER.phase="choose"; TAKEOVER.chosenSeat=null; render();
+}
+async function spectateTakeoverRoom(){
+  const code=TAKEOVER.code;
+  clearTakeoverSubs();
+  if(TAKEOVER.myRequest){ _db.ref("roomsV2/"+code+"/takeoverRequests/"+myUid).remove().catch(()=>{}); }
+  TAKEOVER={active:false};
+  try{
+    const state=await readRoomState(code);
+    if(!state.exists){ showError("その合言コードの部屋が見つかりません。"); return; }
+    resumeSpectatorRoom(code,state);
+  }catch(e){ showError("観戦に失敗："+e.message); }
+}
+function takeoverHTML(){
+  const t=TAKEOVER;
+  const spectateBtn=`<button class="ghost" onclick="spectateTakeoverRoom()">👁 観戦する</button>`;
+  if(t.phase==="pending"){
+    if(t.myRequest&&t.myRequest.status==="rejected"){
+      return `<div class="panel"><div class="eyebrow">🙅 申請は却下されました</div>
+        <div class="kv">進行役が、この引き継ぎ申請を承認しませんでした。</div>
+        <div class="row" style="margin-top:12px">
+          <button class="primary" onclick="retryTakeoverChoice()">別の席で申請し直す</button>
+          ${spectateBtn}
+          <button class="ghost" onclick="cancelTakeoverRequest()">やめる（ホームへ）</button>
+        </div></div>`;
+    }
+    return `<div class="panel"><div class="eyebrow">🙋 席の引き継ぎを申請中</div>
+      <div class="kv">進行役の承認を待っています…</div>
+      <div class="hint"><span class="hi">✎</span><span>進行役が不在の場合、承認までお待ちください。</span></div>
+      <div class="row" style="margin-top:12px">${spectateBtn}<button class="ghost" onclick="cancelTakeoverRequest()">申請を取り下げる</button></div></div>`;
+  }
+  const candidates=takeoverCandidateSeats();
+  let html=`<div class="panel"><div class="eyebrow">🙋 席の引き継ぎを申請する</div>
+    <div class="kv" style="margin-bottom:10px">この部屋は既に開始されています。切断中の席だけ、進行役の承認を得て引き継げます。</div>`;
+  if(!candidates.length){
+    html+=`<div class="kv">今は引き継げる席（切断中の席）がありません。しばらく待つか、観戦してください。</div>
+      <div class="row" style="margin-top:10px">${spectateBtn}<button class="ghost" onclick="cancelTakeoverRequest()">戻る</button></div></div>`;
+    return html;
+  }
+  html+=`<div class="row" style="margin-bottom:10px"><label class="kv">あなたの名前：</label><input id="takeoverName" maxlength="12" placeholder="なまえ" value="${(myName||'').replace(/"/g,'')}"></div>`;
+  for(const s of candidates){
+    const oldName=t.seats[s]&&t.seats[s].name;
+    html+=`<div class="seat"><span class="dot off"></span><span class="kv">席${s+1}（元「${esc(oldName||'')}」）</span><button class="ghost" style="margin-left:auto" onclick="submitTakeoverRequest(${s})">この席を引き継ぐ</button></div>`;
+  }
+  html+=`<div class="row" style="margin-top:10px">${spectateBtn}<button class="ghost" onclick="cancelTakeoverRequest()">戻る</button></div></div>`;
+  return html;
+}
+// ホスト側：申請の承認・却下
+function hostTakeoverPanel(){
+  if(!ST.isHost||!ST.takeoverRequests)return "";
+  const entries=Object.entries(ST.takeoverRequests).filter(([,req])=>req&&req.status!=="rejected");
+  if(!entries.length)return "";
+  let html=`<div class="panel"><div class="eyebrow">🙋 席の引き継ぎ申請</div>`;
+  for(const [uid,req] of entries){
+    const oldName=ST.seats&&ST.seats[req.seat]&&ST.seats[req.seat].name;
+    html+=`<div class="spellbook"><span>${esc(req.name)} さんが 席${req.seat+1}（元「${esc(oldName||'')}」）の引き継ぎを申請</span>
+      <span><button class="ghost" onclick="approveTakeover('${uid}')">承認</button> <button class="ghost" onclick="rejectTakeover('${uid}')">却下</button></span></div>`;
+  }
+  html+=`</div>`;
+  return html;
+}
+async function rejectTakeover(uid){
+  if(!ST.isHost)return;
+  try{ await withRetry(()=>_db.ref(roomPath("takeoverRequests/"+uid+"/status")).set("rejected")); }
+  catch(e){ showError("却下の送信に失敗："+e.message); }
+}
+async function approveTakeover(uid){
+  if(!ST.isHost)return;
+  const req=ST.takeoverRequests&&ST.takeoverRequests[uid];
+  if(!req){ showError("その申請は既に処理済みか見つかりません。"); return; }
+  const seat=req.seat;
+  try{
+    const oldUid=ST.seats&&ST.seats[seat]&&ST.seats[seat].uid;
+    const res=await withRetry(()=>_db.ref(roomPath("seats/"+seat)).transaction(cur=>{
+      if(!cur)return; // 空席（想定外）→中止
+      if(cur.uid!==oldUid)return; // 別経路で既に変わっている→中止（レースガード）
+      if(cur.online!==false)return; // 元プレイヤーが復帰していた→中止（レースガード）
+      return {uid,name:req.name,lastSeen:now(),online:true};
+    }));
+    if(!res.committed){
+      showError("この席は既に元の参加者が復帰したか、他の申請で埋まりました。");
+      await rejectTakeover(uid);
+      return;
+    }
+    // 好みの移行＋申請ノード削除は、複数パスの1回のupdateで原子的に行う。
+    const recSnap=await withRetry(()=>_db.ref(roomPath("privateRecipes/"+oldUid)).get());
+    const updates={};
+    updates["privateRecipes/"+uid]=recSnap.val();
+    updates["privateRecipes/"+oldUid]=null;
+    updates["takeoverRequests/"+uid]=null;
+    await withRetry(()=>_db.ref(roomPath("")).update(updates));
+  }catch(e){ showError("引き継ぎの承認に失敗："+e.message); }
 }
 
 // ============ 放置部屋のTTL掃除（起動時・失敗しても本体を止めない） ============
@@ -805,7 +967,7 @@ async function joinRoom(){
     if(!state.exists){ showError("その合言コードの部屋が見つかりません。"); return; }
     const existingSeat=findSeatByUid(state.seats,myUid);
     if(existingSeat!==null){ resumePlayerRoom(code,state,existingSeat); return; }
-    if(state.meta.phase!=="lobby"){ showError("その部屋は既にゲーム開始済みです。新しいUIDでは途中参加できません。"); return; }
+    if(state.meta.phase!=="lobby"){ enterTakeoverFlow(code,state); return; }
     clearSubs(); ST.room=code; ST.spectator=false; ST.isHost=(state.meta.host===myUid);
     // 空席を探して着席（教訓#1: transactionで競合回避）
     const seat=await claimEmptySeat();
@@ -855,6 +1017,10 @@ function subscribeRoom(){
   const onGame=_db.ref(roomPath("game")).on("value",s=>{ ST.game=s.val(); onGameUpdate(); touch(); });
   const onReveal=_db.ref(roomPath("reveal")).on("value",s=>{ ST.allRecipes=s.val(); touch(); });
   _roomRefs=[["meta",onMeta],["seats",onSeats],["game",onGame],["reveal",onReveal]];
+  if(ST.isHost){
+    const onTakeover=_db.ref(roomPath("takeoverRequests")).on("value",s=>{ ST.takeoverRequests=s.val()||{}; touch(); });
+    _roomRefs.push(["takeoverRequests",onTakeover]);
+  }
   ensureRecipeSub();
 }
 // 生存フラグ＋切断検知（教訓#4）を指定席に張る
@@ -893,7 +1059,8 @@ function clearSubs(){
 }
 function startHeartbeat(){ const beat=()=>{ if(ST.room&&ST.mySeat!=null) _db.ref(roomPath("seats/"+ST.mySeat)).update({lastSeen:now(),online:true}).catch(()=>{}); }; beat(); _hbTimer=setInterval(beat,HEARTBEAT_MS); }
 function touch(){ ST.lastUpdate=Date.now(); render(); }
-function seatActive(s){ const seat=ST.seats&&ST.seats[s]; if(!seat)return false; if(seat.online===false)return false; return (now()-(seat.lastSeen||0))<TIMEOUT_MS; }
+function seatActiveIn(seats,s){ const seat=seats&&seats[s]; if(!seat)return false; if(seat.online===false)return false; return (now()-(seat.lastSeen||0))<TIMEOUT_MS; }
+function seatActive(s){ return seatActiveIn(ST.seats,s); }
 function existingSeats(){ const r=[]; for(let s=0;s<4;s++)if(ST.seats&&ST.seats[s])r.push(s); return r; }
 function liveSeats(){ const r=[]; for(let s=0;s<4;s++)if(seatActive(s))r.push(s); return r; }
 
@@ -1170,6 +1337,12 @@ function helpHTML(){
     <h3>🏆 勝敗（${T.keen()}）</h3>
     <p>ゲーム終了時、全儀式のチーム合計を「完璧な分け方で得られた合計」で割った割合が${T.keen()}です。合理的に協力するだけでは8割どまり——<b>仲間を読み切って初めて</b>100%に近づきます。</p>
     <p class="kv">🌕 大魔女 92%以上　🌔 熟達の魔女 82%以上　🌓 一人前の魔女 70%以上　🌒 見習いを抜けし者 58%以上　🌑 駆け出しの魔女 それ未満</p>
+
+    <h3>📜 好みの一覧</h3>
+    <p class="kv">配られる好みは、この21種類（通常18種＋秘伝6種）から選ばれます。</p>
+    <details><summary style="cursor:pointer;color:var(--candle-soft)">全21種類を表示（タップで開閉）</summary>
+    ${poolListHTML()}
+    </details>
 
     <h3>📚 用語集</h3>
     <p><b style="color:var(--candle-soft)">坩堝</b> ― 素材を入れる器。分けられた素材の塊がそれぞれ一つの坩堝になる。</p>
@@ -1826,6 +1999,19 @@ function matChip(i,small){return `<span class="mat" style="background:${MAT[i].c
 function bookList(recipes,pile){return recipes.map(r=>{const fired=pile?scoreRecipe(r,pile)!==0:null;const cls=r.pt<0?"rpt neg":"rpt";let mark="";if(pile)mark=fired?` <span class="fire">✦叶</span>`:` <span class="nofire">·</span>`;
   return `<div class="spellbook"><span><span class="tag ${r.type}">${TYPE[r.type].icon} ${TYPE[r.type].jp}</span> ${recipeText(r)}</span><span class="${cls}">${r.pt>0?"+":""}${r.pt}${mark}</span></div>`;}).join("");}
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+// 好みプール一覧（R-1：読みはベイズ推論であり、事前分布＝プール構成全体を全員の共通知識にする）
+function poolListHTML(){
+  const groups=[
+    {type:"pair",label:"🤝 同居"},{type:"cnt2",label:"🔢 個数"},{type:"solo",label:"1️⃣ 単体"},
+    {type:"abs2",label:"⛔ 二種忌避"},{type:"abs",label:"🚫 忌避"},
+  ];
+  let html="";
+  for(const g of groups){
+    html+=`<p class="kv" style="margin-top:10px"><b style="color:var(--moon)">${g.label}</b></p>`+bookList(POOL.filter(r=>r.type===g.type),null);
+  }
+  html+=`<p class="kv" style="margin-top:10px"><b style="color:var(--moon)">🌟 秘伝（上級モードのみ）</b></p>`+bookList(HARD,null);
+  return html;
+}
 function nameOf(s){ if(NSOLO.active&&NSOLO.names)return esc(NSOLO.names[s]||NAMES_FALLBACK[s]); return esc((ST.seats&&ST.seats[s]&&ST.seats[s].name)||NAMES_FALLBACK[s]); }
 function pill(s){ return `<b style="color:${PCOL[s]}">${nameOf(s)}</b>`; }
 
@@ -1883,6 +2069,7 @@ function render(){
   const setApp=html=>{ app.innerHTML=html; restoreScrollPositions(app,_scroll); };
   if(SOLO.active){ setApp(soloHTML()); return; }
   if(NSOLO.active){ setApp(nsoloHTML()); return; }
+  if(TAKEOVER.active){ setApp(takeoverHTML()); return; }
   if(!ST.room){ setApp(homeHTML()); return; }
   let html=statusBar();
   const phase=ST.meta&&ST.meta.phase;
@@ -1893,10 +2080,21 @@ function render(){
   else { html+=`<div class="panel"><div class="kv">部屋を同期中…</div></div>`; }
   setApp(html);
 }
+// アプリ内ブラウザ（WebView）検出。誤検出で警告が出る分には害が小さいため保守的に広めに判定する。
+// iOSプライベートブラウズは確実な検出が困難なため対象外（警告文言でもカバーしない）。
+function isInAppBrowser(){
+  const ua=(navigator.userAgent||"");
+  return /\bLine\/|Instagram|FBAN|FBAV|Twitter/i.test(ua);
+}
+function inAppBrowserWarningHTML(){
+  if(!isInAppBrowser())return "";
+  return `<div class="hint" style="margin-bottom:10px"><span class="hi">⚠</span><span>アプリ内ブラウザ（LINE/Instagram/X等）で開いています。<b>再読み込み時に再接続できないことがあります。</b>SafariやChromeで開き直すことをおすすめします。</span></div>`;
+}
 function homeHTML(){
   return `<div class="panel" style="padding:0;overflow:hidden;border:none;background:none;margin-bottom:14px">${heroSVG()}</div>
   <div class="panel">
     <div class="eyebrow">✨ オンラインで遊ぶ</div>
+    ${inAppBrowserWarningHTML()}
     <p class="kv" style="margin:2px 0 12px">3〜4人・無言・協力。仲間と同じ部屋に入り、素材を分け合って全員の魔力合計を高めます。自分の好みは自分だけに見えます。</p>
     <div class="row" style="margin-bottom:12px"><label class="kv">あなたの名前：</label><input id="name" maxlength="12" placeholder="なまえ" value="${(myName||'').replace(/"/g,'')}" oninput="myName=this.value.replace(/[<>&quot;'\`]/g,'')"></div>
     <div class="row">
@@ -1935,6 +2133,7 @@ function fallbackCopyText(text,done,fail){
 function lobbyHTML(){
   const seats=liveSeats(); const n=seats.length;
   let html=`<div class="panel"><div class="eyebrow">🕯️ 参加者を待っています</div>
+    ${inAppBrowserWarningHTML()}
     <div class="kv">この合言コードを仲間に伝えてください：</div>
     <div class="code">${ST.room}</div>
     <div class="row" style="justify-content:center;margin-top:2px"><button class="ghost" id="copyCodeBtn" style="font-size:12px;padding:5px 10px" onclick="copyRoomCode()">📋 コードをコピー</button></div>
@@ -1988,6 +2187,8 @@ function gameHTML(){
     html+=`</div>`;
   }
   html+=`</div>`;
+
+  html+=hostTakeoverPanel();
 
   // 自分の好み（表示分離：自席のみ）
   html+=`<div class="panel"><div class="eyebrow">📖 あなた（${pill(ST.mySeat)}）の好み <span class="kv">— あなただけに見えています・毎儀式、坩堝の中身で判定</span></div>`;
@@ -2078,6 +2279,7 @@ function endHTML(){
     <div class="kv" style="margin:8px 0">${rank.l}</div>
     <div class="meterwrap" style="max-width:420px;margin:12px auto 4px"><div class="meter" style="width:${Math.max(0,Math.min(100,keen))}%"></div></div>
     <div style="font-family:var(--grimoire);color:var(--candle)">通算の冴え ${keen}%</div></div>`;
+  html+=hostTakeoverPanel();
   html+=`<div class="panel"><div class="eyebrow">🏁 総まとめ（${g.n}人・${g.rounds}儀式）</div>
     <div class="kv">総魔力 <b style="color:var(--good)">${g.teamTotal}</b>　通算冴え <b>${keen}%</b>（合理目安 ${ratP}%）</div>
     <div class="kv" style="margin-top:6px">儀式ごと：${g.history.map(h=>`${h.round}:${h.roundScore>0?'+':''}${h.roundScore}${h.pct!=null?`（冴え${h.pct}%）`:''}`).join("　")}</div></div>`;
@@ -2108,7 +2310,7 @@ restoreSavedRoom();
 cleanupExpiredRooms();
 </script>
 <a id="homelink" href="index.html" title="ゲーム一覧へ戻る">🏠 ゲーム一覧</a>
-<div id="verbadge">魔女の調合 v1.6</div>
+<div id="verbadge">魔女の調合 v1.7</div>
 <style>
 #homelink{position:fixed;left:8px;bottom:6px;z-index:9999;
  font:11px/1.5 system-ui,sans-serif;letter-spacing:.04em;text-decoration:none;
