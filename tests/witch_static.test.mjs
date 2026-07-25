@@ -183,18 +183,32 @@ test("v1.7-A: 席の引き継ぎフローが一通り配線されている", () 
   assert.match(html, /if\(TAKEOVER\.active\)\{ setApp\(takeoverHTML\(\)\); return; \}/);
   // 申請：自UIDの子ノードへ書く
   const submit = html.slice(html.indexOf("async function submitTakeoverRequest("), html.indexOf("function cancelTakeoverRequest()"));
-  assert.match(submit, /takeoverRoomPath\("takeoverRequests\/"\+myUid\)\)\.set\(\{seat,name,ts:now\(\),status:"pending"\}\)/);
+  assert.match(submit, /takeoverRoomPath\("takeoverRequests\/"\+myUid\)\)\.set\(\{seat,name,ts:now\(\),status:"pending",prevUid\}\)/);
   // ホスト承認：transactionでのレースガード（別経路で変わっていないか・元プレイヤーが復帰していないか）
   const approve = html.slice(html.indexOf("async function approveTakeover("), html.indexOf("// ============ 放置部屋のTTL掃除"));
   assert.match(approve, /if\(cur\.uid!==oldUid\)return;/);
   assert.match(approve, /if\(cur\.online!==false\)return;/);
-  assert.match(approve, /updates\["privateRecipes\/"\+uid\]=recSnap\.val\(\)/);
-  assert.match(approve, /updates\["privateRecipes\/"\+oldUid\]=null/);
-  assert.match(approve, /updates\["takeoverRequests\/"\+uid\]=null/);
+  assert.match(approve, /await finishTakeoverMigration\(uid,oldUid\);/);
   assert.match(approve, /if\(!ST\.isHost\)return;/);
-  const reject = html.slice(html.indexOf("async function rejectTakeover("), html.indexOf("async function approveTakeover("));
+  const migrate = html.slice(html.indexOf("async function finishTakeoverMigration("), html.indexOf("async function approveTakeover("));
+  assert.match(migrate, /updates\["privateRecipes\/"\+newUid\]=recSnap\.val\(\)/);
+  assert.match(migrate, /updates\["privateRecipes\/"\+oldUid\]=null/);
+  assert.match(migrate, /updates\["takeoverRequests\/"\+newUid\]=null/);
+  const reject = html.slice(html.indexOf("async function rejectTakeover("), html.indexOf("async function finishTakeoverMigration("));
   assert.match(reject, /if\(!ST\.isHost\)return;/);
   assert.match(reject, /\.set\("rejected"\)/);
+});
+
+test("v1.7.1-A: 承認処理は中断状態（席は差し替え済み・好み未移行）から回復できる", () => {
+  const submit = html.slice(html.indexOf("async function submitTakeoverRequest("), html.indexOf("function cancelTakeoverRequest()"));
+  assert.match(submit, /const prevUid=\(TAKEOVER\.seats&&TAKEOVER\.seats\[seat\]&&TAKEOVER\.seats\[seat\]\.uid\)\|\|""/);
+  const approve = html.slice(html.indexOf("async function approveTakeover("), html.indexOf("// ============ 放置部屋のTTL掃除"));
+  assert.match(approve, /if\(seatData&&seatData\.uid===uid\)\{/);
+  assert.match(approve, /if\(!req\.prevUid\)\{ showError/);
+  assert.match(approve, /await finishTakeoverMigration\(uid,req\.prevUid\);/);
+  assert.match(approve, /const oldUid=req\.prevUid\|\|\(seatData&&seatData\.uid\);/);
+  const migrate = html.slice(html.indexOf("async function finishTakeoverMigration("), html.indexOf("async function approveTakeover("));
+  assert.match(migrate, /if\(recSnap\.exists\(\)\)\{/); // 既に移行済みなら好み側は触らない＝冪等
 });
 
 test("v1.7-A: 旧UIDが引き継ぎ後に再接続した場合、実態に合わせた文言を表示する", () => {
@@ -230,4 +244,17 @@ test("v1.7-C: 好みプール一覧が通常18枚＋秘伝6種すべてを型ご
   assert.match(help, /<h3>📜 好みの一覧<\/h3>/);
   assert.match(help, /\$\{poolListHTML\(\)\}/);
   assert.match(help, /<details>/);
+});
+
+test("v2.1-B: 称号ゲージはRANKSだけを唯一の基準として描画する（閾値のハードコード重複がない）", () => {
+  assert.match(html, /const RANKS=\[/);
+  assert.match(html, /function rankFor\(pct\)\{ return RANKS\.find\(r=>pct>=r\.min\); \}/);
+  const gauge = html.slice(html.indexOf("function titleGaugeHTML("), html.indexOf("function endHTML()"));
+  assert.match(gauge, /const bounds=RANKS\.slice\(\)\.reverse\(\)/);
+  assert.match(gauge, /end-start/);
+  assert.doesNotMatch(gauge, /9[028]|58|70/); // 閾値の数値がゲージ内に再ハードコードされていない
+  const endFn = html.slice(html.indexOf("function endHTML()"), html.indexOf("// 定期再描画"));
+  assert.match(endFn, /\$\{titleGaugeHTML\(keen\)\}/);
+  const spectatorFn = html.slice(html.indexOf("function spectatorHTML()"), html.indexOf("function highlightPanel("));
+  assert.match(spectatorFn, /\$\{titleGaugeHTML\(keen\)\}/);
 });

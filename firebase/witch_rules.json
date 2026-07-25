@@ -113,10 +113,11 @@
           "$uid": {
             ".read": "auth != null && ($uid === auth.uid || root.child('roomsV2').child($code).child('meta').child('host').val() === auth.uid)",
             ".write": "auth != null && ($uid === auth.uid || root.child('roomsV2').child($code).child('meta').child('host').val() === auth.uid)",
-            ".validate": "newData.hasChildren(['seat','name','ts'])",
+            ".validate": "newData.hasChildren(['seat','name','ts','prevUid'])",
             "seat": { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 3" },
             "name": { ".validate": "newData.isString() && newData.val().length <= 24" },
             "ts": { ".validate": "newData.isNumber()" },
+            "prevUid": { ".validate": "newData.isString() && newData.val().length <= 128" },
             "status": { ".validate": "newData.isString() && (newData.val() === 'pending' || newData.val() === 'rejected')" },
             "$other": { ".validate": false }
           }

@@ -1,0 +1,135 @@
+{
+  "meta": {
+    "script": "sim/witch_rank_distribution/rational_keen_sim.py",
+    "master_seed": 20260724,
+    "trials_per_condition": 1200,
+    "generated_at": "2026-07-23T16:22:56.549565+00:00",
+    "note": "NPC戦略は「合理」のみ（rationalReach＝合理的だが全知ではないチームの実到達点）。witch.htmlの凍結コアロジックをPythonへ値を変えずに移植。"
+  },
+  "conditions": {
+    "3人・通常": {
+      "label": "3人・通常",
+      "n_trials": 1200,
+      "mean": 86.284,
+      "median": 86.562,
+      "stdev": 5.613,
+      "p10": 78.747,
+      "p25": 82.759,
+      "p50": 86.562,
+      "p75": 90.196,
+      "p90": 93.333,
+      "min": 67.857,
+      "max": 100.0,
+      "threshold_exceed_rate": {
+        ">=58": 1.0,
+        ">=70": 0.9958,
+        ">=82": 0.7942,
+        ">=92": 0.16
+      }
+    },
+    "3人・上級": {
+      "label": "3人・上級",
+      "n_trials": 1200,
+      "mean": 79.159,
+      "median": 79.452,
+      "stdev": 8.621,
+      "p10": 68.1,
+      "p25": 73.145,
+      "p50": 79.452,
+      "p75": 85.474,
+      "p90": 90.079,
+      "min": 51.678,
+      "max": 100.0,
+      "threshold_exceed_rate": {
+        ">=58": 0.9892,
+        ">=70": 0.84,
+        ">=82": 0.3867,
+        ">=92": 0.0592
+      }
+    },
+    "4人・通常": {
+      "label": "4人・通常",
+      "n_trials": 1200,
+      "mean": 82.609,
+      "median": 82.716,
+      "stdev": 4.313,
+      "p10": 77.03,
+      "p25": 79.803,
+      "p50": 82.716,
+      "p75": 85.439,
+      "p90": 88.144,
+      "min": 68.9,
+      "max": 94.949,
+      "threshold_exceed_rate": {
+        ">=58": 1.0,
+        ">=70": 0.9975,
+        ">=82": 0.5592,
+        ">=92": 0.0142
+      }
+    },
+    "4人・上級": {
+      "label": "4人・上級",
+      "n_trials": 1200,
+      "mean": 72.833,
+      "median": 73.069,
+      "stdev": 6.511,
+      "p10": 64.251,
+      "p25": 68.494,
+      "p50": 73.069,
+      "p75": 77.124,
+      "p90": 80.992,
+      "min": 55.83,
+      "max": 92.829,
+      "threshold_exceed_rate": {
+        ">=58": 0.9892,
+        ">=70": 0.6767,
+        ">=82": 0.075,
+        ">=92": 0.0008
+      }
+    }
+  },
+  "shift_4to3_normal": {
+    "58": {
+      "quantile_in_target_pct": 0.0,
+      "equivalent_threshold_in_source": 68.9,
+      "shift": 10.9
+    },
+    "70": {
+      "quantile_in_target_pct": 0.42,
+      "equivalent_threshold_in_source": 70.83,
+      "shift": 0.83
+    },
+    "82": {
+      "quantile_in_target_pct": 20.58,
+      "equivalent_threshold_in_source": 79.1,
+      "shift": -2.9
+    },
+    "92": {
+      "quantile_in_target_pct": 84.0,
+      "equivalent_threshold_in_source": 86.96,
+      "shift": -5.04
+    }
+  },
+  "shift_4to3_advanced": {
+    "58": {
+      "quantile_in_target_pct": 1.08,
+      "equivalent_threshold_in_source": 58.01,
+      "shift": 0.01
+    },
+    "70": {
+      "quantile_in_target_pct": 16.0,
+      "equivalent_threshold_in_source": 66.17,
+      "shift": -3.83
+    },
+    "82": {
+      "quantile_in_target_pct": 61.33,
+      "equivalent_threshold_in_source": 74.56,
+      "shift": -7.44
+    },
+    "92": {
+      "quantile_in_target_pct": 94.08,
+      "equivalent_threshold_in_source": 83.13,
+      "shift": -8.87
+    }
+  }
+}

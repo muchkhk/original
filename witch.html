@@ -128,6 +128,12 @@
   .hint{color:var(--muted);font-size:12.5px;margin-top:8px;display:flex;gap:5px}.hint .hi{color:var(--candle)}
   .meterwrap{background:rgba(20,14,30,.6);border-radius:8px;height:14px;overflow:hidden;margin-top:8px;border:1px solid var(--line)}
   .meter{height:100%;background:linear-gradient(90deg,#8a5a5a,var(--candle),var(--good));transition:width .6s}
+  .rankgauge{position:relative;margin:16px auto 4px;max-width:420px;padding-top:10px}
+  .rankgauge-track{display:flex;height:10px;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+  .rankgauge-zone{height:100%}
+  .rankgauge-marker{position:absolute;top:0;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid var(--candle-soft);transform:translateX(-6px);filter:drop-shadow(0 0 4px rgba(232,180,90,.7))}
+  .rankgauge-ticks{position:relative;height:14px;margin-top:3px;font-family:var(--grimoire);font-size:10.5px;color:var(--muted)}
+  .rankgauge-ticks span{position:absolute;transform:translateX(-50%)}
   .seat{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:9px;margin:5px 0;background:rgba(30,22,44,.4)}
   .dot{width:9px;height:9px;border-radius:50%;flex:none}
   .dot.on{background:var(--good);box-shadow:0 0 8px var(--good)}.dot.off{background:var(--bad)}
@@ -171,7 +177,7 @@
      ③ 古ければ「?v=新版」という別URLへ飛ぶ → キャッシュが原理的に効かない
    ============================================================ */
 (function(){
-  const PAGE_VER = "1.7";
+  const PAGE_VER = "1.7.1";
 
   // ① 残存 Service Worker を解除（過去の実験などで残っていると、強制リロードすら効かなくなる）
   if ("serviceWorker" in navigator) {
@@ -806,8 +812,11 @@ async function submitTakeoverRequest(seat){
   const name=((nameEl&&nameEl.value)||"").replace(/[<>&"'`]/g,"").trim().slice(0,12);
   if(!name){ showError("名前を入力してください。"); return; }
   myName=name; localStorage.setItem("witch_name",name);
+  // prevUid: 申請時点でその席に座っていたUID。承認が中断された場合の回復パスで、
+  // 「誰から誰へ好みを移すか」を復元するための唯一の手掛かりになる（v1.7.1）。
+  const prevUid=(TAKEOVER.seats&&TAKEOVER.seats[seat]&&TAKEOVER.seats[seat].uid)||"";
   try{
-    await withRetry(()=>_db.ref(takeoverRoomPath("takeoverRequests/"+myUid)).set({seat,name,ts:now(),status:"pending"}));
+    await withRetry(()=>_db.ref(takeoverRoomPath("takeoverRequests/"+myUid)).set({seat,name,ts:now(),status:"pending",prevUid}));
     TAKEOVER.chosenSeat=seat; TAKEOVER.phase="pending"; render();
   }catch(e){ showError("引き継ぎ申請の送信に失敗："+e.message); }
 }
@@ -883,13 +892,37 @@ async function rejectTakeover(uid){
   try{ await withRetry(()=>_db.ref(roomPath("takeoverRequests/"+uid+"/status")).set("rejected")); }
   catch(e){ showError("却下の送信に失敗："+e.message); }
 }
+// 好みの移行＋申請ノード削除。既に移行済み（privateRecipes/{newUid}が存在）なら
+// 好み側は触らず申請ノードの後片付けだけ行う＝何度呼んでも安全（冪等）。
+async function finishTakeoverMigration(newUid,oldUid){
+  const updates={};
+  if(oldUid){
+    const recSnap=await withRetry(()=>_db.ref(roomPath("privateRecipes/"+oldUid)).get());
+    if(recSnap.exists()){
+      updates["privateRecipes/"+newUid]=recSnap.val();
+      updates["privateRecipes/"+oldUid]=null;
+    }
+  }
+  updates["takeoverRequests/"+newUid]=null;
+  await withRetry(()=>_db.ref(roomPath("")).update(updates));
+}
 async function approveTakeover(uid){
   if(!ST.isHost)return;
   const req=ST.takeoverRequests&&ST.takeoverRequests[uid];
   if(!req){ showError("その申請は既に処理済みか見つかりません。"); return; }
   const seat=req.seat;
   try{
-    const oldUid=ST.seats&&ST.seats[seat]&&ST.seats[seat].uid;
+    const seatSnap=await withRetry(()=>_db.ref(roomPath("seats/"+seat)).get());
+    const seatData=seatSnap.val();
+    // 回復パス：前回の承認が「席transaction成功→好み移行」の間で中断され、
+    // 席は既に申請者のUIDへ差し替わっているが好みがまだ旧UIDのまま、という中間状態。
+    // 席transactionは再実行せず（既に完了しているため）、移行だけをやり直す。
+    if(seatData&&seatData.uid===uid){
+      if(!req.prevUid){ showError("この申請には旧席の情報がなく、自動回復できません。手動でご確認ください。"); return; }
+      await finishTakeoverMigration(uid,req.prevUid);
+      return;
+    }
+    const oldUid=req.prevUid||(seatData&&seatData.uid);
     const res=await withRetry(()=>_db.ref(roomPath("seats/"+seat)).transaction(cur=>{
       if(!cur)return; // 空席（想定外）→中止
       if(cur.uid!==oldUid)return; // 別経路で既に変わっている→中止（レースガード）
@@ -901,13 +934,7 @@ async function approveTakeover(uid){
       await rejectTakeover(uid);
       return;
     }
-    // 好みの移行＋申請ノード削除は、複数パスの1回のupdateで原子的に行う。
-    const recSnap=await withRetry(()=>_db.ref(roomPath("privateRecipes/"+oldUid)).get());
-    const updates={};
-    updates["privateRecipes/"+uid]=recSnap.val();
-    updates["privateRecipes/"+oldUid]=null;
-    updates["takeoverRequests/"+uid]=null;
-    await withRetry(()=>_db.ref(roomPath("")).update(updates));
+    await finishTakeoverMigration(uid,oldUid);
   }catch(e){ showError("引き継ぎの承認に失敗："+e.message); }
 }
 
@@ -1409,6 +1436,18 @@ function spectatorHTML(){
     <div><span class="phase">🕯️ 儀式 ${g.round}/${g.rounds}</span> 調合師 ${pill(g.cutter)}</div>
     <div class="kv" style="text-align:right">総魔力<br><span class="big" style="font-size:22px">${g.teamTotal||0}</span></div></div>
     <div class="turnbar" style="margin-top:10px"><span>⏳</span><span class="who">${turnLine}</span></div></div>`;
+
+  // 終了後の称号（観戦者にも、プレイヤーの終了画面と同じ基準・ゲージで表示する）
+  if(g.phase==="end"&&g.history&&g.history.length){
+    const sa=g.history.reduce((s,h)=>s+h.roundScore,0), so=g.history.reduce((s,h)=>s+h.omni,0);
+    const keen=so>0?Math.min(100,Math.round(sa/so*100)):100;
+    const rank=rankFor(keen);
+    html+=`<div class="panel" style="text-align:center;border-color:var(--candle)">
+      <div style="font-size:38px">${rank.i}</div>
+      <div style="font-family:var(--grimoire);font-size:20px;letter-spacing:.1em;color:var(--candle-soft)">${rank.t}</div>
+      ${titleGaugeHTML(keen)}
+      <div style="font-family:var(--grimoire);color:var(--candle)">通算の冴え ${keen}%</div></div>`;
+  }
 
   // 全員の好み・個人点・発火状況は終了後の reveal 作成後だけ表示する。
   if(g.phase==="end"&&ST.allRecipes){
@@ -2266,7 +2305,33 @@ function gameHTML(){
 }
 function toggleLocalCut(pos){ const g=ST.game; const i=localCuts.indexOf(pos); if(i>=0)localCuts.splice(i,1); else if(localCuts.length<g.n-1)localCuts.push(pos); render(); }
 function submitCut(){ ac(); SFX.cut(); confirmCut(localCuts.slice()); localCuts=[]; }
-function rankFor(pct){ if(pct>=92)return{t:"大魔女",i:"🌕",l:"沈黙のうちに、互いの心を読み切った。"};if(pct>=82)return{t:"熟達の魔女",i:"🌔",l:"言葉なくとも、意はよく通じていた。"};if(pct>=70)return{t:"一人前の魔女",i:"🌓",l:"良き調合であった。"};if(pct>=58)return{t:"見習いを抜けし者",i:"🌒",l:"まだ視えぬ好みがある。"};return{t:"駆け出しの魔女",i:"🌑",l:"沈黙は深く、心は遠かった。"}; }
+// 称号の唯一の基準（RANKS）。rankFor()も称号ゲージ（titleGaugeHTML）も、ここだけを参照する。
+// 閾値を変えるときはこの配列だけ触ればよい（数値のハードコード重複を作らない）。
+const RANKS=[
+  {min:92,t:"大魔女",i:"🌕",l:"沈黙のうちに、互いの心を読み切った。",color:"var(--candle)"},
+  {min:82,t:"熟達の魔女",i:"🌔",l:"言葉なくとも、意はよく通じていた。",color:"var(--candle-soft)"},
+  {min:70,t:"一人前の魔女",i:"🌓",l:"良き調合であった。",color:"var(--moon)"},
+  {min:58,t:"見習いを抜けし者",i:"🌒",l:"まだ視えぬ好みがある。",color:"#8b7fae"},
+  {min:0,t:"駆け出しの魔女",i:"🌑",l:"沈黙は深く、心は遠かった。",color:"#5c5570"},
+];
+function rankFor(pct){ return RANKS.find(r=>pct>=r.min); }
+// 称号ゲージ：駆け出し〜大魔女の5帯を横一列に表示し、自チームの冴え%の位置をマーカーで示す。
+// 帯の境界・色はすべてRANKSから導出する（閾値を変えれば自動で追随する）。
+function titleGaugeHTML(pct){
+  const p=Math.max(0,Math.min(100,pct));
+  const bounds=RANKS.slice().reverse(); // 昇順：駆け出し→…→大魔女
+  let zones="", ticks="";
+  for(let i=0;i<bounds.length;i++){
+    const start=bounds[i].min, end=i<bounds.length-1?bounds[i+1].min:100;
+    zones+=`<div class="rankgauge-zone" style="width:${end-start}%;background:${bounds[i].color}" title="${bounds[i].i} ${bounds[i].t} ${bounds[i].min}%以上"></div>`;
+    if(i>0) ticks+=`<span style="left:${bounds[i].min}%">${bounds[i].min}</span>`;
+  }
+  return `<div class="rankgauge">
+    <div class="rankgauge-track">${zones}</div>
+    <div class="rankgauge-marker" style="left:${p}%" title="冴え ${Math.round(p)}%"></div>
+    <div class="rankgauge-ticks">${ticks}</div>
+  </div>`;
+}
 function endHTML(){
   const g=ST.game; if(!g||!g.history)return `<div class="panel"><div class="kv">結果を集計中…</div></div>`;
   // 終了時は購読中の reveal が作成されてから全好みを表示する。
@@ -2277,7 +2342,7 @@ function endHTML(){
     <div style="font-size:44px">${rank.i}</div>
     <div style="font-family:var(--grimoire);font-size:23px;letter-spacing:.12em;color:var(--candle-soft)">${rank.t}</div>
     <div class="kv" style="margin:8px 0">${rank.l}</div>
-    <div class="meterwrap" style="max-width:420px;margin:12px auto 4px"><div class="meter" style="width:${Math.max(0,Math.min(100,keen))}%"></div></div>
+    ${titleGaugeHTML(keen)}
     <div style="font-family:var(--grimoire);color:var(--candle)">通算の冴え ${keen}%</div></div>`;
   html+=hostTakeoverPanel();
   html+=`<div class="panel"><div class="eyebrow">🏁 総まとめ（${g.n}人・${g.rounds}儀式）</div>
@@ -2310,7 +2375,7 @@ restoreSavedRoom();
 cleanupExpiredRooms();
 </script>
 <a id="homelink" href="index.html" title="ゲーム一覧へ戻る">🏠 ゲーム一覧</a>
-<div id="verbadge">魔女の調合 v1.7</div>
+<div id="verbadge">魔女の調合 v1.7.1</div>
 <style>
 #homelink{position:fixed;left:8px;bottom:6px;z-index:9999;
  font:11px/1.5 system-ui,sans-serif;letter-spacing:.04em;text-decoration:none;
