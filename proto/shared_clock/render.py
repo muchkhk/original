@@ -27,14 +27,21 @@ RULE_TABLE = """\
 
 
 def band_history_prose(band_history):
-    """帯の履歴を「第1R=緑 → 第4R=黄」形式の遷移列＋現在帯の連続数に変換する。"""
+    """
+    帯の履歴を「第1R終了時=緑 → 第4R終了時=黄」形式の遷移列＋現在帯の連続数に変換する。
+
+    【表記の一意化】band_history[k-1] は「第kR終了時（浄化・成長を適用し帯を再表示した後）」
+    の帯である。開始時（第1Rの行動を選ぶ前）は i0∈{0,1,2,3} により必ず緑になるが、
+    これは自明なので履歴には含めない。「第kR」を「第kRの行動を選ぶ前に見える帯」と
+    誤読しないよう、必ず「終了時」を明記する。
+    """
     transitions = []
     prev = None
     for idx, b in enumerate(band_history, start=1):
         if b != prev:
             transitions.append((idx, b))
             prev = b
-    parts = [f"第{rnd}R={BAND_JP[b]}" for rnd, b in transitions]
+    parts = [f"第{rnd}R終了時={BAND_JP[b]}" for rnd, b in transitions]
     current_band = band_history[-1]
     streak = 0
     for b in reversed(band_history):
