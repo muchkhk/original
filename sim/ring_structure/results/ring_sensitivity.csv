@@ -1,0 +1,7 @@
+N,serve_mode,decay_on,weakest_vanish,f_max,g_max,trials,ticks,loop_events_total,trials_with_loop_frac,loops_per_trial_mean,loop_time_mean
+4,inf,True,False,0.15,0.05,1000,1500,597626,1.0,597.626,760.4693319902414
+4,inf,True,False,0.04,0.05,1000,1500,112870,1.0,112.87,770.6383272791708
+4,inf,True,False,0.55,0.05,1000,1500,2405821,1.0,2405.821,758.3571466871392
+4,inf,True,False,0.04,0.15,1000,1500,53089,1.0,53.089,760.8632108346362
+4,inf,True,False,0.04,0.05,1000,1500,112771,1.0,112.771,770.5546106711832
+4,inf,True,False,0.04,0.45,1000,1500,10782,1.0,10.782,733.7454090150251

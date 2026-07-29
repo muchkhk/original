@@ -1,0 +1,19 @@
+{
+  "script": "sim/ring_structure/ring_sim.py",
+  "master_seed": 20260729,
+  "trials_per_condition": 1200,
+  "ticks_per_trial": 1500,
+  "sensitivity_trials": 1000,
+  "generated_at": "2026-07-29T04:31:38.357315+00:00",
+  "constants": {
+    "HIT_DECREMENT": 0.01,
+    "F_MIN": 0.002,
+    "F_MAX": 0.04,
+    "DMG_INCREMENT": 0.015,
+    "G_MIN": 0.005,
+    "G_MAX": 0.05,
+    "PADDLE_CATCH_RATE": 0.75,
+    "SERVE_CAP": 3,
+    "SERVE_INTERVAL": 40
+  }
+}
