@@ -4,7 +4,7 @@ PASS: ring_math N=5: N‰ñ˜A‘±+1‚Åo”­“_‚É–ß‚é
 PASS: reproducibility: “¯ˆêseed‚ÅŒ‹‰Ê‚ªbit-for-bitˆê’v
 PASS: loop_detection: f_max=0.999,g_max=0‚ÅN=3‚ª”tickˆÈ“à‚ÉˆêüŠ®—¹‚·‚é
 PASS: loop_detection: f_max=0‚Å‚Íˆêü‚ªˆê“x‚à”­¶‚µ‚È‚¢
-FAIL: population_conservation: “¯‹…”‚ªN*SERVE_CAP‚ğ’´‚¦‚È‚¢ (max_seen=162 > N*SERVE_CAP=12iˆÓ}“I‚ÉŠÉ‚ß‚½SERVE_CAP‚ÅÄŒ»j)
+PASS: population_conservation: “¯‹…”‚ªN*SERVE_CAP‚ğ’´‚¦‚È‚¢
 PASS: wall_backward_compat: slope_kind–¢w’è‚È‚çwall_damage_total‚Í0
 PASS: wall_backward_compat: slope_kind–¢w’è‚È‚çreinforced_hits_total‚Í0
 PASS: wall_damage_fn: level=0‚Íí‚É0ƒ_ƒ[ƒW
@@ -25,7 +25,7 @@ PASS: nine_species: ITEM_PADDLE_SIDE‚É'clone'‚ªŠÜ‚Ü‚ê‚È‚¢iw¦‘07‚Å¥Î‚Ö·‚µ‘
 PASS: nine_species: 'sticky'‚àˆø‚«‘±‚«ŠÜ‚Ü‚ê‚È‚¢iw¦‘06‚Ìkill‚ğˆÛj
 PASS: nine_species: ‘SƒAƒCƒeƒ€í‚Ì‘”‚Í9íiƒpƒhƒ‹5{‹…3{ê1j
 PASS: guide_inert: ITEM_CATCH_RATE_CONTRIBUTORS‚É'guide'‚ªŠÜ‚Ü‚ê‚È‚¢i\¬ƒ`ƒFƒbƒNj
-PASS: guide_inert: guide’i‚ğÏ‚İã‚°‚Ä‚à•ß‹…—¦‚ª“®‚©‚¸AB1i—‹…‰ñ”j‚ª‚‚¢‚Ü‚ÜˆÛ‚³‚ê‚é
+FAIL: guide_inert: guide’i‚ğÏ‚İã‚°‚Ä‚à•ß‹…—¦‚ª“®‚©‚¸AB1i—‹…‰ñ”j‚ª‚‚¢‚Ü‚ÜˆÛ‚³‚ê‚é (total_drops=590iguide‚ªŠñ—^‚·‚é‚Æ590‹ß–T‚Ü‚Å‘å‚«‚­Œ¸‚éBè‡’l1000j)
 PASS: random_slot_equivalence: ŠeƒAƒCƒeƒ€‚ÌÀŒøoŒ»—¦‚ª1/9‚©‚ç‚Ì˜¨—£5%ˆÈ“ài10ƒGƒ“ƒgƒŠ’Š‘I‚Æ9í‹Ï“™’Š‘I‚Ì“™‰¿«‚ÌŒŸZj
 PASS: b3_excludes_weaken: weaken‚Ì‚İƒhƒƒbƒv‚³‚ê‚éó‹µ‚ÅAQl’lweaken_active_frac‚ÍÀÛ‚É‚‰Ò“­‚µ‚Ä‚¢‚éi‘O’ñğŒj
 PASS: b3_excludes_weaken: B3i‹…‘¤3í‚Ì‚İj‚Íweaken‚Ì‚İ‚Ìó‹µ‚Å0‹ß–T‚Ì‚Ü‚Ü
@@ -35,4 +35,4 @@ PASS: b3_evaluation: ‘Ñ“à‚Ì‡¬ƒf[ƒ^‚Ípass‚Æ”»’è‚³‚ê‚é
 PASS: b3_evaluation: ‘Ñ‚ğ‘å‚«‚­ŠO‚ê‚½‡¬ƒf[ƒ^‚Ípass‚Å‚È‚¢‚Æ”»’è‚³‚ê‚é
 PASS: b1_b2_no_verdict: summarize_bundle()‚Ìo—Í‚ÉB1/B2‚Ìpass/fail”»’èƒL[‚ª–³‚¢
 PASS: b1_b2_no_verdict: B1‚ÌƒtƒB[ƒ‹ƒh–¼‚ÉQl’l‚Å‚ ‚é|(REFERENCE_ONLY)‚ª–¾‹L‚³‚ê‚Ä‚¢‚é
-RESULT: FAIL (1 check(s) failed: population_conservation: “¯‹…”‚ªN*SERVE_CAP‚ğ’´‚¦‚È‚¢)
+RESULT: FAIL (1 check(s) failed: guide_inert: guide’i‚ğÏ‚İã‚°‚Ä‚à•ß‹…—¦‚ª“®‚©‚¸AB1i—‹…‰ñ”j‚ª‚‚¢‚Ü‚ÜˆÛ‚³‚ê‚é)

@@ -1,4 +1,2 @@
-ball_effect_magnitude,natural_trials,natural_clear_rate,natural_damage_mean,relay_trials,relay_reached_frac,relay_median_tick,relay_median_min,relay_p90_tick,relay_p90_min
-0.5,3000,0.0,9898.419,300,1.0,3852,89.55472,3940,91.60062222222223
-1.0,3000,0.0,9941.671833333334,300,1.0,3856,89.64771555555556,3926,91.27513777777777
-2.0,3000,0.0,10029.080666666667,300,1.0,3847,89.43847555555554,3920,91.13564444444445
+laser_dps_per_stage,weaken_multiplier,ball_effect_magnitude,natural_trials,natural_clear_rate,natural_damage_mean,relay_trials,relay_reached_frac,relay_median_tick,relay_median_min,relay_p90_tick,relay_p90_min,meets_natural_zero,meets_reached_full,meets_median_23_24min,all_criteria_pass
+0.0,2.0,1.0,3000,0.018,62399.99366666667,300,1.0,929,21.59821777777778,949,22.06319555555556,False,True,False,False

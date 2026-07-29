@@ -23,9 +23,14 @@ has_looped判定）を意図的に壊し、check_staged_slope_jumps_after_loop�
 paddle_catch_rate引数）を意図的に無視する壊れた実装を注入し、
 check_catch_rate_slows_relayが確実にFAILすることを示す。
 
---inject-band-bug を付けると、指示書05の帯判定ロジック（evaluate_bands）の
-B1判定を意図的に反転させ、check_band_evaluation_distinguishes_pass_failが
+--inject-band-bug を付けると、指示書06のB3帯判定ロジック（evaluate_b3）の
+pass判定を意図的に反転させ、check_b3_evaluation_distinguishes_pass_failが
 確実にFAILすることを示す（完了条件2：帯逸脱の成功/失敗パス分離）。
+
+--inject-instrument-bug を付けると、指示書06のsticky除去・B1/B2非判定の
+回帰（ITEM_PADDLE_SIDEへのsticky再導入／summarize_bundle()へのB1 pass判定
+混入）を注入し、check_sticky_removed・check_b1_b2_have_no_verdictが
+確実にFAILすることを示す（完了条件1：sticky除去確認・B1/B2判定出力の不在確認）。
 
 使い方:
   python selfcheck.py                       # 正常系。RESULT: PASS を期待
@@ -33,6 +38,7 @@ B1判定を意図的に反転させ、check_band_evaluation_distinguishes_pass_f
   python selfcheck.py --inject-wall-bug        # 異常系。RESULT: FAIL を期待
   python selfcheck.py --inject-catchrate-bug   # 異常系。RESULT: FAIL を期待
   python selfcheck.py --inject-band-bug        # 異常系。RESULT: FAIL を期待
+  python selfcheck.py --inject-instrument-bug  # 異常系。RESULT: FAIL を期待
 """
 import argparse
 import sys
@@ -304,28 +310,210 @@ def check_item_backward_compat():
           "drop_events_per_world" not in r, f"keys={list(r.keys())}")
 
 
-def check_sticky_holds_ball():
-    """スティッキー保持中(hold_ticks>0)の球は、ブロック/パドルフェーズの処理を
-    受けない（跨ぎ判定そのものを試行しない）ことを、sticky有効/無効の比較で確認する。
-    drop_rate=1.0・catch_rate=1.0にして毎ヒットでsticky段が付き、以後の捕球すべてで
-    保持が発生するようにすると、sticky有効時は無効時よりupcross_events_totalが
-    明確に少なくなるはず（保持中は跨ぎ判定自体が走らないため）。"""
+def check_sticky_removed(inject_bug=False):
+    """指示書06：スティッキーはkillされ、ITEM_PADDLE_SIDE・item_systemから
+    完全に除去された（総数8→7）。(1)'sticky'という種が存在しないこと、
+    (2)アイテム有効時でも保持による跨ぎ判定の欠落が起きない（アイテム無しと
+    比べてupcross_events_totalが大きく落ち込まない）ことを確認する。
+
+    --inject-instrument-bugで、ITEM_PADDLE_SIDEにsticky相当の種を復活させた
+    壊れた状態（sticky再導入の回帰）を注入し、FAIL経路を実例で示す。
+    """
     import random
+
+    paddle_side = rs.ITEM_PADDLE_SIDE + ["sticky"] if inject_bug else rs.ITEM_PADDLE_SIDE
+    check("sticky_removed: ITEM_PADDLE_SIDEに'sticky'が含まれない",
+          "sticky" not in paddle_side, f"ITEM_PADDLE_SIDE={paddle_side}")
+
+    if inject_bug:
+        return  # 種の混入自体が既に検出対象。以降のシミュ実行は正常系と同じため省略
+
+    # 捕球率をアイテム有無で揃え（power_bonus=0, cap=1.0）、保持機構の有無だけを
+    # 比較できるようにする
     item_system = {
         "drop_rate": 1.0, "ball_effect_ticks": 5, "ball_effect_magnitude": 1.0,
-        "sticky_hold_ticks_range": (3, 3),
+        "paddle_power_bonus_per_stage": 0.0, "paddle_catch_rate_cap": 1.0,
     }
-    item_system_off = dict(item_system, sticky_enabled=False)
-    r_on = rs.simulate_trial(random.Random(22), N=3, serve_mode="inf", decay_on=True,
-                              weakest_vanish=False, ticks=300, paddle_catch_rate=1.0,
-                              item_system=item_system)
-    r_off = rs.simulate_trial(random.Random(22), N=3, serve_mode="inf", decay_on=True,
+    r_with_items = rs.simulate_trial(random.Random(22), N=3, serve_mode="inf", decay_on=True,
+                                      weakest_vanish=False, ticks=300, paddle_catch_rate=1.0,
+                                      item_system=item_system)
+    r_without_items = rs.simulate_trial(random.Random(22), N=3, serve_mode="inf", decay_on=True,
+                                         weakest_vanish=False, ticks=300, paddle_catch_rate=1.0)
+    ratio = r_with_items["upcross_events_total"] / r_without_items["upcross_events_total"]
+    check("sticky_removed: アイテム有効時でもupcross_events_totalが無効時の80%以上を維持する"
+          "（保持機構が無いため、跨ぎ判定の欠落が起きない）",
+          ratio >= 0.8, f"with_items={r_with_items['upcross_events_total']} "
+          f"without_items={r_without_items['upcross_events_total']} ratio={ratio:.3f}")
+
+
+def check_nine_item_species(inject_bug=False):
+    """指示書07：cloneを除去しmagnet・laser・weakenを追加した結果、アイテム総数は
+    7→9種になった（パドル側5：拡大・速度・ガイド・磁石・レーザー／球側3：貫通・爆発・加速／
+    場1：自陣弱体化）。'clone'が存在しないこと・'sticky'も引き続き存在しないこと・
+    総数が9であることを確認する。
+
+    --inject-species-bugで、cloneを誤って残す壊れた構成を注入し、FAILすることを示す。
+    """
+    paddle_side = rs.ITEM_PADDLE_SIDE + ["clone"] if inject_bug else rs.ITEM_PADDLE_SIDE
+    all_types = paddle_side + rs.ITEM_BALL_SIDE + rs.ITEM_FIELD_SIDE
+    check("nine_species: ITEM_PADDLE_SIDEに'clone'が含まれない（指示書07で磁石へ差し替え）",
+          "clone" not in paddle_side, f"ITEM_PADDLE_SIDE={paddle_side}")
+    check("nine_species: 'sticky'も引き続き含まれない（指示書06のkillを維持）",
+          "sticky" not in all_types, f"all_types={all_types}")
+    check("nine_species: 全アイテム種の総数は9種（パドル5＋球3＋場1）",
+          len(all_types) == 9, f"total={len(all_types)} all_types={all_types}")
+
+
+def check_guide_mechanically_inert(inject_bug=False):
+    """指示書07：guideはドロップ枠・LIFOスタックを占有するが、捕球率計算からは
+    除外され物理・捕球率に一切寄与しない（案(a)：表示のみ・物理不介入）。
+
+    (1) ITEM_CATCH_RATE_CONTRIBUTORSにguideが含まれないこと（構成チェック）。
+    (2) 全ドロップをguide固定にした状態で大量の段を積んでも、捕球率が
+        paddle_catch_rateからほぼ動かず、B1（落球回数）が高いまま
+        （＝guideの段が捕球率を一切押し上げない）ことを実際にsimulate_trial()を
+        回して確認する（挙動チェック）。
+
+    --inject-instrument-bugで、guideも捕球率計算に含めてしまう壊れた実装を
+    一時的に注入し、段を積むほどB1が明確に減る（＝guideが寄与してしまう）ことを示す。
+    """
+    check("guide_inert: ITEM_CATCH_RATE_CONTRIBUTORSに'guide'が含まれない（構成チェック）",
+          "guide" not in rs.ITEM_CATCH_RATE_CONTRIBUTORS,
+          f"ITEM_CATCH_RATE_CONTRIBUTORS={rs.ITEM_CATCH_RATE_CONTRIBUTORS}")
+
+    import random
+    orig_all_types = rs.ITEM_ALL_TYPES
+    orig_contributors = rs.ITEM_CATCH_RATE_CONTRIBUTORS
+    rs.ITEM_ALL_TYPES = ["guide"]  # 全ドロップをguide固定にし、段を確実に積み上げる
+    if inject_bug:
+        rs.ITEM_CATCH_RATE_CONTRIBUTORS = ["guide"]  # 壊れた実装：guideも寄与させてしまう
+    item_system = {
+        "drop_rate": 1.0, "ball_effect_ticks": 1, "ball_effect_magnitude": 0.0,
+        "paddle_power_bonus_per_stage": 0.15, "paddle_catch_rate_cap": 1.0,
+        "pickup_miss_rate_base": 0.0,  # magnetの影響を排除し、guideの効果だけを見る
+    }
+    try:
+        r = rs.simulate_trial(random.Random(42), N=2, serve_mode="inf", decay_on=True,
+                               weakest_vanish=False, ticks=400, paddle_catch_rate=0.3,
+                               item_system=item_system)
+    finally:
+        rs.ITEM_ALL_TYPES = orig_all_types
+        rs.ITEM_CATCH_RATE_CONTRIBUTORS = orig_contributors
+
+    total_drops = sum(r["drop_events_per_world"])
+    # 実測基準（seed固定・同一条件）：guideが寄与しない場合 total_drops=1626、
+    # guideが寄与する（壊れた実装）場合 total_drops=590 まで落ち込む。
+    # 閾値1000はこの2値の中間に置き、どちらの経路かを確実に判別する。
+    check("guide_inert: guide段を積み上げても捕球率が動かず、B1（落球回数）が高いまま維持される",
+          total_drops > 1000,
+          f"total_drops={total_drops}（guideが寄与すると590近傍まで大きく減る。閾値1000）")
+
+
+def check_random_slot_equivalence(inject_bug=False):
+    """指示書07：ドロップテーブルは9種+抽選枠randomの10エントリだが、randomが
+    9種へ均等再抽選されるため、各アイテムの実効出現率は厳密に1/9になる
+    （この等価性により、シミュはrandomを実装せず9種均等抽選のみで代表してよい、
+    という簡略化の根拠）。モンテカルロで検算する。
+
+    --inject-random-bugで、randomの再抽選を均等でなくする（常に先頭アイテム固定）
+    壊れた解決方法を注入し、分布が1/9から有意に外れることを示す。
+    """
+    import random
+    items = list(rs.ITEM_ALL_TYPES)
+    n = len(items)
+    rng = random.Random(999)
+    trials = 90000
+    counts = {it: 0 for it in items}
+    for _ in range(trials):
+        slot = int(rng.random() * (n + 1))  # 10エントリ：0..n-1=直接、n=random
+        if slot < n:
+            resolved = items[slot]
+        elif inject_bug:
+            resolved = items[0]  # 壊れた実装：常に先頭固定（均等でない）
+        else:
+            resolved = items[int(rng.random() * n)]
+        counts[resolved] += 1
+    expected = trials / n
+    max_dev_frac = max(abs(c - expected) / expected for c in counts.values())
+    check("random_slot_equivalence: 各アイテムの実効出現率が1/9からの乖離5%以内"
+          "（10エントリ抽選と9種均等抽選の等価性の検算）",
+          max_dev_frac < 0.05, f"expected={expected:.1f} max_dev_frac={max_dev_frac:.3f} counts={counts}")
+
+
+def check_b3_excludes_weaken(inject_bug=False):
+    """指示書07：B3は球側3種（貫通・爆発・加速）のみの稼働率であり、weaken
+    （場・時限）の稼働率を含めてはならない（定義変更禁止）。全ドロップをweaken
+    固定にした状況で、B3（ball_effect_active_frac_per_world）がほぼ0のまま、
+    weaken_active_frac_per_world（参考値）だけが実際に稼働していることを確認する。
+
+    --inject-b3-scope-bugで、集計後にweaken稼働率をB3へ合算する壊れた集計を
+    注入し、B3が不当に高くなることを示す（simulate_trial自体は変更しない）。
+    """
+    import random
+    orig_all_types = rs.ITEM_ALL_TYPES
+    rs.ITEM_ALL_TYPES = ["weaken"]  # 全ドロップをweaken固定にする
+    item_system = {
+        "drop_rate": 1.0, "ball_effect_ticks": 900, "ball_effect_magnitude": 0.0,
+        "paddle_power_bonus_per_stage": 0.0, "paddle_catch_rate_cap": 1.0,
+        "pickup_miss_rate_base": 0.0,
+    }
+    try:
+        r = rs.simulate_trial(random.Random(7), N=2, serve_mode="inf", decay_on=True,
                                weakest_vanish=False, ticks=300, paddle_catch_rate=1.0,
-                               item_system=item_system_off)
-    check("sticky_holds_ball: sticky有効時はupcross_events_totalが無効時より明確に少ない"
-          "（保持中は跨ぎ判定を試行しないため）",
-          r_on["upcross_events_total"] < r_off["upcross_events_total"] * 0.5,
-          f"on={r_on['upcross_events_total']} off={r_off['upcross_events_total']}")
+                               item_system=item_system)
+    finally:
+        rs.ITEM_ALL_TYPES = orig_all_types
+
+    b3 = r["ball_effect_active_frac_per_world"]
+    weaken_frac = r["weaken_active_frac_per_world"]
+    check("b3_excludes_weaken: weakenのみドロップされる状況で、参考値weaken_active_fracは"
+          "実際に高稼働している（前提条件）",
+          min(weaken_frac) > 0.5, f"weaken_frac={weaken_frac}")
+
+    if inject_bug:
+        combined = [b3[w] + weaken_frac[w] for w in range(len(b3))]  # 壊れた集計：B3へweakenを混入
+        check("b3_excludes_weaken: B3（球側3種のみ）はweakenのみの状況で0近傍のまま"
+              "（意図的にweakenをB3へ混入させた壊れた集計）",
+              max(combined) <= 0.01, f"combined(bug)={combined}")
+    else:
+        check("b3_excludes_weaken: B3（球側3種のみ）はweakenのみの状況で0近傍のまま",
+              max(b3) <= 0.01, f"b3={b3}")
+
+
+def check_b1_b2_have_no_verdict(inject_bug=False):
+    """指示書06 完了条件1：B1・B2はシミュの帯判定（PASS/FAIL）から外れ、
+    参考値としてのみ扱われる。summarize_bundle()の出力にB1/B2のpass/fail
+    キーが無いこと、フィールド名にREFERENCE_ONLYが明記されていることを確認する。
+
+    --inject-instrument-bugで、summarize_bundle()にB1の偽のpass判定を
+    混入させる壊れた実装を注入し、FAIL経路を実例で示す。
+    """
+    fake_raw = {"drop_counts": [5], "recovery_ticks": [50.0], "uptime_fracs": [0.2],
+                "trials": 1, "ticks": 900, "N": 1}
+
+    if inject_bug:
+        orig_summarize = isim.summarize_bundle
+
+        def broken_summarize_bundle(raw):
+            s = orig_summarize(raw)
+            s["b1_pass"] = True  # B1にpass/fail判定を混入させる壊れた実装
+            return s
+
+        isim.summarize_bundle = broken_summarize_bundle
+        try:
+            summary = isim.summarize_bundle(fake_raw)
+        finally:
+            isim.summarize_bundle = orig_summarize
+    else:
+        summary = isim.summarize_bundle(fake_raw)
+
+    check("b1_b2_no_verdict: summarize_bundle()の出力にB1/B2のpass/fail判定キーが無い",
+          not any("pass" in str(k).lower() and ("b1" in str(k).lower() or "b2" in str(k).lower())
+                  for k in summary.keys()),
+          f"summary keys={list(summary.keys())}")
+    check("b1_b2_no_verdict: B1のフィールド名に参考値である旨(REFERENCE_ONLY)が明記されている",
+          any("b1" in k.lower() and "reference_only" in k.lower() for k in summary),
+          f"summary keys={list(summary.keys())}")
 
 
 def check_lifo_drop_penalty_order():
@@ -335,7 +523,7 @@ def check_lifo_drop_penalty_order():
     import random
     item_system = {
         "drop_rate": 0.3, "ball_effect_ticks": 5, "ball_effect_magnitude": 1.0,
-        "sticky_hold_ticks_range": (2, 4), "paddle_power_bonus_per_stage": 0.001,
+        "paddle_power_bonus_per_stage": 0.001,
     }
     r = rs.simulate_trial(random.Random(23), N=3, serve_mode="inf", decay_on=True,
                            weakest_vanish=False, ticks=900, paddle_catch_rate=0.5,
@@ -348,48 +536,41 @@ def check_lifo_drop_penalty_order():
           total_recoveries > 0, f"total_recoveries={total_recoveries}")
 
 
-def check_band_evaluation_distinguishes_pass_fail(inject_bug=False):
+def check_b3_evaluation_distinguishes_pass_fail(inject_bug=False):
     """
-    指示書05 完了条件2：検証コード（evaluate_bands）自体が、成功パスと失敗パス
-    （帯逸脱）で必ず別の出力になることを、実際のシミュレーションを回す前に
-    合成データで確認する。
+    指示書05完了条件2を継承：検証コード（指示書06でB3専用に改訂したevaluate_b3）
+    自体が、成功パスと失敗パス（帯逸脱）で必ず別の出力になることを、
+    実際のシミュレーションを回す前に合成データで確認する。B1・B2は指示書06で
+    帯判定の対象から外れたため、判定対象はB3のみになった。
 
-    --inject-band-bug で、B1判定の不等号を意図的に反転させた壊れた実装を注入し、
+    --inject-band-bug で、B3判定の不等号を意図的に反転させた壊れた実装を注入し、
     「帯内のはずの値がNGと判定される／帯外のはずの値がOKと判定される」ことを示す。
     """
-    good_summary = {
-        "b1_drop_mean": 5.0,            # B1帯[2,10]の中央付近
-        "b2_recovery_mean_ticks": 45.0, # B2帯の中央付近
-        "b3_uptime_mean_frac": 0.20,    # B3上限0.40の半分
-    }
-    bad_summary = {
-        "b1_drop_mean": 500.0,          # B1帯を大きく超える（明確な帯逸脱）
-        "b2_recovery_mean_ticks": 45.0,
-        "b3_uptime_mean_frac": 0.20,
-    }
+    good_summary = {"b3_uptime_mean_frac": 0.20}   # B3上限0.40の半分（帯内）
+    bad_summary = {"b3_uptime_mean_frac": 0.90}    # B3上限0.40を大きく超える（帯逸脱）
 
     if inject_bug:
-        orig_evaluate_bands = isim.evaluate_bands
+        orig_evaluate_b3 = isim.evaluate_b3
 
-        def broken_evaluate_bands(summary):
-            ev = orig_evaluate_bands(summary)
-            ev["B1"]["pass"] = not ev["B1"]["pass"]  # 判定を反転させる壊れた実装
+        def broken_evaluate_b3(summary):
+            ev = orig_evaluate_b3(summary)
+            ev["pass"] = not ev["pass"]  # 判定を反転させる壊れた実装
             return ev
 
-        isim.evaluate_bands = broken_evaluate_bands
+        isim.evaluate_b3 = broken_evaluate_b3
         try:
-            good_ev = isim.evaluate_bands(good_summary)
-            bad_ev = isim.evaluate_bands(bad_summary)
+            good_ev = isim.evaluate_b3(good_summary)
+            bad_ev = isim.evaluate_b3(bad_summary)
         finally:
-            isim.evaluate_bands = orig_evaluate_bands
+            isim.evaluate_b3 = orig_evaluate_b3
     else:
-        good_ev = isim.evaluate_bands(good_summary)
-        bad_ev = isim.evaluate_bands(bad_summary)
+        good_ev = isim.evaluate_b3(good_summary)
+        bad_ev = isim.evaluate_b3(bad_summary)
 
-    check("band_evaluation: 帯内の合成データはB1が'pass'と判定される",
-          good_ev["B1"]["pass"] is True, f"good_ev.B1={good_ev['B1']}")
-    check("band_evaluation: 帯を大きく外れた合成データはB1が'pass'でないと判定される",
-          bad_ev["B1"]["pass"] is False, f"bad_ev.B1={bad_ev['B1']}")
+    check("b3_evaluation: 帯内の合成データはpassと判定される",
+          good_ev["pass"] is True, f"good_ev={good_ev}")
+    check("b3_evaluation: 帯を大きく外れた合成データはpassでないと判定される",
+          bad_ev["pass"] is False, f"bad_ev={bad_ev}")
 
 
 def main():
@@ -401,7 +582,17 @@ def main():
     ap.add_argument("--inject-catchrate-bug", action="store_true",
                      help="指示書03のpaddle_catch_rate引数を無視する壊れた実装を注入し、FAIL経路を実例で示す")
     ap.add_argument("--inject-band-bug", action="store_true",
-                     help="指示書05の帯判定(evaluate_bands)のB1判定を反転させ、FAIL経路を実例で示す")
+                     help="指示書06のB3帯判定(evaluate_b3)のpass判定を反転させ、FAIL経路を実例で示す")
+    ap.add_argument("--inject-instrument-bug", action="store_true",
+                     help="指示書06のsticky除去・B1/B2非判定の回帰(sticky再導入/B1にpass判定混入)を注入し、FAIL経路を実例で示す")
+    ap.add_argument("--inject-species-bug", action="store_true",
+                     help="指示書07のアイテム9種構成にcloneを誤って残す壊れた構成を注入し、FAIL経路を実例で示す")
+    ap.add_argument("--inject-guide-bug", action="store_true",
+                     help="指示書07のguide機構的不活性を壊し、guideが捕球率に寄与してしまう実装を注入し、FAIL経路を実例で示す")
+    ap.add_argument("--inject-random-bug", action="store_true",
+                     help="指示書07のドロップテーブル等価性(10エントリ=9種均等)を壊し、FAIL経路を実例で示す")
+    ap.add_argument("--inject-b3-scope-bug", action="store_true",
+                     help="指示書07のB3定義(球側3種のみ)にweakenを混入させる壊れた集計を注入し、FAIL経路を実例で示す")
     args = ap.parse_args()
 
     check_ring_math()
@@ -415,9 +606,14 @@ def main():
     check_checkpoint_reaches_final_tick()
     check_catch_rate_slows_relay(inject_bug=args.inject_catchrate_bug)
     check_item_backward_compat()
-    check_sticky_holds_ball()
+    check_sticky_removed(inject_bug=args.inject_instrument_bug)
+    check_nine_item_species(inject_bug=args.inject_species_bug)
+    check_guide_mechanically_inert(inject_bug=args.inject_guide_bug)
+    check_random_slot_equivalence(inject_bug=args.inject_random_bug)
+    check_b3_excludes_weaken(inject_bug=args.inject_b3_scope_bug)
     check_lifo_drop_penalty_order()
-    check_band_evaluation_distinguishes_pass_fail(inject_bug=args.inject_band_bug)
+    check_b3_evaluation_distinguishes_pass_fail(inject_bug=args.inject_band_bug)
+    check_b1_b2_have_no_verdict(inject_bug=args.inject_instrument_bug)
 
     if FAILURES:
         print(f"RESULT: FAIL ({len(FAILURES)} check(s) failed: {', '.join(FAILURES)})")

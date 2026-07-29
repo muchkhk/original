@@ -3,16 +3,24 @@
   "requirement": 64672.2,
   "session_ticks": 900,
   "slope_kind": "staged",
+  "sweep_a_winner": {
+    "drop_rate": 0.15,
+    "ball_effect_ticks": 2
+  },
   "final_bundle": {
     "drop_rate": 0.15,
     "ball_effect_ticks": 2,
+    "ball_effect_magnitude": 1.0,
     "paddle_power_bonus_per_stage": 0.3,
-    "paddle_catch_rate_cap": 0.999
+    "paddle_catch_rate_cap": 0.999,
+    "laser_dps_per_stage": 0.0,
+    "weaken_multiplier": 2.0
   },
-  "magnitudes_checked": [
-    0.5,
-    1.0,
-    2.0
+  "laser_dps_levels_swept": [
+    0.3,
+    0.6,
+    1.2
   ],
-  "generated_at": "2026-07-29T15:18:07.820872+00:00"
+  "all_criteria_pass": false,
+  "generated_at": "2026-07-29T17:38:29.973537+00:00"
 }
