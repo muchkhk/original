@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-玉キープ束（確定候補）下での要求量64,672.2の再検証（指示書05 やること3）。
+玉キープ束（sticky除去後の7種構成）下での要求量64,672.2の再検証（指示書06 やること1-2）。
 
 指示書02/03で確定した要求量64,672.2（staged・900tick・安全係数1.2）が、
-球側3種（貫通・爆発・加速）の壁破壊レート影響下でも成立するかを、
-item_sim.py で見つけた確定候補束を使って再検証する。
+sticky killを反映した7種構成・球側3種（貫通・爆発・加速）の壁破壊レート
+影響下でも成立するかを再検証する。
+
+指示書05の確定候補束（catch_cap=0.999等）は不採用（B1・B2がシミュの判定対象から
+外れたため、極端な捕球率へ追い込む理由が無くなった）。FINAL_BUNDLEは
+item_sim.py のB3再掃引（指示書06 やること1-3）でB3≤40%を満たすことを確認した
+組み合わせを使う。
 
 生データCSV（指示書01〜03分）は読み取らない・変更しない。要求量の絶対値
 64,672.2はproto/報告_強化傾斜と強化壁要求量_v1_2026-07-29.md §2から転記。
@@ -21,30 +26,31 @@ from datetime import datetime, timezone
 
 from ring_sim import simulate_trial, pct
 from wall_sim import Q4_MS_PER_TICK
-from item_sim import sticky_hold_ticks_range, item_seed, NATURAL_N, NATURAL_DECAY_ON, NATURAL_WEAKEST_VANISH
+from item_sim import (item_seed, NATURAL_N, NATURAL_DECAY_ON, NATURAL_WEAKEST_VANISH,
+                       FIXED_POWER_BONUS_PER_STAGE, FIXED_PADDLE_CATCH_RATE_CAP)
 
-REQUIREMENT = 64672.2  # staged・900tick・安全係数1.2（指示書02/03で確定）
+REQUIREMENT = 64672.2  # staged・900tick・安全係数1.2（指示書02/03で確定。値は変更禁止）
 SESSION_TICKS = 900
 SLOPE_KIND = "staged"
 
-# 球側効果量（球側3種の効果量パラメータ。B1〜B3の探索では直接関与しなかったため、
-# ここで複数値を試し、要求量への影響を確認する）
+# 球側効果量（球側3種の効果量パラメータ。指示書05ではsticky除去前提が
+# 支配的すぎて無意味化していたため、sticky除去後に再び有意味かを確認する）
 MAGNITUDES_TO_CHECK = [0.5, 1.0, 2.0]
 
-# B1〜B3を満たす確定候補束（item_sim.py フェーズA/Bで探索・確認済み）
+# 指示書06 B3再掃引（item_b3_resweep.csv）でB3≤40%を満たすことを確認した組
+# （drop_rate=0.15, ball_effect_ticks=2。詳細は報告書§2参照）
 FINAL_BUNDLE = {
     "drop_rate": 0.15,
     "ball_effect_ticks": 2,
-    "paddle_power_bonus_per_stage": 0.3,
-    "paddle_catch_rate_cap": 0.999,
+    "paddle_power_bonus_per_stage": FIXED_POWER_BONUS_PER_STAGE,
+    "paddle_catch_rate_cap": FIXED_PADDLE_CATCH_RATE_CAP,
 }
 
 
 def natural_clear_rate(seed, magnitude, trials):
     import random
     rng = random.Random(seed)
-    item_system = dict(FINAL_BUNDLE, ball_effect_magnitude=magnitude,
-                        sticky_hold_ticks_range=sticky_hold_ticks_range())
+    item_system = dict(FINAL_BUNDLE, ball_effect_magnitude=magnitude)
     damages = []
     for _ in range(trials):
         r = simulate_trial(rng, NATURAL_N, "inf", NATURAL_DECAY_ON, NATURAL_WEAKEST_VANISH,
@@ -58,8 +64,7 @@ def natural_clear_rate(seed, magnitude, trials):
 def relay_clear_time(seed, magnitude, trials, ticks=10000):
     import random
     rng = random.Random(seed)
-    item_system = dict(FINAL_BUNDLE, ball_effect_magnitude=magnitude,
-                        sticky_hold_ticks_range=sticky_hold_ticks_range())
+    item_system = dict(FINAL_BUNDLE, ball_effect_magnitude=magnitude)
     reach = []
     for _ in range(trials):
         r = simulate_trial(rng, NATURAL_N, "inf", NATURAL_DECAY_ON, NATURAL_WEAKEST_VANISH,

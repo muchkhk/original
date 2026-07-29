@@ -104,10 +104,15 @@ STAGE_JUMP_WALL_DMG = 6.0
 
 
 # ============ 指示書05：玉キープ束（アイテム）。既存モデルの拡張 ============
-# 球側3種＝段なし・一定時間制。パドル側5種＝各3段・持続型（LIFO落球ペナルティ対象）。
+# 球側3種＝段なし・一定時間制。パドル側4種＝各3段・持続型（LIFO落球ペナルティ対象）。
 # item_system=None なら一切のアイテムロジックが走らない（指示書01〜04とbit-for-bit互換）。
+#
+# 【指示書06】スティッキーはkill（設計チャット20・作家判断）。理由：保持機構が
+# 跨ぎイベントを半減させ、反転1の証拠トラフィックを機構的に抑制することが
+# 指示書05の回帰テスト・要求量再検証（§0・§3-1）で実測されたため。
+# アイテム総数は8→7（パドル側5→4：拡大・移動速度・反射角ガイド・分身）。
 ITEM_BALL_SIDE = ["pierce", "explode", "accel"]      # 貫通・爆発・加速
-ITEM_PADDLE_SIDE = ["enlarge", "speed", "sticky", "guide", "clone"]  # 拡大・移動速度・スティッキー・ガイド・分身
+ITEM_PADDLE_SIDE = ["enlarge", "speed", "guide", "clone"]  # 拡大・移動速度・ガイド・分身（sticky除去済み）
 ITEM_ALL_TYPES = ITEM_PADDLE_SIDE + ITEM_BALL_SIDE
 PADDLE_MAX_STAGE = 3  # B4凍結：探索対象ではない固定値
 DEFAULT_PADDLE_POWER_BONUS_PER_STAGE = 0.01  # 近似仮定。報告書参照
@@ -135,20 +140,22 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
     指定して呼び出す。
 
     item_system=None の場合、玉キープ束（アイテム）ロジックは一切走らない
-    （指示書01〜04とbit-for-bit互換を保つ）。指示書05の解析はdictで指定する：
+    （指示書01〜04とbit-for-bit互換を保つ）。指示書05/06の解析はdictで指定する：
       {
         "drop_rate": float,             # ブロック接触1回あたりのアイテム出現確率
         "ball_effect_ticks": int,       # 球側効果（貫通/爆発/加速）の持続tick数
         "ball_effect_magnitude": float, # 球側効果によるHIT_DECREMENT倍率ボーナス
-        "sticky_hold_ticks_range": (int,int),  # スティッキー保持tick数の範囲(呼び出し側でQ4較正から換算済み)
         "paddle_power_bonus_per_stage": float,  # 省略可(デフォルトあり)
         "paddle_catch_rate_cap": float,         # 省略可(デフォルトあり)
-        "sticky_enabled": bool,                 # 省略可(既定True)。Falseで測定(a)(b)用にsticky保持を無効化
       }
     球側3種（貫通・爆発・加速）は、このモデルに空間構造（隣接ブロック・弾道）が
     無いため、いずれも「このヒットのHIT_DECREMENTにball_effect_magnitudeを
     上乗せする」という同一の機構で近似した。爆発の範囲・貫通の対象数という
-    質的な違いはこの実装では区別できない（捨象。報告書に明記）。
+    質的な違いはこの実装では区別できない（捨象。報告書に明記。較正用プロト
+    〈指示書06〉では個別実装している）。
+
+    【指示書06】スティッキー（球の一時保持）はkillされ、このモデルからは
+    完全に除去した。`sticky_hold_ticks_range`/`sticky_enabled`引数は廃止。
     """
     block_remaining = [1.0] * N
     ground_damage = [0.0] * N
@@ -192,11 +199,9 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         drop_rate = item_system["drop_rate"]
         ball_effect_ticks = item_system["ball_effect_ticks"]
         ball_effect_magnitude = item_system["ball_effect_magnitude"]
-        sticky_lo, sticky_hi = item_system["sticky_hold_ticks_range"]
         power_bonus = item_system.get("paddle_power_bonus_per_stage",
                                        DEFAULT_PADDLE_POWER_BONUS_PER_STAGE)
         catch_cap = item_system.get("paddle_catch_rate_cap", DEFAULT_PADDLE_CATCH_RATE_CAP)
-        sticky_enabled = item_system.get("sticky_enabled", True)
 
         # world(=プレイヤー)ごとの状態
         paddle_stages = [{it: 0 for it in ITEM_PADDLE_SIDE} for _ in range(N)]
@@ -213,7 +218,7 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         b = {
             "world": world, "level": 0, "up_streak": 0,
             "birth_tick": tick, "ever_reinforced": False, "has_looped": False,
-            "ball_effect": None, "hold_ticks": 0,
+            "ball_effect": None,
         }
         balls.append(b)
         balls_by_world[world].append(b)
@@ -268,15 +273,6 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         next_by_world = [[] for _ in range(N)]
         for w in range(N):
             for b in snapshot[w]:
-                # 指示書05：スティッキー保持中の球は、ラリー処理を一切行わず
-                # そのまま在圏球として次tickへ持ち越す（在圏カウントには通常算入。
-                # 特例を作らない、という凍結事項の通り、simultaneous_counts等は
-                # このbも含めてカウント済み）。
-                if item_on and b["hold_ticks"] > 0:
-                    b["hold_ticks"] -= 1
-                    next_by_world[w].append(b)
-                    continue
-
                 # a) ブロックフェーズ
                 effective_hit = HIT_DECREMENT
                 if item_on and b["ball_effect"] is not None:
@@ -348,12 +344,6 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                         catch_cap, paddle_catch_rate + power_bonus * stage_sum)
 
                 if rng.random() < effective_catch_rate:
-                    if item_on and sticky_enabled and paddle_stages[w]["sticky"] > 0:
-                        # スティッキー保持：実時間3〜5秒(呼び出し側でtick換算済み)の
-                        # 間、ラリー処理を止めて在圏球として持ち越す（B5）
-                        hold = sticky_lo if sticky_lo >= sticky_hi else (
-                            sticky_lo + int(rng.random() * (sticky_hi - sticky_lo + 1)))
-                        b["hold_ticks"] = max(1, hold)
                     next_by_world[w].append(b)  # 捕球。世界に留まる
                     continue
 

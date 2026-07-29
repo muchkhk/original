@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書06 作業2</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: #14151a; color: #d7dae0;
+    font-family: -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+    font-size: 14px;
+  }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  .warn {
+    background: #3a2a10; border: 1px solid #7a5a1a; color: #f0d090;
+    padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; line-height: 1.6;
+  }
+  .layout { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+  canvas {
+    background: #05060a; border: 1px solid #3a3d46; border-radius: 4px; display: block;
+    cursor: none;
+  }
+  .panel { width: 360px; display: flex; flex-direction: column; gap: 10px; }
+  fieldset {
+    border: 1px solid #3a3d46; border-radius: 4px; padding: 8px 10px; margin: 0;
+  }
+  legend { padding: 0 4px; color: #9aa0ad; font-size: 12px; }
+  label.slider-row {
+    display: grid; grid-template-columns: 108px 1fr 56px; align-items: center;
+    gap: 6px; margin: 4px 0; font-size: 12px;
+  }
+  input[type=range] { width: 100%; }
+  button {
+    background: #23262f; color: #d7dae0; border: 1px solid #3a3d46; border-radius: 4px;
+    padding: 6px 10px; cursor: pointer; font-size: 13px;
+  }
+  button:hover { background: #2c303b; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  #hud { font-size: 12px; line-height: 1.7; white-space: pre; }
+  #hud .stage-full { color: #7fd0ff; }
+  textarea#jsonOut {
+    width: 100%; height: 220px; background: #0a0b0e; color: #9fe0a0; border: 1px solid #3a3d46;
+    border-radius: 4px; font-family: Consolas, monospace; font-size: 11px; padding: 6px;
+  }
+  .legend-items { font-size: 11px; color: #9aa0ad; line-height: 1.8; }
+  .swatch { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align: middle; }
+  footer { margin-top: 14px; font-size: 11px; color: #666; }
+</style>
+</head>
+<body>
+
+<h1>玉キープ束 較正用プロトタイプ（計測器具）</h1>
+<div class="warn">
+  これは「面白いかどうか」を確かめるゲームではなく、B1（落球頻度）・B2（パドル側1段喪失から同段回復までの実時間）を
+  実物理・実時間で測定するための<strong>計測器具</strong>です。ストーリー・演出・音は一切ありません。
+  <strong>プレイテスト対象者には見せないこと。</strong>（指示書06 やること2）
+</div>
+
+<div class="layout">
+  <canvas id="game" width="700" height="500"></canvas>
+
+  <div class="panel">
+    <fieldset>
+      <legend>較正パラメータ</legend>
+      <label class="slider-row">ドロップ率
+        <input type="range" id="dropRate" min="0" max="1" step="0.01" value="0.15">
+        <span id="dropRateVal"></span>
+      </label>
+      <label class="slider-row">サーブ間隔(秒)
+        <input type="range" id="serveInterval" min="0.2" max="10" step="0.1" value="2.0">
+        <span id="serveIntervalVal"></span>
+      </label>
+      <label class="slider-row">効果時間(秒)
+        <input type="range" id="effectDuration" min="0.5" max="15" step="0.5" value="4">
+        <span id="effectDurationVal"></span>
+      </label>
+      <label class="slider-row">効果倍率
+        <input type="range" id="effectMagnitude" min="0.1" max="3" step="0.1" value="1.0">
+        <span id="effectMagnitudeVal"></span>
+      </label>
+      <label class="slider-row">ボール速度(px/s)
+        <input type="range" id="ballSpeed" min="100" max="700" step="10" value="260">
+        <span id="ballSpeedVal"></span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>セッション制御</legend>
+      <div class="btnrow">
+        <button id="startBtn">開始</button>
+        <button id="pauseBtn" disabled>一時停止</button>
+        <button id="endBtn" disabled>セッション終了・JSON出力</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>ライブHUD</legend>
+      <div id="hud">(未開始)</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>アイテム凡例（全7種・7種均等抽選）</legend>
+      <div class="legend-items">
+        <div><span class="swatch" style="background:#5aa9ff"></span>ENL 拡大（パドル側・3段）幅が段階的に広がる</div>
+        <div><span class="swatch" style="background:#7fd0ff"></span>SPD 速度（パドル側・3段）パドル移動速度が上がる</div>
+        <div><span class="swatch" style="background:#9fb8ff"></span>GID 誘導（パドル側・3段）ボールがパドル中心へ弱く寄る</div>
+        <div><span class="swatch" style="background:#b39fff"></span>CLN 分身（パドル側・3段）左右に補助パドルが出現</div>
+        <div><span class="swatch" style="background:#ffb35a"></span>PRC 貫通（球側・時限）ブロックを跳ね返らず貫通</div>
+        <div><span class="swatch" style="background:#ff8a5a"></span>EXP 爆発（球側・時限）命中時に周囲ブロックも破壊</div>
+        <div><span class="swatch" style="background:#ff5a7a"></span>ACC 加速（球側・時限）ボール速度が上がる</div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>出力JSON（B1実測落球数・B2実測復帰時間）</legend>
+      <textarea id="jsonOut" readonly placeholder="「セッション終了・JSON出力」を押すとここに出力されます"></textarea>
+    </fieldset>
+  </div>
+</div>
+
+<footer>
+  proto/ring_keep_calibration.html ― 指示書06 作業2。器具再割当（設計チャット20）によりB1・B2・B5はこのプロトタイプと
+  プレイテストで確認する。ring_sim.py（抽象tickモデル）はB3・要求量のみを判定する。Firebase・オンライン同期なし、ローカル完結。
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- 定数 ----------------------------------------------------------
+  var CW = 700, CH = 500;
+  var PADDLE_Y = CH - 24;
+  var PADDLE_H = 12;
+  var PADDLE_BASE_W = 90;
+  var PADDLE_BASE_SPEED = 900; // px/s、マウス追従なので実質未使用だが分身/速度段の基準に使う
+  var BALL_R = 7;
+  var BLOCK_ROWS = 5, BLOCK_COLS = 10;
+  var BLOCK_MARGIN = 3;
+  var BLOCK_TOP = 40;
+  var BLOCK_AREA_W = CW - 40;
+  var BLOCK_W = (BLOCK_AREA_W / BLOCK_COLS) - BLOCK_MARGIN;
+  var BLOCK_H = 18;
+  var BLOCK_HP_MAX = 2;
+
+  var PADDLE_SIDE_TYPES = ["enlarge", "speed", "guide", "clone"];
+  var BALL_SIDE_TYPES = ["pierce", "explode", "accel"];
+  var ALL_TYPES = PADDLE_SIDE_TYPES.concat(BALL_SIDE_TYPES);
+  var MAX_STAGE = 3;
+
+  var ITEM_COLOR = {
+    enlarge: "#5aa9ff", speed: "#7fd0ff", guide: "#9fb8ff", clone: "#b39fff",
+    pierce: "#ffb35a", explode: "#ff8a5a", accel: "#ff5a7a"
+  };
+  var ITEM_CODE = {
+    enlarge: "ENL", speed: "SPD", guide: "GID", clone: "CLN",
+    pierce: "PRC", explode: "EXP", accel: "ACC"
+  };
+
+  // ---- DOM参照 ----------------------------------------------------------
+  var canvas = document.getElementById("game");
+  var ctx = canvas.getContext("2d");
+  var hudEl = document.getElementById("hud");
+  var jsonOutEl = document.getElementById("jsonOut");
+  var startBtn = document.getElementById("startBtn");
+  var pauseBtn = document.getElementById("pauseBtn");
+  var endBtn = document.getElementById("endBtn");
+
+  var sliders = {
+    dropRate: document.getElementById("dropRate"),
+    serveInterval: document.getElementById("serveInterval"),
+    effectDuration: document.getElementById("effectDuration"),
+    effectMagnitude: document.getElementById("effectMagnitude"),
+    ballSpeed: document.getElementById("ballSpeed")
+  };
+  var sliderVals = {
+    dropRate: document.getElementById("dropRateVal"),
+    serveInterval: document.getElementById("serveIntervalVal"),
+    effectDuration: document.getElementById("effectDurationVal"),
+    effectMagnitude: document.getElementById("effectMagnitudeVal"),
+    ballSpeed: document.getElementById("ballSpeedVal")
+  };
+
+  function cfg() {
+    return {
+      dropRate: parseFloat(sliders.dropRate.value),
+      serveIntervalSec: parseFloat(sliders.serveInterval.value),
+      effectDurationSec: parseFloat(sliders.effectDuration.value),
+      effectMagnitude: parseFloat(sliders.effectMagnitude.value),
+      ballSpeedPxS: parseFloat(sliders.ballSpeed.value)
+    };
+  }
+
+  function refreshSliderLabels() {
+    var c = cfg();
+    sliderVals.dropRate.textContent = c.dropRate.toFixed(2);
+    sliderVals.serveInterval.textContent = c.serveIntervalSec.toFixed(1) + "s";
+    sliderVals.effectDuration.textContent = c.effectDurationSec.toFixed(1) + "s";
+    sliderVals.effectMagnitude.textContent = c.effectMagnitude.toFixed(1) + "x";
+    sliderVals.ballSpeed.textContent = c.ballSpeedPxS.toFixed(0);
+  }
+  Object.keys(sliders).forEach(function (k) {
+    sliders[k].addEventListener("input", refreshSliderLabels);
+  });
+  refreshSliderLabels();
+
+  // ---- セッション状態 ----------------------------------------------------------
+  var state = null; // 開始時に生成
+  var running = false;
+  var paused = false;
+  var rafId = null;
+  var lastT = null;
+
+  function freshState() {
+    return {
+      startedAt: null,
+      elapsedSec: 0,
+      config: cfg(),
+
+      paddle: { x: CW / 2, w: PADDLE_BASE_W },
+      stages: { enlarge: 0, speed: 0, guide: 0, clone: 0 },
+      // クロスアイテムの取得順スタック（パドル側の段のみ）。LIFO落球ペナルティ対象。
+      stageStack: [], // {type, stageIndex} stageIndex=1..3 (このpushで到達した段)
+
+      ball: null, // {x,y,vx,vy}
+      serving: true,
+      serveTimer: 0.4,
+
+      blocks: [],
+      wallDamage: 0,
+
+      drops: [], // 落ちてくるアイテムカプセル {x,y,vy,type}
+      ballEffects: {}, // type -> remainingSec (pierce/explode/accel)
+
+      // テレメトリ
+      dropEvents: [], // B1: {tSec}
+      pendingRecovery: {}, // type -> [{stageIndex, lostAtSec}] FIFO
+      recoveryTimesSec: [], // B2実測
+      pickupCounts: { enlarge: 0, speed: 0, guide: 0, clone: 0, pierce: 0, explode: 0, accel: 0 },
+      missedPickups: 0
+    };
+  }
+
+  function makeBlocks() {
+    var blocks = [];
+    for (var r = 0; r < BLOCK_ROWS; r++) {
+      for (var c = 0; c < BLOCK_COLS; c++) {
+        blocks.push({
+          row: r, col: c,
+          x: 20 + c * (BLOCK_W + BLOCK_MARGIN),
+          y: BLOCK_TOP + r * (BLOCK_H + BLOCK_MARGIN),
+          w: BLOCK_W, h: BLOCK_H,
+          hp: BLOCK_HP_MAX, alive: true
+        });
+      }
+    }
+    return blocks;
+  }
+
+  function serveBall(s) {
+    var c = s.config;
+    var angle = (-Math.PI / 2) + (Math.random() * 0.8 - 0.4); // ほぼ真上、少しランダム
+    var mag = magActive(s, "accel") ? c.ballSpeedPxS * (1 + c.effectMagnitude) : c.ballSpeedPxS;
+    s.ball = {
+      x: s.paddle.x, y: PADDLE_Y - BALL_R - 2,
+      vx: Math.cos(angle) * mag, vy: Math.sin(angle) * mag
+    };
+    s.serving = false;
+  }
+
+  function magActive(s, type) {
+    return (s.ballEffects[type] || 0) > 0;
+  }
+
+  function paddleWidth(s) {
+    // 拡大段: 段ごとに+20%、上限3段
+    return PADDLE_BASE_W * (1 + 0.2 * s.stages.enlarge);
+  }
+
+  function paddleMoveTargetX(s, pointerX) {
+    return pointerX;
+  }
+
+  // ---- LIFO落球ペナルティ ----------------------------------------------------------
+  function applyDropPenalty(s) {
+    if (s.stageStack.length === 0) return;
+    var entry = s.stageStack.pop();
+    var t = entry.type;
+    if (s.stages[t] >= entry.stageIndex) {
+      s.stages[t] = entry.stageIndex - 1;
+    }
+    // 復帰待ち登録（B2計測対象）：同じ段に再到達したら復帰
+    if (!s.pendingRecovery[t]) s.pendingRecovery[t] = [];
+    s.pendingRecovery[t].push({ stageIndex: entry.stageIndex, lostAtSec: s.elapsedSec });
+  }
+
+  function onBallMiss(s) {
+    s.dropEvents.push({ tSec: s.elapsedSec });
+    applyDropPenalty(s);
+    s.ball = null;
+    s.serving = true;
+    s.serveTimer = s.config.serveIntervalSec;
+  }
+
+  // ---- アイテム取得 ----------------------------------------------------------
+  function onPickup(s, type) {
+    s.pickupCounts[type]++;
+    if (PADDLE_SIDE_TYPES.indexOf(type) >= 0) {
+      if (s.stages[type] < MAX_STAGE) {
+        s.stages[type]++;
+        s.stageStack.push({ type: type, stageIndex: s.stages[type] });
+      }
+      // 復帰判定：この段への喪失が未回復で残っていれば回復とみなす
+      var pend = s.pendingRecovery[type];
+      if (pend && pend.length) {
+        for (var i = 0; i < pend.length; i++) {
+          if (pend[i].stageIndex <= s.stages[type]) {
+            var rec = pend.splice(i, 1)[0];
+            s.recoveryTimesSec.push(s.elapsedSec - rec.lostAtSec);
+            break;
+          }
+        }
+      }
+    } else {
+      // 球側：時限効果を(再)付与
+      s.ballEffects[type] = s.config.effectDurationSec;
+    }
+  }
+
+  function spawnDropMaybe(s, x, y) {
+    if (Math.random() < s.config.dropRate) {
+      var type = ALL_TYPES[Math.floor(Math.random() * ALL_TYPES.length)];
+      s.drops.push({ x: x, y: y, vy: 90, type: type });
+    }
+  }
+
+  // ---- 物理更新 ----------------------------------------------------------
+  function circleRectHit(cx, cy, cr, rx, ry, rw, rh) {
+    var nx = Math.max(rx, Math.min(cx, rx + rw));
+    var ny = Math.max(ry, Math.min(cy, ry + rh));
+    var dx = cx - nx, dy = cy - ny;
+    return (dx * dx + dy * dy) <= cr * cr;
+  }
+
+  function destroyBlock(s, b, viaExplode) {
+    if (!b.alive) return;
+    b.alive = false;
+    s.wallDamage += 1;
+    if (!viaExplode) spawnDropMaybe(s, b.x + b.w / 2, b.y + b.h / 2);
+    if (magActive(s, "explode")) {
+      var radius = Math.max(1, Math.round(s.config.effectMagnitude));
+      for (var i = 0; i < s.blocks.length; i++) {
+        var o = s.blocks[i];
+        if (!o.alive) continue;
+        if (Math.abs(o.row - b.row) <= radius && Math.abs(o.col - b.col) <= radius) {
+          destroyBlock(s, o, true);
+        }
+      }
+    }
+  }
+
+  function hitBlock(s, b) {
+    if (!b.alive) return;
+    b.hp -= 1;
+    if (b.hp <= 0) destroyBlock(s, b, false);
+  }
+
+  function allBlocksCleared(s) {
+    return s.blocks.every(function (b) { return !b.alive; });
+  }
+
+  function step(s, dt) {
+    s.elapsedSec += dt;
+    var c = s.config;
+
+    // 球側時限効果の減衰
+    ALL_TYPES.forEach(function (t) {
+      if (BALL_SIDE_TYPES.indexOf(t) >= 0 && s.ballEffects[t] > 0) {
+        s.ballEffects[t] = Math.max(0, s.ballEffects[t] - dt);
+      }
+    });
+
+    // パドル追従（マウス位置は pointerX に都度更新）
+    s.paddle.w = paddleWidth(s);
+    var speedMul = 1 + 0.35 * s.stages.speed;
+    var targetX = s.pointerX == null ? s.paddle.x : s.pointerX;
+    var maxStep = PADDLE_BASE_SPEED * speedMul * dt;
+    var dx = targetX - s.paddle.x;
+    if (Math.abs(dx) > maxStep) dx = maxStep * Math.sign(dx);
+    s.paddle.x += dx;
+    var halfW = s.paddle.w / 2;
+    s.paddle.x = Math.max(halfW, Math.min(CW - halfW, s.paddle.x));
+
+    // 分身補助パドル（stages.clone段数ぶん、左右に配置）
+    s.clonePads = [];
+    for (var i = 1; i <= s.stages.clone; i++) {
+      var off = 90 * i;
+      s.clonePads.push({ x: Math.max(30, s.paddle.x - off), w: 46 });
+      s.clonePads.push({ x: Math.min(CW - 30, s.paddle.x + off), w: 46 });
+    }
+
+    // サーブ待ち
+    if (s.serving) {
+      s.serveTimer -= dt;
+      if (s.serveTimer <= 0) serveBall(s);
+    }
+
+    // ボール更新
+    if (s.ball) {
+      var b = s.ball;
+      // 誘導：パドル中心へ弱く水平方向を寄せる
+      if (s.stages.guide > 0 && b.vy > 0) {
+        var pull = 40 * s.stages.guide;
+        var toward = (s.paddle.x - b.x);
+        b.vx += Math.sign(toward) * Math.min(Math.abs(toward), 1) * pull * dt;
+      }
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+
+      if (b.x - BALL_R < 0) { b.x = BALL_R; b.vx *= -1; }
+      if (b.x + BALL_R > CW) { b.x = CW - BALL_R; b.vx *= -1; }
+      if (b.y - BALL_R < 0) { b.y = BALL_R; b.vy *= -1; }
+
+      // ブロック衝突
+      var pierce = magActive(s, "pierce");
+      for (var bi = 0; bi < s.blocks.length; bi++) {
+        var blk = s.blocks[bi];
+        if (!blk.alive) continue;
+        if (circleRectHit(b.x, b.y, BALL_R, blk.x, blk.y, blk.w, blk.h)) {
+          hitBlock(s, blk);
+          if (!pierce) { b.vy *= -1; break; }
+        }
+      }
+      if (allBlocksCleared(s)) s.blocks = makeBlocks();
+
+      // メインパドル衝突
+      if (b.vy > 0 && circleRectHit(b.x, b.y, BALL_R, s.paddle.x - halfW, PADDLE_Y, s.paddle.w, PADDLE_H)) {
+        b.y = PADDLE_Y - BALL_R;
+        b.vy *= -1;
+        var off = (b.x - s.paddle.x) / halfW; // -1..1
+        b.vx += off * 120;
+      } else {
+        // 分身パドル衝突
+        for (var ci = 0; ci < s.clonePads.length; ci++) {
+          var cp = s.clonePads[ci];
+          if (b.vy > 0 && circleRectHit(b.x, b.y, BALL_R, cp.x - cp.w / 2, PADDLE_Y, cp.w, PADDLE_H)) {
+            b.y = PADDLE_Y - BALL_R;
+            b.vy *= -1;
+            break;
+          }
+        }
+      }
+
+      // 落球判定
+      if (b.y - BALL_R > CH) {
+        onBallMiss(s);
+      }
+    }
+
+    // 落下アイテム更新
+    for (var di = s.drops.length - 1; di >= 0; di--) {
+      var d = s.drops[di];
+      d.y += d.vy * dt;
+      var caught = circleRectHit(d.x, d.y, 6, s.paddle.x - halfW, PADDLE_Y, s.paddle.w, PADDLE_H);
+      if (!caught) {
+        for (var cj = 0; cj < s.clonePads.length; cj++) {
+          var cp2 = s.clonePads[cj];
+          if (circleRectHit(d.x, d.y, 6, cp2.x - cp2.w / 2, PADDLE_Y, cp2.w, PADDLE_H)) { caught = true; break; }
+        }
+      }
+      if (caught) {
+        onPickup(s, d.type);
+        s.drops.splice(di, 1);
+      } else if (d.y > CH) {
+        s.missedPickups++;
+        s.drops.splice(di, 1);
+      }
+    }
+  }
+
+  // ---- 描画 ----------------------------------------------------------
+  function draw(s) {
+    ctx.clearRect(0, 0, CW, CH);
+
+    // ブロック
+    s.blocks.forEach(function (b) {
+      if (!b.alive) return;
+      ctx.fillStyle = b.hp >= 2 ? "#4a6fa5" : "#3a5580";
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+    });
+
+    // パドル
+    var halfW = s.paddle.w / 2;
+    ctx.fillStyle = "#d7dae0";
+    ctx.fillRect(s.paddle.x - halfW, PADDLE_Y, s.paddle.w, PADDLE_H);
+    ctx.fillStyle = "#8a8fa0";
+    (s.clonePads || []).forEach(function (cp) {
+      ctx.fillRect(cp.x - cp.w / 2, PADDLE_Y, cp.w, PADDLE_H);
+    });
+
+    // ボール
+    if (s.ball) {
+      ctx.beginPath();
+      var glowing = magActive(s, "pierce") || magActive(s, "explode") || magActive(s, "accel");
+      ctx.fillStyle = glowing ? "#ffe08a" : "#f0f0f0";
+      ctx.arc(s.ball.x, s.ball.y, BALL_R, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 落下アイテム
+    s.drops.forEach(function (d) {
+      ctx.fillStyle = ITEM_COLOR[d.type];
+      ctx.fillRect(d.x - 7, d.y - 7, 14, 14);
+      ctx.fillStyle = "#05060a";
+      ctx.font = "8px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(ITEM_CODE[d.type], d.x, d.y + 3);
+    });
+
+    if (s.serving) {
+      ctx.fillStyle = "#9aa0ad";
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("サーブ待ち " + Math.max(0, s.serveTimer).toFixed(1) + "s", CW / 2, CH / 2);
+    }
+  }
+
+  // ---- HUD ----------------------------------------------------------
+  function fmtStages(s) {
+    return PADDLE_SIDE_TYPES.map(function (t) {
+      return ITEM_CODE[t] + ":" + s.stages[t] + "/3";
+    }).join("  ");
+  }
+  function fmtBallEffects(s) {
+    var parts = [];
+    BALL_SIDE_TYPES.forEach(function (t) {
+      var rem = s.ballEffects[t] || 0;
+      if (rem > 0) parts.push(ITEM_CODE[t] + ":" + rem.toFixed(1) + "s");
+    });
+    return parts.length ? parts.join("  ") : "(なし)";
+  }
+  function updateHud(s) {
+    var lastRec = s.recoveryTimesSec.length ? s.recoveryTimesSec[s.recoveryTimesSec.length - 1].toFixed(1) + "s" : "-";
+    var pendingCount = 0;
+    Object.keys(s.pendingRecovery).forEach(function (k) { pendingCount += s.pendingRecovery[k].length; });
+    hudEl.textContent =
+      "経過時間      : " + s.elapsedSec.toFixed(1) + "s\n" +
+      "壁ダメージ(累積破壊数): " + s.wallDamage + "\n" +
+      "パドル段      : " + fmtStages(s) + "\n" +
+      "球側効果残り  : " + fmtBallEffects(s) + "\n" +
+      "B1 落球回数   : " + s.dropEvents.length + "\n" +
+      "B2 復帰回数   : " + s.recoveryTimesSec.length + "（直近 " + lastRec + "）\n" +
+      "B2 復帰待ち中 : " + pendingCount + "\n" +
+      "アイテム取得数: " + Object.keys(s.pickupCounts).map(function (k) {
+        return ITEM_CODE[k] + s.pickupCounts[k];
+      }).join(" ");
+  }
+
+  // ---- メインループ ----------------------------------------------------------
+  function loop(ts) {
+    if (!running || paused) return;
+    if (lastT == null) lastT = ts;
+    var dt = Math.min(0.05, (ts - lastT) / 1000);
+    lastT = ts;
+    step(state, dt);
+    draw(state);
+    updateHud(state);
+    rafId = requestAnimationFrame(loop);
+  }
+
+  canvas.addEventListener("mousemove", function (ev) {
+    if (!state) return;
+    var rect = canvas.getBoundingClientRect();
+    state.pointerX = (ev.clientX - rect.left) * (CW / rect.width);
+  });
+
+  startBtn.addEventListener("click", function () {
+    state = freshState();
+    state.blocks = makeBlocks();
+    state.pointerX = CW / 2;
+    state.startedAt = new Date().toISOString();
+    running = true; paused = false; lastT = null;
+    startBtn.disabled = true;
+    pauseBtn.disabled = false;
+    endBtn.disabled = false;
+    pauseBtn.textContent = "一時停止";
+    jsonOutEl.value = "";
+    rafId = requestAnimationFrame(loop);
+  });
+
+  pauseBtn.addEventListener("click", function () {
+    if (!running) return;
+    paused = !paused;
+    pauseBtn.textContent = paused ? "再開" : "一時停止";
+    if (!paused) { lastT = null; rafId = requestAnimationFrame(loop); }
+  });
+
+  endBtn.addEventListener("click", function () {
+    running = false; paused = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    endBtn.disabled = true;
+
+    var s = state;
+    var pendingUnresolved = 0;
+    Object.keys(s.pendingRecovery).forEach(function (k) { pendingUnresolved += s.pendingRecovery[k].length; });
+
+    var out = {
+      note: "これは計測器具（proto/ring_keep_calibration.html）の出力であり、ゲームバランス確定値そのものではない。B1・B2は実測参考値としてNOW文書へ転記する。",
+      generated_at: new Date().toISOString(),
+      started_at: s.startedAt,
+      session_duration_sec: Number(s.elapsedSec.toFixed(2)),
+      config: s.config,
+      b1_drop_count: s.dropEvents.length,
+      b1_drop_events_sec: s.dropEvents.map(function (e) { return Number(e.tSec.toFixed(2)); }),
+      b2_recovery_count: s.recoveryTimesSec.length,
+      b2_recovery_times_sec: s.recoveryTimesSec.map(function (v) { return Number(v.toFixed(2)); }),
+      b2_pending_unresolved_at_end: pendingUnresolved,
+      item_pickup_counts: s.pickupCounts,
+      item_missed_pickup_count: s.missedPickups,
+      final_paddle_stages: s.stages,
+      final_wall_damage_block_count: s.wallDamage
+    };
+    jsonOutEl.value = JSON.stringify(out, null, 2);
+  });
+
+  // 初期描画（未開始プレースホルダ）
+  ctx.fillStyle = "#05060a";
+  ctx.fillRect(0, 0, CW, CH);
+  ctx.fillStyle = "#5a5f6d";
+  ctx.font = "14px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("「開始」を押してください", CW / 2, CH / 2);
+})();
+</script>
+</body>
+</html>
