@@ -17,5 +17,6 @@ PASS: staged_slope: 周回後は平均ダメージ/ヒットがSTAGE_SMALLより
 PASS: checkpoint_wall_target_consistency: checkpoint値と同じ乱数系列でwall_targetを引くと、到達tickがcheckpoint tick以下
 PASS: checkpoint_boundary: ticks==checkpointだと、そのcheckpointは記録されない（呼び出し側はticks=checkpoint+1にする必要がある、という既知の仕様）
 PASS: checkpoint_boundary: ticks==checkpoint+1なら、そのcheckpointが記録される
+PASS: catch_rate_slows_relay: catch_rate=0.5はcatch_rate=1.0より明確に遅い（または到達率が下がる）
 RESULT: PASS
 exit=0
