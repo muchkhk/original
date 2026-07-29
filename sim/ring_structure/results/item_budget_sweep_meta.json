@@ -1,0 +1,23 @@
+{
+  "script": "sim/ring_structure/item_budget_sweep.py",
+  "mode": "sweep",
+  "requirement": 64672.2,
+  "laser_target_frac": 0.1,
+  "laser_tol": 0.02,
+  "weaken_multiplier_fixed": 2.0,
+  "drop_rates_swept": [
+    0.08,
+    0.1,
+    0.12,
+    0.15
+  ],
+  "ticks_swept": [
+    2,
+    3
+  ],
+  "natural_trials": 300,
+  "relay_trials": 100,
+  "b3_trials": 800,
+  "pass_count": 0,
+  "generated_at": "2026-07-29T22:23:54.590397+00:00"
+}
