@@ -86,9 +86,42 @@ def g_downcross(damage):
     return G_MIN + (G_MAX - G_MIN) * damage
 
 
+# ============ 指示書02：強化壁・傾斜（既存モデルの拡張。新規モデルは起こさない） ============
+# 「強化球のみ強化壁を削る」：level>=1（一度でも上昇跨ぎした）球が、既存の
+# ブロックフェーズのヒット（1tick=1ラリーの一部として毎tick発生）のたびに
+# 強化壁へダメージを与える、という形で既存ループへ素直に足し込む。
+# 傾斜（このダメージ量がlevelにどう依存するか）は2候補：
+#   linear：damage = BASE_WALL_DMG * level（段数に比例。滑らかな傾斜）
+#   staged：level>=1だが未だ一周未達なら微小ダメージ（＝「疑問が生まれる」）、
+#           一周を1度でも達成した球（has_looped）は跳ね上がったダメージ
+#           （＝「別格になる」）。しきい値は「一周達成そのもの」とした
+#           （level>=Nでの近似ではなく、has_loopedという明示フラグを使う。
+#           levelはdecayで上下し得るため、level>=Nは「一周を達成した」ことの
+#           確実な代理指標にならないため）。
+BASE_WALL_DMG = 1.0
+STAGE_SMALL_WALL_DMG = 0.5
+STAGE_JUMP_WALL_DMG = 6.0
+
+
+def wall_damage_for_level(level, has_looped, slope_kind):
+    if level < 1:
+        return 0.0
+    if slope_kind == "linear":
+        return BASE_WALL_DMG * level
+    if slope_kind == "staged":
+        return STAGE_JUMP_WALL_DMG if has_looped else STAGE_SMALL_WALL_DMG
+    raise ValueError(f"unknown slope_kind: {slope_kind}")
+
+
 def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
-                    f_max=F_MAX, g_max=G_MAX):
-    """1試行を実行し、Q1〜Q3に必要な生データを辞書で返す。"""
+                    f_max=F_MAX, g_max=G_MAX, slope_kind=None, checkpoints=None,
+                    paddle_catch_rate=PADDLE_CATCH_RATE, wall_targets=None):
+    """1試行を実行し、Q1〜Q3に必要な生データを辞書で返す。
+
+    slope_kind=None の場合、強化壁の集計は一切行わない（指示書01時点の
+    挙動・出力とbit-for-bit互換を保つ）。指示書02の解析はslope_kindを
+    指定して呼び出す。
+    """
     block_remaining = [1.0] * N
     ground_damage = [0.0] * N
 
@@ -111,11 +144,25 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
     interrupted_events_total = 0  # up_streak>0の途中で落下跨ぎに遭った回数（Q3分子：挫折した歩数）
     vanished_total = 0
 
+    # 指示書02：強化壁の累積ダメージ。slope_kind=Noneなら一切更新しない
+    wall_damage_total = 0.0
+    reinforced_hits_total = 0
+    checkpoints_sorted = sorted(checkpoints) if checkpoints else []
+    checkpoint_idx = 0
+    checkpoint_results = {}  # tick -> {"loops": int, "wall_damage": float}
+
+    # 指示書02 Q2：「強化壁がこの要求量に初めて達したtick」を、値の昇順に記録する
+    # （requirement自体はQ1の自然プレイ分布から事後的に決まるため、呼び出し側が
+    # 候補値のリストとして渡す）
+    wall_targets_sorted = sorted(wall_targets) if wall_targets else []
+    wall_target_idx = 0
+    wall_target_ticks = {}  # requirement -> 初めて到達したtick
+
     def spawn(world, tick):
         nonlocal next_ball_id
         b = {
             "world": world, "level": 0, "up_streak": 0,
-            "birth_tick": tick, "ever_reinforced": False,
+            "birth_tick": tick, "ever_reinforced": False, "has_looped": False,
         }
         balls.append(b)
         balls_by_world[world].append(b)
@@ -166,6 +213,19 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
             for b in snapshot[w]:
                 # a) ブロックフェーズ
                 block_remaining[w] = max(0.0, block_remaining[w] - HIT_DECREMENT)
+
+                # 指示書02：強化壁ダメージ（このヒットの時点でのlevelを使う。
+                # このtickで上昇跨ぎするかどうかは、このヒットより後に決まる
+                # 別のイベントなので、ヒット時点の既存levelで判定する）
+                if slope_kind is not None and b["level"] >= 1:
+                    wall_damage_total += wall_damage_for_level(
+                        b["level"], b["has_looped"], slope_kind)
+                    reinforced_hits_total += 1
+                    while (wall_target_idx < len(wall_targets_sorted)
+                           and wall_damage_total >= wall_targets_sorted[wall_target_idx]):
+                        wall_target_ticks[wall_targets_sorted[wall_target_idx]] = tick
+                        wall_target_idx += 1
+
                 destruction = 1.0 - block_remaining[w]
                 if rng.random() < f_local(destruction):
                     # 上昇跨ぎ
@@ -178,6 +238,7 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                     b["world"] = (w + 1) % N
                     if b["up_streak"] == N:
                         loop_completions.append(tick - b["birth_tick"])
+                        b["has_looped"] = True
                         if first_loop_tick is None:
                             first_loop_tick = tick
                         b["up_streak"] = 0
@@ -185,7 +246,7 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                     continue  # このtickでの処理は完了
 
                 # b) パドルフェーズ（上昇しなかった場合のみ）
-                if rng.random() < PADDLE_CATCH_RATE:
+                if rng.random() < paddle_catch_rate:
                     next_by_world[w].append(b)  # 捕球。世界に留まる
                     continue
 
@@ -213,6 +274,17 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
 
         balls_by_world = next_by_world
 
+        # 指示書02：checkpointsで指定したtickの時点の累積値を記録する
+        # （Q1「1セッション相当」の候補tick数ごとの分布を、1回の試行から
+        # まとめて取得するため。tick=0起点なので「tickまでに」= tick+1個目の
+        # 処理が終わった時点、の意味でここに置く）
+        while checkpoint_idx < len(checkpoints_sorted) and tick == checkpoints_sorted[checkpoint_idx]:
+            checkpoint_results[checkpoints_sorted[checkpoint_idx]] = {
+                "loops": len(loop_completions),
+                "wall_damage": wall_damage_total,
+            }
+            checkpoint_idx += 1
+
     total_balls = next_ball_id
     return {
         "loop_completions": loop_completions,
@@ -223,6 +295,10 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         "interrupted_events_total": interrupted_events_total,
         "vanished_total": vanished_total,
         "total_balls": total_balls,
+        "wall_damage_total": wall_damage_total,
+        "reinforced_hits_total": reinforced_hits_total,
+        "checkpoint_results": checkpoint_results,
+        "wall_target_ticks": wall_target_ticks,
     }
 
 

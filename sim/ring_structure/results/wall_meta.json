@@ -1,0 +1,35 @@
+{
+  "script": "sim/ring_structure/wall_sim.py",
+  "wall_master_seed": 20260730,
+  "natural_trials": 3000,
+  "natural_ticks": 1801,
+  "relay_trials": 300,
+  "relay_ticks": 3000,
+  "checkpoints": [
+    300,
+    900,
+    1800
+  ],
+  "percentiles": [
+    0.5,
+    0.9,
+    0.99
+  ],
+  "safety_factors": [
+    2,
+    4,
+    8
+  ],
+  "slope_kinds": [
+    "linear",
+    "staged"
+  ],
+  "reference_serve_mode": "inf",
+  "hits_per_unit": {
+    "linear/inf": 0.038597547868103314,
+    "linear/interval": 0.0394361959482168,
+    "staged/inf": 0.17679501197519,
+    "staged/interval": 0.17714904927069072
+  },
+  "generated_at": "2026-07-29T05:27:10.202748+00:00"
+}
