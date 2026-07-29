@@ -22,7 +22,7 @@ PASS: item_backward_compat: item_system未指定ならdrop_events_per_worldが�
 PASS: sticky_holds_ball: sticky有効時はupcross_events_totalが無効時より明確に少ない（保持中は跨ぎ判定を試行しないため）
 PASS: lifo_drop_penalty: 低catch_rateで落球イベントが実際に発生する
 PASS: lifo_drop_penalty: 喪失後に同アイテムを再取得する経路（回復）も発生する
-PASS: band_evaluation: 帯内の合成データはB1が'pass'と判定される
-PASS: band_evaluation: 帯を大きく外れた合成データはB1が'pass'でないと判定される
-RESULT: PASS
-exit=0
+FAIL: band_evaluation: 帯内の合成データはB1が'pass'と判定される (good_ev.B1={'pass': False, 'value': 5.0, 'range': (2, 10), 'margin': 0.25})
+FAIL: band_evaluation: 帯を大きく外れた合成データはB1が'pass'でないと判定される (bad_ev.B1={'pass': True, 'value': 500.0, 'range': (2, 10), 'margin': 123.5})
+RESULT: FAIL (2 check(s) failed: band_evaluation: 帯内の合成データはB1が'pass'と判定される, band_evaluation: 帯を大きく外れた合成データはB1が'pass'でないと判定される)
+exit=1
