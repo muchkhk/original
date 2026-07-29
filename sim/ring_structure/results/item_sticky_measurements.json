@@ -1,0 +1,18 @@
+{
+  "trials": 2000,
+  "sticky_on": {
+    "starve_frac_mean": 0.03372013888888889,
+    "drop_mean": 3.148875,
+    "drop_min": 0,
+    "frac_sessions_below_b1_lower": 0.344125
+  },
+  "sticky_off": {
+    "starve_frac_mean": 0.030641527777777778,
+    "drop_mean": 4.992375,
+    "drop_min": 0,
+    "frac_sessions_below_b1_lower": 0.100125
+  },
+  "starve_delta": 0.003078611111111112,
+  "b1_lower_bound": 2,
+  "generated_at": "2026-07-29T15:16:56.801917+00:00"
+}

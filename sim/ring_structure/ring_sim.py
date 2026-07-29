@@ -103,6 +103,17 @@ STAGE_SMALL_WALL_DMG = 0.5
 STAGE_JUMP_WALL_DMG = 6.0
 
 
+# ============ 指示書05：玉キープ束（アイテム）。既存モデルの拡張 ============
+# 球側3種＝段なし・一定時間制。パドル側5種＝各3段・持続型（LIFO落球ペナルティ対象）。
+# item_system=None なら一切のアイテムロジックが走らない（指示書01〜04とbit-for-bit互換）。
+ITEM_BALL_SIDE = ["pierce", "explode", "accel"]      # 貫通・爆発・加速
+ITEM_PADDLE_SIDE = ["enlarge", "speed", "sticky", "guide", "clone"]  # 拡大・移動速度・スティッキー・ガイド・分身
+ITEM_ALL_TYPES = ITEM_PADDLE_SIDE + ITEM_BALL_SIDE
+PADDLE_MAX_STAGE = 3  # B4凍結：探索対象ではない固定値
+DEFAULT_PADDLE_POWER_BONUS_PER_STAGE = 0.01  # 近似仮定。報告書参照
+DEFAULT_PADDLE_CATCH_RATE_CAP = 0.98
+
+
 def wall_damage_for_level(level, has_looped, slope_kind):
     if level < 1:
         return 0.0
@@ -115,12 +126,29 @@ def wall_damage_for_level(level, has_looped, slope_kind):
 
 def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                     f_max=F_MAX, g_max=G_MAX, slope_kind=None, checkpoints=None,
-                    paddle_catch_rate=PADDLE_CATCH_RATE, wall_targets=None):
+                    paddle_catch_rate=PADDLE_CATCH_RATE, wall_targets=None,
+                    item_system=None):
     """1試行を実行し、Q1〜Q3に必要な生データを辞書で返す。
 
     slope_kind=None の場合、強化壁の集計は一切行わない（指示書01時点の
     挙動・出力とbit-for-bit互換を保つ）。指示書02の解析はslope_kindを
     指定して呼び出す。
+
+    item_system=None の場合、玉キープ束（アイテム）ロジックは一切走らない
+    （指示書01〜04とbit-for-bit互換を保つ）。指示書05の解析はdictで指定する：
+      {
+        "drop_rate": float,             # ブロック接触1回あたりのアイテム出現確率
+        "ball_effect_ticks": int,       # 球側効果（貫通/爆発/加速）の持続tick数
+        "ball_effect_magnitude": float, # 球側効果によるHIT_DECREMENT倍率ボーナス
+        "sticky_hold_ticks_range": (int,int),  # スティッキー保持tick数の範囲(呼び出し側でQ4較正から換算済み)
+        "paddle_power_bonus_per_stage": float,  # 省略可(デフォルトあり)
+        "paddle_catch_rate_cap": float,         # 省略可(デフォルトあり)
+        "sticky_enabled": bool,                 # 省略可(既定True)。Falseで測定(a)(b)用にsticky保持を無効化
+      }
+    球側3種（貫通・爆発・加速）は、このモデルに空間構造（隣接ブロック・弾道）が
+    無いため、いずれも「このヒットのHIT_DECREMENTにball_effect_magnitudeを
+    上乗せする」という同一の機構で近似した。爆発の範囲・貫通の対象数という
+    質的な違いはこの実装では区別できない（捨象。報告書に明記）。
     """
     block_remaining = [1.0] * N
     ground_damage = [0.0] * N
@@ -158,11 +186,34 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
     wall_target_idx = 0
     wall_target_ticks = {}  # requirement -> 初めて到達したtick
 
+    # 指示書05：玉キープ束（アイテム）。item_system=Noneなら一切初期化・更新しない
+    item_on = item_system is not None
+    if item_on:
+        drop_rate = item_system["drop_rate"]
+        ball_effect_ticks = item_system["ball_effect_ticks"]
+        ball_effect_magnitude = item_system["ball_effect_magnitude"]
+        sticky_lo, sticky_hi = item_system["sticky_hold_ticks_range"]
+        power_bonus = item_system.get("paddle_power_bonus_per_stage",
+                                       DEFAULT_PADDLE_POWER_BONUS_PER_STAGE)
+        catch_cap = item_system.get("paddle_catch_rate_cap", DEFAULT_PADDLE_CATCH_RATE_CAP)
+        sticky_enabled = item_system.get("sticky_enabled", True)
+
+        # world(=プレイヤー)ごとの状態
+        paddle_stages = [{it: 0 for it in ITEM_PADDLE_SIDE} for _ in range(N)]
+        paddle_stack = [[] for _ in range(N)]  # LIFO：取得順（種を跨いで管理）
+        drop_events_per_world = [0] * N        # B1：落球（ミスキャッチ）回数
+        recovery_times_per_world = [[] for _ in range(N)]  # B2：喪失→同アイテム再取得までのtick差
+        lost_ticks_queue = [{it: [] for it in ITEM_PADDLE_SIDE} for _ in range(N)]
+        ball_effect_active_ticks = [0] * N     # B3分子：いずれかの球側効果が有効だったtick数
+        # 追加測定(a)の球涸れ(STARVE)は、既存のsimultaneous_counts（下記で常に記録）を
+        # 呼び出し側(item_sim.py)で集計すれば求まるため、ここでは重複して持たない。
+
     def spawn(world, tick):
         nonlocal next_ball_id
         b = {
             "world": world, "level": 0, "up_streak": 0,
             "birth_tick": tick, "ever_reinforced": False, "has_looped": False,
+            "ball_effect": None, "hold_ticks": 0,
         }
         balls.append(b)
         balls_by_world[world].append(b)
@@ -201,6 +252,12 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         for w in range(N):
             simultaneous_counts[w].append(len(balls_by_world[w]))
 
+        # 指示書05 B3：このtick開始時点で、いずれかの球側効果が有効な球がいるworldを記録
+        if item_on:
+            for w in range(N):
+                if any(b["ball_effect"] is not None for b in balls_by_world[w]):
+                    ball_effect_active_ticks[w] += 1
+
         # --- 各球のラリー処理 ---
         # 重要：このtickで跨いだ球を、跨いだ先のworldへ即座に混ぜてはいけない。
         # worldをw=0..N-1の順で処理するため、即座に混ぜると「跨いだ直後にもう一度
@@ -211,8 +268,43 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         next_by_world = [[] for _ in range(N)]
         for w in range(N):
             for b in snapshot[w]:
+                # 指示書05：スティッキー保持中の球は、ラリー処理を一切行わず
+                # そのまま在圏球として次tickへ持ち越す（在圏カウントには通常算入。
+                # 特例を作らない、という凍結事項の通り、simultaneous_counts等は
+                # このbも含めてカウント済み）。
+                if item_on and b["hold_ticks"] > 0:
+                    b["hold_ticks"] -= 1
+                    next_by_world[w].append(b)
+                    continue
+
                 # a) ブロックフェーズ
-                block_remaining[w] = max(0.0, block_remaining[w] - HIT_DECREMENT)
+                effective_hit = HIT_DECREMENT
+                if item_on and b["ball_effect"] is not None:
+                    # 貫通・爆発・加速はいずれも「このヒットの破壊力を底上げする」
+                    # という同一機構で近似する（空間構造が無いため質的な違いは
+                    # 表現できない。捨象。報告書に明記）。
+                    effective_hit = HIT_DECREMENT * (1.0 + ball_effect_magnitude)
+                block_remaining[w] = max(0.0, block_remaining[w] - effective_hit)
+
+                # 球側効果の残りtickを消費する（このヒットに使った直後の効果に対して）
+                if item_on and b["ball_effect"] is not None:
+                    b["ball_effect"]["ticks_left"] -= 1
+                    if b["ball_effect"]["ticks_left"] <= 0:
+                        b["ball_effect"] = None
+
+                # 指示書05：アイテムドロップ判定（ブロック接触1回につき1回）
+                if item_on and rng.random() < drop_rate:
+                    item_type = ITEM_ALL_TYPES[int(rng.random() * len(ITEM_ALL_TYPES))]
+                    if item_type in ITEM_PADDLE_SIDE:
+                        prev_stage = paddle_stages[w][item_type]
+                        if prev_stage < PADDLE_MAX_STAGE:
+                            paddle_stages[w][item_type] += 1
+                            paddle_stack[w].append(item_type)
+                            if lost_ticks_queue[w][item_type]:
+                                t_lost = lost_ticks_queue[w][item_type].pop(0)
+                                recovery_times_per_world[w].append(tick - t_lost)
+                    else:
+                        b["ball_effect"] = {"type": item_type, "ticks_left": ball_effect_ticks}
 
                 # 指示書02：強化壁ダメージ（このヒットの時点でのlevelを使う。
                 # このtickで上昇跨ぎするかどうかは、このヒットより後に決まる
@@ -236,6 +328,9 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                     upcross_events_total += 1
                     b["up_streak"] += 1
                     b["world"] = (w + 1) % N
+                    if item_on:
+                        # 凍結文v2：球が自陣を出た瞬間に球側効果は残らない
+                        b["ball_effect"] = None
                     if b["up_streak"] == N:
                         loop_completions.append(tick - b["birth_tick"])
                         b["has_looped"] = True
@@ -246,9 +341,30 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                     continue  # このtickでの処理は完了
 
                 # b) パドルフェーズ（上昇しなかった場合のみ）
-                if rng.random() < paddle_catch_rate:
+                effective_catch_rate = paddle_catch_rate
+                if item_on:
+                    stage_sum = sum(paddle_stages[w].values())
+                    effective_catch_rate = min(
+                        catch_cap, paddle_catch_rate + power_bonus * stage_sum)
+
+                if rng.random() < effective_catch_rate:
+                    if item_on and sticky_enabled and paddle_stages[w]["sticky"] > 0:
+                        # スティッキー保持：実時間3〜5秒(呼び出し側でtick換算済み)の
+                        # 間、ラリー処理を止めて在圏球として持ち越す（B5）
+                        hold = sticky_lo if sticky_lo >= sticky_hi else (
+                            sticky_lo + int(rng.random() * (sticky_hi - sticky_lo + 1)))
+                        b["hold_ticks"] = max(1, hold)
                     next_by_world[w].append(b)  # 捕球。世界に留まる
                     continue
+
+                # 指示書05：落球（ミスキャッチ）＝B1のカウント対象＋LIFO落球ペナルティ
+                if item_on:
+                    drop_events_per_world[w] += 1
+                    if paddle_stack[w]:
+                        lost_item = paddle_stack[w].pop()
+                        if paddle_stages[w][lost_item] > 0:
+                            paddle_stages[w][lost_item] -= 1
+                            lost_ticks_queue[w][lost_item].append(tick)
 
                 ground_damage[w] = min(1.0, ground_damage[w] + DMG_INCREMENT)
                 if rng.random() < g_local(ground_damage[w]):
@@ -267,6 +383,9 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                         b["level"] = max(-1, prev_level - 1)
                     # decay_on=False（対照条件）：落下跨ぎは起きるが段数は変化しない
                     b["world"] = (w - 1) % N
+                    if item_on:
+                        # 凍結文v2：球が自陣を出た瞬間に球側効果は残らない（下方跨ぎも同様）
+                        b["ball_effect"] = None
                     next_by_world[b["world"]].append(b)
                     continue
 
@@ -286,7 +405,7 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
             checkpoint_idx += 1
 
     total_balls = next_ball_id
-    return {
+    result = {
         "loop_completions": loop_completions,
         "first_loop_tick": first_loop_tick,
         "simultaneous_counts": simultaneous_counts,
@@ -300,6 +419,12 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         "checkpoint_results": checkpoint_results,
         "wall_target_ticks": wall_target_ticks,
     }
+    if item_on:
+        result["drop_events_per_world"] = drop_events_per_world              # B1
+        result["recovery_times_per_world"] = recovery_times_per_world        # B2（tick差のリスト）
+        result["ball_effect_active_frac_per_world"] = [
+            ball_effect_active_ticks[w] / ticks for w in range(N)]           # B3
+    return result
 
 
 def pct(sorted_vals, p):

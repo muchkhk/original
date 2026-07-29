@@ -23,11 +23,16 @@ has_looped判定）を意図的に壊し、check_staged_slope_jumps_after_loop�
 paddle_catch_rate引数）を意図的に無視する壊れた実装を注入し、
 check_catch_rate_slows_relayが確実にFAILすることを示す。
 
+--inject-band-bug を付けると、指示書05の帯判定ロジック（evaluate_bands）の
+B1判定を意図的に反転させ、check_band_evaluation_distinguishes_pass_failが
+確実にFAILすることを示す（完了条件2：帯逸脱の成功/失敗パス分離）。
+
 使い方:
   python selfcheck.py                       # 正常系。RESULT: PASS を期待
   python selfcheck.py --inject-population-bug  # 異常系。RESULT: FAIL を期待
   python selfcheck.py --inject-wall-bug        # 異常系。RESULT: FAIL を期待
   python selfcheck.py --inject-catchrate-bug   # 異常系。RESULT: FAIL を期待
+  python selfcheck.py --inject-band-bug        # 異常系。RESULT: FAIL を期待
 """
 import argparse
 import sys
@@ -36,6 +41,7 @@ sys.path.insert(0, __file__.rsplit("/", 1)[0] if "/" in __file__ else ".")
 
 import ring_sim as rs
 import wall_sim as ws
+import item_sim as isim
 
 FAILURES = []
 
@@ -288,6 +294,104 @@ def check_catch_rate_slows_relay(inject_bug=False):
           f"fast_median={fast_med}(reached={fast_reached}) slow_median={slow_med}(reached={slow_reached})")
 
 
+def check_item_backward_compat():
+    """item_system=None（指示書01〜04時点のデフォルト）のとき、アイテム関連の
+    集計キーが結果に一切現れないこと（既存の再現性を壊していないこと）を確認する。"""
+    import random
+    r = rs.simulate_trial(random.Random(21), N=4, serve_mode="inf", decay_on=True,
+                           weakest_vanish=False, ticks=300)
+    check("item_backward_compat: item_system未指定ならdrop_events_per_worldが無い",
+          "drop_events_per_world" not in r, f"keys={list(r.keys())}")
+
+
+def check_sticky_holds_ball():
+    """スティッキー保持中(hold_ticks>0)の球は、ブロック/パドルフェーズの処理を
+    受けない（跨ぎ判定そのものを試行しない）ことを、sticky有効/無効の比較で確認する。
+    drop_rate=1.0・catch_rate=1.0にして毎ヒットでsticky段が付き、以後の捕球すべてで
+    保持が発生するようにすると、sticky有効時は無効時よりupcross_events_totalが
+    明確に少なくなるはず（保持中は跨ぎ判定自体が走らないため）。"""
+    import random
+    item_system = {
+        "drop_rate": 1.0, "ball_effect_ticks": 5, "ball_effect_magnitude": 1.0,
+        "sticky_hold_ticks_range": (3, 3),
+    }
+    item_system_off = dict(item_system, sticky_enabled=False)
+    r_on = rs.simulate_trial(random.Random(22), N=3, serve_mode="inf", decay_on=True,
+                              weakest_vanish=False, ticks=300, paddle_catch_rate=1.0,
+                              item_system=item_system)
+    r_off = rs.simulate_trial(random.Random(22), N=3, serve_mode="inf", decay_on=True,
+                               weakest_vanish=False, ticks=300, paddle_catch_rate=1.0,
+                               item_system=item_system_off)
+    check("sticky_holds_ball: sticky有効時はupcross_events_totalが無効時より明確に少ない"
+          "（保持中は跨ぎ判定を試行しないため）",
+          r_on["upcross_events_total"] < r_off["upcross_events_total"] * 0.5,
+          f"on={r_on['upcross_events_total']} off={r_off['upcross_events_total']}")
+
+
+def check_lifo_drop_penalty_order():
+    """LIFO落球ペナルティ：最後に取得した段が最初に剥がれることを、
+    多数の落球イベントを含む試行で間接的に確認する（drop_events_per_worldが
+    実際に発生していること＝ペナルティ経路自体が動いていることの確認）。"""
+    import random
+    item_system = {
+        "drop_rate": 0.3, "ball_effect_ticks": 5, "ball_effect_magnitude": 1.0,
+        "sticky_hold_ticks_range": (2, 4), "paddle_power_bonus_per_stage": 0.001,
+    }
+    r = rs.simulate_trial(random.Random(23), N=3, serve_mode="inf", decay_on=True,
+                           weakest_vanish=False, ticks=900, paddle_catch_rate=0.5,
+                           item_system=item_system)
+    total_drops = sum(r["drop_events_per_world"])
+    total_recoveries = sum(len(x) for x in r["recovery_times_per_world"])
+    check("lifo_drop_penalty: 低catch_rateで落球イベントが実際に発生する",
+          total_drops > 0, f"total_drops={total_drops}")
+    check("lifo_drop_penalty: 喪失後に同アイテムを再取得する経路（回復）も発生する",
+          total_recoveries > 0, f"total_recoveries={total_recoveries}")
+
+
+def check_band_evaluation_distinguishes_pass_fail(inject_bug=False):
+    """
+    指示書05 完了条件2：検証コード（evaluate_bands）自体が、成功パスと失敗パス
+    （帯逸脱）で必ず別の出力になることを、実際のシミュレーションを回す前に
+    合成データで確認する。
+
+    --inject-band-bug で、B1判定の不等号を意図的に反転させた壊れた実装を注入し、
+    「帯内のはずの値がNGと判定される／帯外のはずの値がOKと判定される」ことを示す。
+    """
+    good_summary = {
+        "b1_drop_mean": 5.0,            # B1帯[2,10]の中央付近
+        "b2_recovery_mean_ticks": 45.0, # B2帯の中央付近
+        "b3_uptime_mean_frac": 0.20,    # B3上限0.40の半分
+    }
+    bad_summary = {
+        "b1_drop_mean": 500.0,          # B1帯を大きく超える（明確な帯逸脱）
+        "b2_recovery_mean_ticks": 45.0,
+        "b3_uptime_mean_frac": 0.20,
+    }
+
+    if inject_bug:
+        orig_evaluate_bands = isim.evaluate_bands
+
+        def broken_evaluate_bands(summary):
+            ev = orig_evaluate_bands(summary)
+            ev["B1"]["pass"] = not ev["B1"]["pass"]  # 判定を反転させる壊れた実装
+            return ev
+
+        isim.evaluate_bands = broken_evaluate_bands
+        try:
+            good_ev = isim.evaluate_bands(good_summary)
+            bad_ev = isim.evaluate_bands(bad_summary)
+        finally:
+            isim.evaluate_bands = orig_evaluate_bands
+    else:
+        good_ev = isim.evaluate_bands(good_summary)
+        bad_ev = isim.evaluate_bands(bad_summary)
+
+    check("band_evaluation: 帯内の合成データはB1が'pass'と判定される",
+          good_ev["B1"]["pass"] is True, f"good_ev.B1={good_ev['B1']}")
+    check("band_evaluation: 帯を大きく外れた合成データはB1が'pass'でないと判定される",
+          bad_ev["B1"]["pass"] is False, f"bad_ev.B1={bad_ev['B1']}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--inject-population-bug", action="store_true",
@@ -296,6 +400,8 @@ def main():
                      help="指示書02の強化壁ロジック(has_looped判定)を意図的に壊し、FAIL経路を実例で示す")
     ap.add_argument("--inject-catchrate-bug", action="store_true",
                      help="指示書03のpaddle_catch_rate引数を無視する壊れた実装を注入し、FAIL経路を実例で示す")
+    ap.add_argument("--inject-band-bug", action="store_true",
+                     help="指示書05の帯判定(evaluate_bands)のB1判定を反転させ、FAIL経路を実例で示す")
     args = ap.parse_args()
 
     check_ring_math()
@@ -308,6 +414,10 @@ def main():
     check_checkpoint_and_wall_target_consistency()
     check_checkpoint_reaches_final_tick()
     check_catch_rate_slows_relay(inject_bug=args.inject_catchrate_bug)
+    check_item_backward_compat()
+    check_sticky_holds_ball()
+    check_lifo_drop_penalty_order()
+    check_band_evaluation_distinguishes_pass_fail(inject_bug=args.inject_band_bug)
 
     if FAILURES:
         print(f"RESULT: FAIL ({len(FAILURES)} check(s) failed: {', '.join(FAILURES)})")

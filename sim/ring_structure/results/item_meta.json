@@ -1,0 +1,54 @@
+{
+  "script": "sim/ring_structure/item_sim.py",
+  "item_master_seed": 20260731,
+  "session_ticks": 900,
+  "trials_per_combo": 800,
+  "sticky_hold_ticks_range": [
+    2,
+    4
+  ],
+  "b1_range": [
+    2,
+    10
+  ],
+  "b2_range_ticks": [
+    32.25960619384439,
+    86.02561651691836
+  ],
+  "b3_max_frac": 0.4,
+  "drop_rates_swept": [
+    0.02,
+    0.05,
+    0.1,
+    0.2
+  ],
+  "power_bonuses_swept": [
+    0.1,
+    0.2,
+    0.3,
+    0.5,
+    0.8
+  ],
+  "catch_caps_swept": [
+    0.995,
+    0.999
+  ],
+  "phase_a_b1b2_pass_count": 14,
+  "phase_a_all_pass_count": 0,
+  "phase_b_base_bundle": {
+    "drop_rate": 0.1,
+    "power_bonus_per_stage": 0.5,
+    "catch_cap": 0.999,
+    "b1_mean": 4.5403125,
+    "b1_pass": true,
+    "b1_margin": 0.36492187500000006,
+    "b2_mean_sec": 113.03848628580573,
+    "b2_pass": true,
+    "b2_margin": 0.814359634288153,
+    "b2_sample_n": 2083,
+    "b3_mean_frac": 0.46630069444444444,
+    "b3_pass": false,
+    "b3_margin": 0.16575173611111094
+  },
+  "generated_at": "2026-07-29T15:27:41.606783+00:00"
+}

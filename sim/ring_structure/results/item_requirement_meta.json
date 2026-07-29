@@ -1,0 +1,18 @@
+{
+  "script": "sim/ring_structure/item_requirement_check.py",
+  "requirement": 64672.2,
+  "session_ticks": 900,
+  "slope_kind": "staged",
+  "final_bundle": {
+    "drop_rate": 0.15,
+    "ball_effect_ticks": 2,
+    "paddle_power_bonus_per_stage": 0.3,
+    "paddle_catch_rate_cap": 0.999
+  },
+  "magnitudes_checked": [
+    0.5,
+    1.0,
+    2.0
+  ],
+  "generated_at": "2026-07-29T15:18:07.820872+00:00"
+}
