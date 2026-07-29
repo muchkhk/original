@@ -26,10 +26,33 @@
     overflow-y:auto;padding:6px;white-space:pre-wrap}
   #latency{font-size:12px;color:#9d9}
   .badge{display:inline-block;padding:2px 6px;border-radius:3px;background:#553;font-size:11px}
+  .q4box{border:1px solid #556;padding:10px;margin-bottom:14px;background:#20202a}
+  .q4box h2{font-size:14px;margin:0 0 6px}
+  .q4box p{font-size:12px;color:#bbb;margin:4px 0}
+  #tickBtn{font-size:20px;padding:14px 28px}
+  #tickCount{font-size:22px;font-weight:bold;margin:0 10px}
+  #q4history{font-family:monospace;font-size:12px;color:#9d9;white-space:pre-wrap;margin-top:6px}
 </style>
 </head>
 <body>
 <h1>環構造 越境同期スパイク（指示書01・単一HTML＋Firebase RTDB、Emulator専用）</h1>
+
+<div class="q4box">
+  <h2>⏱ Q4較正（指示書02）：100tick相当タイマー</h2>
+  <p>「ラリー1回＝ブロック接触1回＋パドル接触1回」を頭の中でイメージしながら、
+     急がず・自分が想像する1ラリー分のテンポで、下のボタンを100回クリックしてください。
+     100回目のクリックで自動的に計測が止まり、経過秒数が下に記録されます。
+     3回以上（できればテンポを変えず）繰り返し、記録された行をそのままコピーして報告してください。</p>
+  <p style="color:#e88">注：これはボタンクリックの間隔を測る代理指標であり、実際のラリー時間そのものの
+     計測ではありません（実機のボール描画アニメーションは未実装のため）。</p>
+  <div class="row">
+    <button id="tickBtn">tick</button>
+    <span id="tickCount">0 / 100</span>
+    <button id="q4ResetBtn">リセット</button>
+  </div>
+  <div id="q4history">（まだ計測なし）</div>
+</div>
+
 <div class="row">
   <span class="badge" id="gateBadge">未接続</span>
   <span id="status">-</span>
@@ -56,6 +79,46 @@ const FIREBASE_CONFIG = {
   databaseURL: "https://ring-spike-test-default-rtdb.firebaseio.com",
   projectId: "ring-spike-test",
 };
+
+// --- Q4較正タイマー（Firebase/Emulatorとは独立して常に動く） ---
+(function () {
+  const TARGET = 100;
+  const tickBtn = document.getElementById("tickBtn");
+  const tickCountEl = document.getElementById("tickCount");
+  const historyEl = document.getElementById("q4history");
+  const resetBtn = document.getElementById("q4ResetBtn");
+  let count = 0;
+  let startedAt = null;
+  let runs = [];
+
+  function render() {
+    tickCountEl.textContent = `${count} / ${TARGET}`;
+    historyEl.textContent = runs.length
+      ? runs.map((r, i) => `run${i + 1}: ${r.seconds.toFixed(2)}s  (${(r.seconds * 1000 / TARGET).toFixed(1)}ms/tick)`).join("\n")
+      : "（まだ計測なし）";
+  }
+
+  tickBtn.addEventListener("click", () => {
+    if (count === 0) startedAt = performance.now();
+    count++;
+    if (count >= TARGET) {
+      const seconds = (performance.now() - startedAt) / 1000;
+      runs.push({ seconds });
+      count = 0;
+      startedAt = null;
+    }
+    render();
+  });
+
+  resetBtn.addEventListener("click", () => {
+    count = 0;
+    startedAt = null;
+    runs = [];
+    render();
+  });
+
+  render();
+})();
 
 const qs = new URLSearchParams(location.search);
 const emulatorMode = qs.get("emulator") === "1" &&

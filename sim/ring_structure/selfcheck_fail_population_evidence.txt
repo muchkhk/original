@@ -4,7 +4,7 @@ PASS: ring_math N=5: N回連続+1で出発点に戻る
 PASS: reproducibility: 同一seedで結果がbit-for-bit一致
 PASS: loop_detection: f_max=0.999,g_max=0でN=3が数tick以内に一周完了する
 PASS: loop_detection: f_max=0では一周が一度も発生しない
-PASS: population_conservation: 同時球数がN*SERVE_CAPを超えない
+FAIL: population_conservation: 同時球数がN*SERVE_CAPを超えない (max_seen=162 > N*SERVE_CAP=12（意図的に緩めたSERVE_CAPで再現）)
 PASS: wall_backward_compat: slope_kind未指定ならwall_damage_totalは0
 PASS: wall_backward_compat: slope_kind未指定ならreinforced_hits_totalは0
 PASS: wall_damage_fn: level=0は常に0ダメージ
@@ -17,5 +17,5 @@ PASS: staged_slope: 周回後は平均ダメージ/ヒットがSTAGE_SMALLより
 PASS: checkpoint_wall_target_consistency: checkpoint値と同じ乱数系列でwall_targetを引くと、到達tickがcheckpoint tick以下
 PASS: checkpoint_boundary: ticks==checkpointだと、そのcheckpointは記録されない（呼び出し側はticks=checkpoint+1にする必要がある、という既知の仕様）
 PASS: checkpoint_boundary: ticks==checkpoint+1なら、そのcheckpointが記録される
-RESULT: PASS
-exit=0
+RESULT: FAIL (1 check(s) failed: population_conservation: 同時球数がN*SERVE_CAPを超えない)
+exit=1
