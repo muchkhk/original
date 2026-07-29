@@ -324,9 +324,6 @@ def check_sticky_removed(inject_bug=False):
     paddle_side = rs.ITEM_PADDLE_SIDE + ["sticky"] if inject_bug else rs.ITEM_PADDLE_SIDE
     check("sticky_removed: ITEM_PADDLE_SIDEに'sticky'が含まれない",
           "sticky" not in paddle_side, f"ITEM_PADDLE_SIDE={paddle_side}")
-    check("sticky_removed: ITEM_ALL_TYPESの総数は7種（sticky除去済み）",
-          len(paddle_side) + len(rs.ITEM_BALL_SIDE) == 7,
-          f"total={len(paddle_side) + len(rs.ITEM_BALL_SIDE)}")
 
     if inject_bug:
         return  # 種の混入自体が既に検出対象。以降のシミュ実行は正常系と同じため省略
@@ -347,6 +344,140 @@ def check_sticky_removed(inject_bug=False):
           "（保持機構が無いため、跨ぎ判定の欠落が起きない）",
           ratio >= 0.8, f"with_items={r_with_items['upcross_events_total']} "
           f"without_items={r_without_items['upcross_events_total']} ratio={ratio:.3f}")
+
+
+def check_nine_item_species(inject_bug=False):
+    """指示書07：cloneを除去しmagnet・laser・weakenを追加した結果、アイテム総数は
+    7→9種になった（パドル側5：拡大・速度・ガイド・磁石・レーザー／球側3：貫通・爆発・加速／
+    場1：自陣弱体化）。'clone'が存在しないこと・'sticky'も引き続き存在しないこと・
+    総数が9であることを確認する。
+
+    --inject-species-bugで、cloneを誤って残す壊れた構成を注入し、FAILすることを示す。
+    """
+    paddle_side = rs.ITEM_PADDLE_SIDE + ["clone"] if inject_bug else rs.ITEM_PADDLE_SIDE
+    all_types = paddle_side + rs.ITEM_BALL_SIDE + rs.ITEM_FIELD_SIDE
+    check("nine_species: ITEM_PADDLE_SIDEに'clone'が含まれない（指示書07で磁石へ差し替え）",
+          "clone" not in paddle_side, f"ITEM_PADDLE_SIDE={paddle_side}")
+    check("nine_species: 'sticky'も引き続き含まれない（指示書06のkillを維持）",
+          "sticky" not in all_types, f"all_types={all_types}")
+    check("nine_species: 全アイテム種の総数は9種（パドル5＋球3＋場1）",
+          len(all_types) == 9, f"total={len(all_types)} all_types={all_types}")
+
+
+def check_guide_mechanically_inert(inject_bug=False):
+    """指示書07：guideはドロップ枠・LIFOスタックを占有するが、捕球率計算からは
+    除外され物理・捕球率に一切寄与しない（案(a)：表示のみ・物理不介入）。
+
+    (1) ITEM_CATCH_RATE_CONTRIBUTORSにguideが含まれないこと（構成チェック）。
+    (2) 全ドロップをguide固定にした状態で大量の段を積んでも、捕球率が
+        paddle_catch_rateからほぼ動かず、B1（落球回数）が高いまま
+        （＝guideの段が捕球率を一切押し上げない）ことを実際にsimulate_trial()を
+        回して確認する（挙動チェック）。
+
+    --inject-instrument-bugで、guideも捕球率計算に含めてしまう壊れた実装を
+    一時的に注入し、段を積むほどB1が明確に減る（＝guideが寄与してしまう）ことを示す。
+    """
+    check("guide_inert: ITEM_CATCH_RATE_CONTRIBUTORSに'guide'が含まれない（構成チェック）",
+          "guide" not in rs.ITEM_CATCH_RATE_CONTRIBUTORS,
+          f"ITEM_CATCH_RATE_CONTRIBUTORS={rs.ITEM_CATCH_RATE_CONTRIBUTORS}")
+
+    import random
+    orig_all_types = rs.ITEM_ALL_TYPES
+    orig_contributors = rs.ITEM_CATCH_RATE_CONTRIBUTORS
+    rs.ITEM_ALL_TYPES = ["guide"]  # 全ドロップをguide固定にし、段を確実に積み上げる
+    if inject_bug:
+        rs.ITEM_CATCH_RATE_CONTRIBUTORS = ["guide"]  # 壊れた実装：guideも寄与させてしまう
+    item_system = {
+        "drop_rate": 1.0, "ball_effect_ticks": 1, "ball_effect_magnitude": 0.0,
+        "paddle_power_bonus_per_stage": 0.15, "paddle_catch_rate_cap": 1.0,
+        "pickup_miss_rate_base": 0.0,  # magnetの影響を排除し、guideの効果だけを見る
+    }
+    try:
+        r = rs.simulate_trial(random.Random(42), N=2, serve_mode="inf", decay_on=True,
+                               weakest_vanish=False, ticks=400, paddle_catch_rate=0.3,
+                               item_system=item_system)
+    finally:
+        rs.ITEM_ALL_TYPES = orig_all_types
+        rs.ITEM_CATCH_RATE_CONTRIBUTORS = orig_contributors
+
+    total_drops = sum(r["drop_events_per_world"])
+    # 実測基準（seed固定・同一条件）：guideが寄与しない場合 total_drops=1626、
+    # guideが寄与する（壊れた実装）場合 total_drops=590 まで落ち込む。
+    # 閾値1000はこの2値の中間に置き、どちらの経路かを確実に判別する。
+    check("guide_inert: guide段を積み上げても捕球率が動かず、B1（落球回数）が高いまま維持される",
+          total_drops > 1000,
+          f"total_drops={total_drops}（guideが寄与すると590近傍まで大きく減る。閾値1000）")
+
+
+def check_random_slot_equivalence(inject_bug=False):
+    """指示書07：ドロップテーブルは9種+抽選枠randomの10エントリだが、randomが
+    9種へ均等再抽選されるため、各アイテムの実効出現率は厳密に1/9になる
+    （この等価性により、シミュはrandomを実装せず9種均等抽選のみで代表してよい、
+    という簡略化の根拠）。モンテカルロで検算する。
+
+    --inject-random-bugで、randomの再抽選を均等でなくする（常に先頭アイテム固定）
+    壊れた解決方法を注入し、分布が1/9から有意に外れることを示す。
+    """
+    import random
+    items = list(rs.ITEM_ALL_TYPES)
+    n = len(items)
+    rng = random.Random(999)
+    trials = 90000
+    counts = {it: 0 for it in items}
+    for _ in range(trials):
+        slot = int(rng.random() * (n + 1))  # 10エントリ：0..n-1=直接、n=random
+        if slot < n:
+            resolved = items[slot]
+        elif inject_bug:
+            resolved = items[0]  # 壊れた実装：常に先頭固定（均等でない）
+        else:
+            resolved = items[int(rng.random() * n)]
+        counts[resolved] += 1
+    expected = trials / n
+    max_dev_frac = max(abs(c - expected) / expected for c in counts.values())
+    check("random_slot_equivalence: 各アイテムの実効出現率が1/9からの乖離5%以内"
+          "（10エントリ抽選と9種均等抽選の等価性の検算）",
+          max_dev_frac < 0.05, f"expected={expected:.1f} max_dev_frac={max_dev_frac:.3f} counts={counts}")
+
+
+def check_b3_excludes_weaken(inject_bug=False):
+    """指示書07：B3は球側3種（貫通・爆発・加速）のみの稼働率であり、weaken
+    （場・時限）の稼働率を含めてはならない（定義変更禁止）。全ドロップをweaken
+    固定にした状況で、B3（ball_effect_active_frac_per_world）がほぼ0のまま、
+    weaken_active_frac_per_world（参考値）だけが実際に稼働していることを確認する。
+
+    --inject-b3-scope-bugで、集計後にweaken稼働率をB3へ合算する壊れた集計を
+    注入し、B3が不当に高くなることを示す（simulate_trial自体は変更しない）。
+    """
+    import random
+    orig_all_types = rs.ITEM_ALL_TYPES
+    rs.ITEM_ALL_TYPES = ["weaken"]  # 全ドロップをweaken固定にする
+    item_system = {
+        "drop_rate": 1.0, "ball_effect_ticks": 900, "ball_effect_magnitude": 0.0,
+        "paddle_power_bonus_per_stage": 0.0, "paddle_catch_rate_cap": 1.0,
+        "pickup_miss_rate_base": 0.0,
+    }
+    try:
+        r = rs.simulate_trial(random.Random(7), N=2, serve_mode="inf", decay_on=True,
+                               weakest_vanish=False, ticks=300, paddle_catch_rate=1.0,
+                               item_system=item_system)
+    finally:
+        rs.ITEM_ALL_TYPES = orig_all_types
+
+    b3 = r["ball_effect_active_frac_per_world"]
+    weaken_frac = r["weaken_active_frac_per_world"]
+    check("b3_excludes_weaken: weakenのみドロップされる状況で、参考値weaken_active_fracは"
+          "実際に高稼働している（前提条件）",
+          min(weaken_frac) > 0.5, f"weaken_frac={weaken_frac}")
+
+    if inject_bug:
+        combined = [b3[w] + weaken_frac[w] for w in range(len(b3))]  # 壊れた集計：B3へweakenを混入
+        check("b3_excludes_weaken: B3（球側3種のみ）はweakenのみの状況で0近傍のまま"
+              "（意図的にweakenをB3へ混入させた壊れた集計）",
+              max(combined) <= 0.01, f"combined(bug)={combined}")
+    else:
+        check("b3_excludes_weaken: B3（球側3種のみ）はweakenのみの状況で0近傍のまま",
+              max(b3) <= 0.01, f"b3={b3}")
 
 
 def check_b1_b2_have_no_verdict(inject_bug=False):
@@ -454,6 +585,14 @@ def main():
                      help="指示書06のB3帯判定(evaluate_b3)のpass判定を反転させ、FAIL経路を実例で示す")
     ap.add_argument("--inject-instrument-bug", action="store_true",
                      help="指示書06のsticky除去・B1/B2非判定の回帰(sticky再導入/B1にpass判定混入)を注入し、FAIL経路を実例で示す")
+    ap.add_argument("--inject-species-bug", action="store_true",
+                     help="指示書07のアイテム9種構成にcloneを誤って残す壊れた構成を注入し、FAIL経路を実例で示す")
+    ap.add_argument("--inject-guide-bug", action="store_true",
+                     help="指示書07のguide機構的不活性を壊し、guideが捕球率に寄与してしまう実装を注入し、FAIL経路を実例で示す")
+    ap.add_argument("--inject-random-bug", action="store_true",
+                     help="指示書07のドロップテーブル等価性(10エントリ=9種均等)を壊し、FAIL経路を実例で示す")
+    ap.add_argument("--inject-b3-scope-bug", action="store_true",
+                     help="指示書07のB3定義(球側3種のみ)にweakenを混入させる壊れた集計を注入し、FAIL経路を実例で示す")
     args = ap.parse_args()
 
     check_ring_math()
@@ -468,6 +607,10 @@ def main():
     check_catch_rate_slows_relay(inject_bug=args.inject_catchrate_bug)
     check_item_backward_compat()
     check_sticky_removed(inject_bug=args.inject_instrument_bug)
+    check_nine_item_species(inject_bug=args.inject_species_bug)
+    check_guide_mechanically_inert(inject_bug=args.inject_guide_bug)
+    check_random_slot_equivalence(inject_bug=args.inject_random_bug)
+    check_b3_excludes_weaken(inject_bug=args.inject_b3_scope_bug)
     check_lifo_drop_penalty_order()
     check_b3_evaluation_distinguishes_pass_fail(inject_bug=args.inject_band_bug)
     check_b1_b2_have_no_verdict(inject_bug=args.inject_instrument_bug)

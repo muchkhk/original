@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-玉キープ束（アイテム）のB3再掃引（指示書06。指示書05からの改訂）
+玉キープ束（アイテム）のB3再掃引（指示書07で9種構成へ改訂。指示書06からの改訂）
 
 sim/ring_structure/ring_sim.py の simulate_trial()（既存モデル）に指示書05で
 追加した item_system 引数を使う。新しい物理モデルはここでは作らない
 （既存モデルの拡張のみ）。
 
-【指示書06での器具再割当（設計チャット20）】
+【指示書06での器具再割当（設計チャット20）・指示書07でも継続】
 B1（落球頻度）・B2（復帰期待時間）・B5（スティッキー保持）は、このシミュでは
 パドル試行のペース（実時間との対応）を表現できないため、判定器具から外れた。
 最終確認は較正用プロトタイプ（`proto/ring_keep_calibration.html`）とプレイテストで行う。
@@ -15,10 +15,16 @@ B1（落球頻度）・B2（復帰期待時間）・B5（スティッキー保�
 値だけを記録する（PASS/FAIL形式では出力しない。実卓と乖離した器具の判定は
 偽の確信になるため＝指示書06完了条件1）。
 
+【指示書07】アイテムセット改訂（設計チャット21）：clone廃止・magnet/laser/weaken追加で
+9種構成に。ドロップテーブルは9種+抽選枠randomの10エントリだが、実効出現率は
+9種均等抽選と数学的に等価（selfcheck参照）なため、このスクリプトはrandomを
+実装せず9種均等抽選のみで代表する。掃引Aではlaser（laser_dps_per_stage=0=無効）は
+対象外（掃引Bで扱う）。weakenの稼働率はB3には含めず、参考値として別掲する。
+
 体験帯（凍結・設計チャット20。数値そのものは変更禁止）：
   B1 落球頻度：1人1セッション（900tick）あたり2〜10回　※参考値のみ。判定はプロト側
   B2 復帰期待時間：パドル側1段喪失から同段回復まで実時間45〜120秒　※参考値のみ
-  B3 球側効果の稼働率：セッションの40%以下　※このスクリプトで判定
+  B3 球側効果の稼働率：セッションの40%以下　※このスクリプトで判定（球側3種のみ。定義変更禁止）
   B4 パドル側の段数：各アイテム3段（固定・探索対象外）
   B5 スティッキー保持上限：対象（sticky）がkillされ消滅
   衝突時優先順位：B1 > B3（B1はもはやこのスクリプトの判定対象ではないが、事前登録は維持）
@@ -65,7 +71,8 @@ def run_bundle(seed, item_system, trials, ticks=SESSION_TICKS, N=NATURAL_N,
     rng = random.Random(seed)
     drop_counts = []      # 世界×試行 のフラットなリスト（B1・参考値）
     recovery_ticks = []   # 世界×試行 のフラットなリスト（B2・参考値）
-    uptime_fracs = []     # 世界×試行 のフラットなリスト（B3）
+    uptime_fracs = []     # 世界×試行 のフラットなリスト（B3・球側3種のみ）
+    weaken_fracs = []     # 世界×試行 のフラットなリスト（weaken稼働率・参考値。B3に含めない）
 
     for _ in range(trials):
         r = simulate_trial(rng, N, serve_mode, NATURAL_DECAY_ON, NATURAL_WEAKEST_VANISH,
@@ -74,11 +81,13 @@ def run_bundle(seed, item_system, trials, ticks=SESSION_TICKS, N=NATURAL_N,
         for w in range(N):
             recovery_ticks.extend(r["recovery_times_per_world"][w])
         uptime_fracs.extend(r["ball_effect_active_frac_per_world"])
+        weaken_fracs.extend(r["weaken_active_frac_per_world"])
 
     return {
         "drop_counts": drop_counts,
         "recovery_ticks": recovery_ticks,
         "uptime_fracs": uptime_fracs,
+        "weaken_fracs": weaken_fracs,
         "trials": trials, "ticks": ticks, "N": N,
     }
 
@@ -87,12 +96,14 @@ def summarize_bundle(raw):
     drop_mean = statistics.mean(raw["drop_counts"]) if raw["drop_counts"] else None
     recovery_mean = statistics.mean(raw["recovery_ticks"]) if raw["recovery_ticks"] else None
     uptime_mean = statistics.mean(raw["uptime_fracs"]) if raw["uptime_fracs"] else None
+    weaken_mean = statistics.mean(raw["weaken_fracs"]) if raw.get("weaken_fracs") else None
     return {
         "b1_drop_mean_REFERENCE_ONLY": drop_mean,
         "b2_recovery_mean_sec_REFERENCE_ONLY": (
             recovery_mean * Q4_MS_PER_TICK / 1000) if recovery_mean else None,
         "b2_recovery_sample_n": len(raw["recovery_ticks"]),
         "b3_uptime_mean_frac": uptime_mean,
+        "weaken_uptime_mean_frac_REFERENCE_ONLY": weaken_mean,
     }
 
 
@@ -111,9 +122,10 @@ def main():
     ap.add_argument("--out", type=str, default="sim/ring_structure/results")
     args = ap.parse_args()
 
-    # 指示書06 やること1-3：7種均等抽選・ball_effect_ticks∈{2,3,4,5,6}でB3の成立域を更新
-    drop_rates = [0.05, 0.10, 0.15, 0.20, 0.30]
-    ball_effect_ticks_list = [2, 3, 4, 5, 6]
+    # 指示書07 掃引A：9種均等抽選・drop_rate∈{0.10,0.15,0.20,0.25}×ball_effect_ticks∈{2,3,4}
+    # （laserは対象外＝laser_dps_per_stageは既定0.0で無効。掃引Bで扱う）
+    drop_rates = [0.10, 0.15, 0.20, 0.25]
+    ball_effect_ticks_list = [2, 3, 4]
     rows = []
     idx = 0
     for dr in drop_rates:
@@ -130,18 +142,22 @@ def main():
                 "drop_rate": dr, "ball_effect_ticks": bet,
                 "b3_mean_frac": summary["b3_uptime_mean_frac"],
                 "b3_pass": b3["pass"], "b3_margin": b3["margin"],
+                "weaken_uptime_mean_frac_reference_only":
+                    summary["weaken_uptime_mean_frac_REFERENCE_ONLY"],
                 "b1_drop_mean_reference_only": summary["b1_drop_mean_REFERENCE_ONLY"],
                 "b2_recovery_sec_reference_only": summary["b2_recovery_mean_sec_REFERENCE_ONLY"],
             })
             idx += 1
-            print(f"[B3sweep] drop_rate={dr} ball_effect_ticks={bet} "
+            print(f"[sweepA] drop_rate={dr} ball_effect_ticks={bet} "
                   f"B3={summary['b3_uptime_mean_frac']:.3f}({'OK' if b3['pass'] else 'NG'}) "
+                  f"weaken(参考)={summary['weaken_uptime_mean_frac_REFERENCE_ONLY']:.3f} "
                   f"[参考]B1={summary['b1_drop_mean_REFERENCE_ONLY']:.2f}回 "
                   f"B2={summary['b2_recovery_mean_sec_REFERENCE_ONLY']}")
 
     os.makedirs(args.out, exist_ok=True)
-    path = f"{args.out}/item_b3_resweep.csv"
+    path = f"{args.out}/item_sweepA_b3_weaken.csv"
     cols = ["drop_rate", "ball_effect_ticks", "b3_mean_frac", "b3_pass", "b3_margin",
+            "weaken_uptime_mean_frac_reference_only",
             "b1_drop_mean_reference_only", "b2_recovery_sec_reference_only"]
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols)
@@ -155,7 +171,7 @@ def main():
 
     meta = {
         "script": "sim/ring_structure/item_sim.py",
-        "note": "指示書06でB1/B2/B5をシミュの判定対象から除外し、B3専用の再掃引に改訂した",
+        "note": "指示書07でアイテムを9種構成へ改訂し、掃引A（B3+weaken参考値）に更新した",
         "item_master_seed": ITEM_MASTER_SEED,
         "session_ticks": SESSION_TICKS,
         "trials_per_combo": args.trials,

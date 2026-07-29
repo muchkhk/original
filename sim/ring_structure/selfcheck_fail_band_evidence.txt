@@ -1,32 +1,38 @@
-PASS: ring_math N=3: Nå›é€£ç¶š+1ã§å‡ºç™ºç‚¹ã«æˆ»ã‚‹
-PASS: ring_math N=4: Nå›é€£ç¶š+1ã§å‡ºç™ºç‚¹ã«æˆ»ã‚‹
-PASS: ring_math N=5: Nå›é€£ç¶š+1ã§å‡ºç™ºç‚¹ã«æˆ»ã‚‹
-PASS: reproducibility: åŒä¸€seedã§çµæœãŒbit-for-bitä¸€è‡´
-PASS: loop_detection: f_max=0.999,g_max=0ã§N=3ãŒæ•°tickä»¥å†…ã«ä¸€å‘¨å®Œäº†ã™ã‚‹
-PASS: loop_detection: f_max=0ã§ã¯ä¸€å‘¨ãŒä¸€åº¦ã‚‚ç™ºç”Ÿã—ãªã„
-PASS: population_conservation: åŒæ™‚çƒæ•°ãŒN*SERVE_CAPã‚’è¶…ãˆãªã„
-PASS: wall_backward_compat: slope_kindæœªæŒ‡å®šãªã‚‰wall_damage_totalã¯0
-PASS: wall_backward_compat: slope_kindæœªæŒ‡å®šãªã‚‰reinforced_hits_totalã¯0
-PASS: wall_damage_fn: level=0ã¯å¸¸ã«0ãƒ€ãƒ¡ãƒ¼ã‚¸
-PASS: wall_damage_fn: linear level=3ã¯BASE*3
-PASS: wall_damage_fn: staged æœªå‘¨å›ã¯STAGE_SMALL
-PASS: wall_damage_fn: staged å‘¨å›æ¸ˆã¿ã¯STAGE_JUMP
-PASS: wall_damage_fn: STAGE_JUMPã¯STAGE_SMALLã‚ˆã‚Šå¤§ãã„ï¼ˆåˆ¥æ ¼ã«ãªã‚‹ã€ã®å‰æï¼‰
-PASS: staged_slope: å‘¨å›ãŒå®Ÿéš›ã«ç™ºç”Ÿã—ã¦ã„ã‚‹ï¼ˆå‰ææ¡ä»¶ï¼‰
-PASS: staged_slope: å‘¨å›å¾Œã¯å¹³å‡ãƒ€ãƒ¡ãƒ¼ã‚¸/ãƒ’ãƒƒãƒˆãŒSTAGE_SMALLã‚ˆã‚Šæ˜ç¢ºã«å¤§ãã„
-PASS: checkpoint_wall_target_consistency: checkpointå€¤ã¨åŒã˜ä¹±æ•°ç³»åˆ—ã§wall_targetã‚’å¼•ãã¨ã€åˆ°é”tickãŒcheckpoint tickä»¥ä¸‹
-PASS: checkpoint_boundary: ticks==checkpointã ã¨ã€ãã®checkpointã¯è¨˜éŒ²ã•ã‚Œãªã„ï¼ˆå‘¼ã³å‡ºã—å´ã¯ticks=checkpoint+1ã«ã™ã‚‹å¿…è¦ãŒã‚ã‚‹ã€ã¨ã„ã†æ—¢çŸ¥ã®ä»•æ§˜ï¼‰
-PASS: checkpoint_boundary: ticks==checkpoint+1ãªã‚‰ã€ãã®checkpointãŒè¨˜éŒ²ã•ã‚Œã‚‹
-PASS: catch_rate_slows_relay: catch_rate=0.5ã¯catch_rate=1.0ã‚ˆã‚Šæ˜ç¢ºã«é…ã„ï¼ˆã¾ãŸã¯åˆ°é”ç‡ãŒä¸‹ãŒã‚‹ï¼‰
-PASS: item_backward_compat: item_systemæœªæŒ‡å®šãªã‚‰drop_events_per_worldãŒç„¡ã„
-PASS: sticky_removed: ITEM_PADDLE_SIDEã«'sticky'ãŒå«ã¾ã‚Œãªã„
-PASS: sticky_removed: ITEM_ALL_TYPESã®ç·æ•°ã¯7ç¨®ï¼ˆstickyé™¤å»æ¸ˆã¿ï¼‰
-PASS: sticky_removed: ã‚¢ã‚¤ãƒ†ãƒ æœ‰åŠ¹æ™‚ã§ã‚‚upcross_events_totalãŒç„¡åŠ¹æ™‚ã®80%ä»¥ä¸Šã‚’ç¶­æŒã™ã‚‹ï¼ˆä¿æŒæ©Ÿæ§‹ãŒç„¡ã„ãŸã‚ã€è·¨ãåˆ¤å®šã®æ¬ è½ãŒèµ·ããªã„ï¼‰
-PASS: lifo_drop_penalty: ä½catch_rateã§è½çƒã‚¤ãƒ™ãƒ³ãƒˆãŒå®Ÿéš›ã«ç™ºç”Ÿã™ã‚‹
-PASS: lifo_drop_penalty: å–ªå¤±å¾Œã«åŒã‚¢ã‚¤ãƒ†ãƒ ã‚’å†å–å¾—ã™ã‚‹çµŒè·¯ï¼ˆå›å¾©ï¼‰ã‚‚ç™ºç”Ÿã™ã‚‹
-FAIL: b3_evaluation: å¸¯å†…ã®åˆæˆãƒ‡ãƒ¼ã‚¿ã¯passã¨åˆ¤å®šã•ã‚Œã‚‹ (good_ev={'pass': False, 'value': 0.2, 'range': (0, 0.4), 'margin': -0.5})
-FAIL: b3_evaluation: å¸¯ã‚’å¤§ããå¤–ã‚ŒãŸåˆæˆãƒ‡ãƒ¼ã‚¿ã¯passã§ãªã„ã¨åˆ¤å®šã•ã‚Œã‚‹ (bad_ev={'pass': True, 'value': 0.9, 'range': (0, 0.4), 'margin': 1.25})
-PASS: b1_b2_no_verdict: summarize_bundle()ã®å‡ºåŠ›ã«B1/B2ã®pass/failåˆ¤å®šã‚­ãƒ¼ãŒç„¡ã„
-PASS: b1_b2_no_verdict: B1ã®ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰åã«å‚è€ƒå€¤ã§ã‚ã‚‹æ—¨(REFERENCE_ONLY)ãŒæ˜è¨˜ã•ã‚Œã¦ã„ã‚‹
-RESULT: FAIL (2 check(s) failed: b3_evaluation: å¸¯å†…ã®åˆæˆãƒ‡ãƒ¼ã‚¿ã¯passã¨åˆ¤å®šã•ã‚Œã‚‹, b3_evaluation: å¸¯ã‚’å¤§ããå¤–ã‚ŒãŸåˆæˆãƒ‡ãƒ¼ã‚¿ã¯passã§ãªã„ã¨åˆ¤å®šã•ã‚Œã‚‹)
-exit=1
+PASS: ring_math N=3: N‰ñ˜A‘±+1‚Åo”­“_‚É–ß‚é
+PASS: ring_math N=4: N‰ñ˜A‘±+1‚Åo”­“_‚É–ß‚é
+PASS: ring_math N=5: N‰ñ˜A‘±+1‚Åo”­“_‚É–ß‚é
+PASS: reproducibility: “¯ˆêseed‚ÅŒ‹‰Ê‚ªbit-for-bitˆê’v
+PASS: loop_detection: f_max=0.999,g_max=0‚ÅN=3‚ª”tickˆÈ“à‚ÉˆêüŠ®—¹‚·‚é
+PASS: loop_detection: f_max=0‚Å‚Íˆêü‚ªˆê“x‚à”­¶‚µ‚È‚¢
+PASS: population_conservation: “¯‹…”‚ªN*SERVE_CAP‚ğ’´‚¦‚È‚¢
+PASS: wall_backward_compat: slope_kind–¢w’è‚È‚çwall_damage_total‚Í0
+PASS: wall_backward_compat: slope_kind–¢w’è‚È‚çreinforced_hits_total‚Í0
+PASS: wall_damage_fn: level=0‚Íí‚É0ƒ_ƒ[ƒW
+PASS: wall_damage_fn: linear level=3‚ÍBASE*3
+PASS: wall_damage_fn: staged –¢ü‰ñ‚ÍSTAGE_SMALL
+PASS: wall_damage_fn: staged ü‰ñÏ‚İ‚ÍSTAGE_JUMP
+PASS: wall_damage_fn: STAGE_JUMP‚ÍSTAGE_SMALL‚æ‚è‘å‚«‚¢i•ÊŠi‚É‚È‚éA‚Ì‘O’ñj
+PASS: staged_slope: ü‰ñ‚ªÀÛ‚É”­¶‚µ‚Ä‚¢‚éi‘O’ñğŒj
+PASS: staged_slope: ü‰ñŒã‚Í•½‹Ïƒ_ƒ[ƒW/ƒqƒbƒg‚ªSTAGE_SMALL‚æ‚è–¾Šm‚É‘å‚«‚¢
+PASS: checkpoint_wall_target_consistency: checkpoint’l‚Æ“¯‚¶—”Œn—ñ‚Åwall_target‚ğˆø‚­‚ÆA“’Btick‚ªcheckpoint tickˆÈ‰º
+PASS: checkpoint_boundary: ticks==checkpoint‚¾‚ÆA‚»‚Ìcheckpoint‚Í‹L˜^‚³‚ê‚È‚¢iŒÄ‚Ño‚µ‘¤‚Íticks=checkpoint+1‚É‚·‚é•K—v‚ª‚ ‚éA‚Æ‚¢‚¤Šù’m‚Ìd—lj
+PASS: checkpoint_boundary: ticks==checkpoint+1‚È‚çA‚»‚Ìcheckpoint‚ª‹L˜^‚³‚ê‚é
+PASS: catch_rate_slows_relay: catch_rate=0.5‚Ícatch_rate=1.0‚æ‚è–¾Šm‚É’x‚¢i‚Ü‚½‚Í“’B—¦‚ª‰º‚ª‚éj
+PASS: item_backward_compat: item_system–¢w’è‚È‚çdrop_events_per_world‚ª–³‚¢
+PASS: sticky_removed: ITEM_PADDLE_SIDE‚É'sticky'‚ªŠÜ‚Ü‚ê‚È‚¢
+PASS: sticky_removed: ƒAƒCƒeƒ€—LŒø‚Å‚àupcross_events_total‚ª–³Œø‚Ì80%ˆÈã‚ğˆÛ‚·‚éi•Û‹@\‚ª–³‚¢‚½‚ßAŒ×‚¬”»’è‚ÌŒ‡—‚ª‹N‚«‚È‚¢j
+PASS: nine_species: ITEM_PADDLE_SIDE‚É'clone'‚ªŠÜ‚Ü‚ê‚È‚¢iw¦‘07‚Å¥Î‚Ö·‚µ‘Ö‚¦j
+PASS: nine_species: 'sticky'‚àˆø‚«‘±‚«ŠÜ‚Ü‚ê‚È‚¢iw¦‘06‚Ìkill‚ğˆÛj
+PASS: nine_species: ‘SƒAƒCƒeƒ€í‚Ì‘”‚Í9íiƒpƒhƒ‹5{‹…3{ê1j
+PASS: guide_inert: ITEM_CATCH_RATE_CONTRIBUTORS‚É'guide'‚ªŠÜ‚Ü‚ê‚È‚¢i\¬ƒ`ƒFƒbƒNj
+PASS: guide_inert: guide’i‚ğÏ‚İã‚°‚Ä‚à•ß‹…—¦‚ª“®‚©‚¸AB1i—‹…‰ñ”j‚ª‚‚¢‚Ü‚ÜˆÛ‚³‚ê‚é
+PASS: random_slot_equivalence: ŠeƒAƒCƒeƒ€‚ÌÀŒøoŒ»—¦‚ª1/9‚©‚ç‚Ì˜¨—£5%ˆÈ“ài10ƒGƒ“ƒgƒŠ’Š‘I‚Æ9í‹Ï“™’Š‘I‚Ì“™‰¿«‚ÌŒŸZj
+PASS: b3_excludes_weaken: weaken‚Ì‚İƒhƒƒbƒv‚³‚ê‚éó‹µ‚ÅAQl’lweaken_active_frac‚ÍÀÛ‚É‚‰Ò“­‚µ‚Ä‚¢‚éi‘O’ñğŒj
+PASS: b3_excludes_weaken: B3i‹…‘¤3í‚Ì‚İj‚Íweaken‚Ì‚İ‚Ìó‹µ‚Å0‹ß–T‚Ì‚Ü‚Ü
+PASS: lifo_drop_penalty: ’ácatch_rate‚Å—‹…ƒCƒxƒ“ƒg‚ªÀÛ‚É”­¶‚·‚é
+PASS: lifo_drop_penalty: ‘r¸Œã‚É“¯ƒAƒCƒeƒ€‚ğÄæ“¾‚·‚éŒo˜Hi‰ñ•œj‚à”­¶‚·‚é
+FAIL: b3_evaluation: ‘Ñ“à‚Ì‡¬ƒf[ƒ^‚Ípass‚Æ”»’è‚³‚ê‚é (good_ev={'pass': False, 'value': 0.2, 'range': (0, 0.4), 'margin': -0.5})
+FAIL: b3_evaluation: ‘Ñ‚ğ‘å‚«‚­ŠO‚ê‚½‡¬ƒf[ƒ^‚Ípass‚Å‚È‚¢‚Æ”»’è‚³‚ê‚é (bad_ev={'pass': True, 'value': 0.9, 'range': (0, 0.4), 'margin': 1.25})
+PASS: b1_b2_no_verdict: summarize_bundle()‚Ìo—Í‚ÉB1/B2‚Ìpass/fail”»’èƒL[‚ª–³‚¢
+PASS: b1_b2_no_verdict: B1‚ÌƒtƒB[ƒ‹ƒh–¼‚ÉQl’l‚Å‚ ‚é|(REFERENCE_ONLY)‚ª–¾‹L‚³‚ê‚Ä‚¢‚é
+RESULT: FAIL (2 check(s) failed: b3_evaluation: ‘Ñ“à‚Ì‡¬ƒf[ƒ^‚Ípass‚Æ”»’è‚³‚ê‚é, b3_evaluation: ‘Ñ‚ğ‘å‚«‚­ŠO‚ê‚½‡¬ƒf[ƒ^‚Ípass‚Å‚È‚¢‚Æ”»’è‚³‚ê‚é)

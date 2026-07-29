@@ -20,8 +20,15 @@ PASS: checkpoint_boundary: ticks==checkpoint+1なら、そのcheckpointが記録される
 PASS: catch_rate_slows_relay: catch_rate=0.5はcatch_rate=1.0より明確に遅い（または到達率が下がる）
 PASS: item_backward_compat: item_system未指定ならdrop_events_per_worldが無い
 PASS: sticky_removed: ITEM_PADDLE_SIDEに'sticky'が含まれない
-PASS: sticky_removed: ITEM_ALL_TYPESの総数は7種（sticky除去済み）
 PASS: sticky_removed: アイテム有効時でもupcross_events_totalが無効時の80%以上を維持する（保持機構が無いため、跨ぎ判定の欠落が起きない）
+PASS: nine_species: ITEM_PADDLE_SIDEに'clone'が含まれない（指示書07で磁石へ差し替え）
+PASS: nine_species: 'sticky'も引き続き含まれない（指示書06のkillを維持）
+PASS: nine_species: 全アイテム種の総数は9種（パドル5＋球3＋場1）
+PASS: guide_inert: ITEM_CATCH_RATE_CONTRIBUTORSに'guide'が含まれない（構成チェック）
+PASS: guide_inert: guide段を積み上げても捕球率が動かず、B1（落球回数）が高いまま維持される
+PASS: random_slot_equivalence: 各アイテムの実効出現率が1/9からの乖離5%以内（10エントリ抽選と9種均等抽選の等価性の検算）
+PASS: b3_excludes_weaken: weakenのみドロップされる状況で、参考値weaken_active_fracは実際に高稼働している（前提条件）
+PASS: b3_excludes_weaken: B3（球側3種のみ）はweakenのみの状況で0近傍のまま
 PASS: lifo_drop_penalty: 低catch_rateで落球イベントが実際に発生する
 PASS: lifo_drop_penalty: 喪失後に同アイテムを再取得する経路（回復）も発生する
 PASS: b3_evaluation: 帯内の合成データはpassと判定される

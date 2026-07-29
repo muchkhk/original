@@ -104,19 +104,51 @@ STAGE_JUMP_WALL_DMG = 6.0
 
 
 # ============ 指示書05：玉キープ束（アイテム）。既存モデルの拡張 ============
-# 球側3種＝段なし・一定時間制。パドル側4種＝各3段・持続型（LIFO落球ペナルティ対象）。
+# 球側3種＝段なし・一定時間制。パドル側5種＝各3段・持続型（LIFO落球ペナルティ対象）。
 # item_system=None なら一切のアイテムロジックが走らない（指示書01〜04とbit-for-bit互換）。
 #
 # 【指示書06】スティッキーはkill（設計チャット20・作家判断）。理由：保持機構が
 # 跨ぎイベントを半減させ、反転1の証拠トラフィックを機構的に抑制することが
 # 指示書05の回帰テスト・要求量再検証（§0・§3-1）で実測されたため。
-# アイテム総数は8→7（パドル側5→4：拡大・移動速度・反射角ガイド・分身）。
-ITEM_BALL_SIDE = ["pierce", "explode", "accel"]      # 貫通・爆発・加速
-ITEM_PADDLE_SIDE = ["enlarge", "speed", "guide", "clone"]  # 拡大・移動速度・ガイド・分身（sticky除去済み）
-ITEM_ALL_TYPES = ITEM_PADDLE_SIDE + ITEM_BALL_SIDE
+#
+# 【指示書07】設計チャット21で以下が確定：
+#   - 分身（clone）は拡大と機能軸が同一と判定され廃止。磁石（magnet）に差し替え
+#   - ガイド（guide）は物理不介入（案(a)：予測線・自陣上端打ち切りの表示のみ）へ是正。
+#     シミュ上は「ドロップ枠・LIFOスタックは占有するが、捕球率には一切寄与しない」
+#     という機構的不活性として表現する（ITEM_CATCH_RATE_CONTRIBUTORSで除外）
+#   - 新規2種を採用：レーザー（laser・パドル側・持続ダメージ）、
+#     自陣弱体化（weaken・場・時限・第3の型＝ITEM_FIELD_SIDE）
+#   - ドロップテーブルは9種+抽選枠randomの10エントリだが、randomが9種へ均等
+#     再抽選されるため実効出現率は厳密に1/9（selfcheckで検算）。この等価性により
+#     シミュはrandomを実装せず、9種均等抽選のみで代表する
+# アイテム総数は7→9（パドル側4→5：拡大・移動速度・ガイド・磁石・レーザー／
+# 球側3：貫通・爆発・加速／場1：自陣弱体化）。
+ITEM_BALL_SIDE = ["pierce", "explode", "accel"]      # 貫通・爆発・加速（段なし時限）
+ITEM_PADDLE_SIDE = ["enlarge", "speed", "guide", "magnet", "laser"]  # 拡大・速度・ガイド・磁石・レーザー（3段持続）
+ITEM_FIELD_SIDE = ["weaken"]  # 自陣弱体化（場・時限。第3の型。作家判断・チャット21）
+ITEM_ALL_TYPES = ITEM_PADDLE_SIDE + ITEM_BALL_SIDE + ITEM_FIELD_SIDE  # 9種
+# guideは捕球率ボーナスの計算対象から除外する（機構的不活性。ドロップ枠・LIFOスタックは占有）
+ITEM_CATCH_RATE_CONTRIBUTORS = [it for it in ITEM_PADDLE_SIDE if it != "guide"]
 PADDLE_MAX_STAGE = 3  # B4凍結：探索対象ではない固定値
 DEFAULT_PADDLE_POWER_BONUS_PER_STAGE = 0.01  # 近似仮定。報告書参照
 DEFAULT_PADDLE_CATCH_RATE_CAP = 0.98
+
+# 【指示書07】magnet：現行シミュには「アイテム取りこぼし」概念が無かったため、
+# pickup_miss_rateを新規導入する（裁量。報告06プロトの実測データはまだ無いため、
+# 質的に妥当な桁としてClaude Codeが暫定設定した。実測データが揃い次第、
+# 設計チャット側での再校正を推奨する）。
+DEFAULT_ITEM_PICKUP_MISS_RATE_BASE = 0.20      # magnet段数0での基準取りこぼし率
+DEFAULT_MAGNET_MISS_REDUCTION_PER_STAGE = 0.06  # magnet1段あたりの低減量
+MIN_ITEM_PICKUP_MISS_RATE = 0.02               # 低減の下限（0にはしない）
+
+# 【指示書07】weaken：自世界の全壁ダメージ（球・レーザーとも）を掛け算で底上げする。
+# 効果時間はball_effect_ticksに連動（捨象。自由度の爆発を防ぐための設計判断）。
+DEFAULT_WEAKEN_MULTIPLIER = 2.0
+
+# 【指示書07】laser：段数保有中、毎tick壁へ持続ダメージを加算する。
+# 強度（1段あたりのdps）はitem_system["laser_dps_per_stage"]で指定する掃引対象の
+# ため、既定値は0.0（未指定なら完全に無効＝指示書06までの挙動と後方互換）。
+DEFAULT_LASER_DPS_PER_STAGE = 0.0
 
 
 def wall_damage_for_level(level, has_looped, slope_kind):
@@ -140,22 +172,41 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
     指定して呼び出す。
 
     item_system=None の場合、玉キープ束（アイテム）ロジックは一切走らない
-    （指示書01〜04とbit-for-bit互換を保つ）。指示書05/06の解析はdictで指定する：
+    （指示書01〜04とbit-for-bit互換を保つ）。指示書05〜07の解析はdictで指定する：
       {
         "drop_rate": float,             # ブロック接触1回あたりのアイテム出現確率
-        "ball_effect_ticks": int,       # 球側効果（貫通/爆発/加速）の持続tick数
+        "ball_effect_ticks": int,       # 球側効果（貫通/爆発/加速）とweakenの持続tick数
         "ball_effect_magnitude": float, # 球側効果によるHIT_DECREMENT倍率ボーナス
         "paddle_power_bonus_per_stage": float,  # 省略可(デフォルトあり)
         "paddle_catch_rate_cap": float,         # 省略可(デフォルトあり)
+        "pickup_miss_rate_base": float,         # 省略可(デフォルトあり)。magnet裁量導入
+        "magnet_reduction_per_stage": float,    # 省略可(デフォルトあり)
+        "laser_dps_per_stage": float,           # 省略可(デフォルト0.0=無効)
+        "weaken_multiplier": float,             # 省略可(デフォルト2.0)
       }
     球側3種（貫通・爆発・加速）は、このモデルに空間構造（隣接ブロック・弾道）が
     無いため、いずれも「このヒットのHIT_DECREMENTにball_effect_magnitudeを
     上乗せする」という同一の機構で近似した。爆発の範囲・貫通の対象数という
     質的な違いはこの実装では区別できない（捨象。報告書に明記。較正用プロト
-    〈指示書06〉では個別実装している）。
+    〈指示書06/07〉では個別実装している）。
 
     【指示書06】スティッキー（球の一時保持）はkillされ、このモデルからは
     完全に除去した。`sticky_hold_ticks_range`/`sticky_enabled`引数は廃止。
+
+    【指示書07】
+    - guide：ドロップ枠・LIFOスタックは占有するが、捕球率計算（ITEM_CATCH_RATE_
+      CONTRIBUTORS）からは除外され、物理・捕球率に一切寄与しない（機構的不活性）
+    - magnet：pickup_miss_rate_base（既定0.20）をmagnet段数×magnet_reduction_
+      per_stage（既定0.06、下限0.02）で低減する形でモデル化（裁量導入）
+    - laser：段数保有中、毎tick `laser_dps_per_stage * stage` を壁ダメージへ
+      加算する（slope_kind指定時のみ。B3〈球側効果稼働率〉には含めない）
+    - weaken：場に属する時限効果（ball_effect_ticksに連動）。効果中、その世界の
+      壁ダメージ（強化球のヒット・レーザーとも）をweaken_multiplier（既定2.0）倍する。
+      稼働率はweaken_active_frac_per_worldとして別掲し、B3〈球側3種のみ〉には
+      含めない（定義変更禁止・指示書07明記）
+    - ドロップテーブルは9種+抽選枠randomの10エントリだが、randomが9種均等へ
+      再抽選されるため実効出現率は厳密に1/9。この等価性により、シミュは
+      randomを実装せず9種均等抽選のみで代表する（selfcheckで数学的検算）
     """
     block_remaining = [1.0] * N
     ground_damage = [0.0] * N
@@ -202,6 +253,12 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         power_bonus = item_system.get("paddle_power_bonus_per_stage",
                                        DEFAULT_PADDLE_POWER_BONUS_PER_STAGE)
         catch_cap = item_system.get("paddle_catch_rate_cap", DEFAULT_PADDLE_CATCH_RATE_CAP)
+        pickup_miss_base = item_system.get("pickup_miss_rate_base",
+                                            DEFAULT_ITEM_PICKUP_MISS_RATE_BASE)
+        magnet_reduction = item_system.get("magnet_reduction_per_stage",
+                                            DEFAULT_MAGNET_MISS_REDUCTION_PER_STAGE)
+        laser_dps_per_stage = item_system.get("laser_dps_per_stage", DEFAULT_LASER_DPS_PER_STAGE)
+        weaken_multiplier = item_system.get("weaken_multiplier", DEFAULT_WEAKEN_MULTIPLIER)
 
         # world(=プレイヤー)ごとの状態
         paddle_stages = [{it: 0 for it in ITEM_PADDLE_SIDE} for _ in range(N)]
@@ -209,7 +266,11 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         drop_events_per_world = [0] * N        # B1：落球（ミスキャッチ）回数
         recovery_times_per_world = [[] for _ in range(N)]  # B2：喪失→同アイテム再取得までのtick差
         lost_ticks_queue = [{it: [] for it in ITEM_PADDLE_SIDE} for _ in range(N)]
-        ball_effect_active_ticks = [0] * N     # B3分子：いずれかの球側効果が有効だったtick数
+        ball_effect_active_ticks = [0] * N     # B3分子：球側3種のいずれかが有効だったtick数（weaken含めない）
+        weaken_ticks_left = [0] * N            # weaken：場属性の時限効果の残りtick
+        weaken_active_ticks = [0] * N          # weaken稼働tick数（B3には含めない参考値）
+        item_pickup_miss_total = [0] * N       # magnet裁量導入：取りこぼし参考カウンタ
+        laser_wall_damage_total_per_world = [0.0] * N  # レーザー由来の壁ダメージ内訳（参考値）
         # 追加測定(a)の球涸れ(STARVE)は、既存のsimultaneous_counts（下記で常に記録）を
         # 呼び出し側(item_sim.py)で集計すれば求まるため、ここでは重複して持たない。
 
@@ -258,10 +319,31 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
             simultaneous_counts[w].append(len(balls_by_world[w]))
 
         # 指示書05 B3：このtick開始時点で、いずれかの球側効果が有効な球がいるworldを記録
+        # （球側3種のみ。weakenはここに含めない＝B3の定義変更禁止・指示書07明記）
         if item_on:
             for w in range(N):
                 if any(b["ball_effect"] is not None for b in balls_by_world[w]):
                     ball_effect_active_ticks[w] += 1
+                if weaken_ticks_left[w] > 0:
+                    weaken_active_ticks[w] += 1
+
+            # 指示書07：レーザーの自動持続ダメージ（段数保有中、毎tick壁へ加算）。
+            # ラリー処理とは独立に、world単位で1回だけ加算する（弾道・空間構造は
+            # 抽象モデルに無いため、段数比例の持続ダメージとして近似する。捨象）
+            if slope_kind is not None and laser_dps_per_stage > 0:
+                for w in range(N):
+                    laser_stage = paddle_stages[w]["laser"]
+                    if laser_stage <= 0:
+                        continue
+                    dmg = laser_dps_per_stage * laser_stage
+                    if weaken_ticks_left[w] > 0:
+                        dmg *= weaken_multiplier
+                    wall_damage_total += dmg
+                    laser_wall_damage_total_per_world[w] += dmg
+                    while (wall_target_idx < len(wall_targets_sorted)
+                           and wall_damage_total >= wall_targets_sorted[wall_target_idx]):
+                        wall_target_ticks[wall_targets_sorted[wall_target_idx]] = tick
+                        wall_target_idx += 1
 
         # --- 各球のラリー処理 ---
         # 重要：このtickで跨いだ球を、跨いだ先のworldへ即座に混ぜてはいけない。
@@ -289,9 +371,18 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                         b["ball_effect"] = None
 
                 # 指示書05：アイテムドロップ判定（ブロック接触1回につき1回）
+                # 【指示書07】9種均等抽選（10エントリ・random再抽選との等価性はselfcheckで検算）。
+                # magnet裁量導入：抽選後にpickup_miss判定を挟み、外れたら何も起きない
+                # （取りこぼし。段数はmagnet自身の既存段数で決まる＝自分の取得判定にも掛かる）。
                 if item_on and rng.random() < drop_rate:
                     item_type = ITEM_ALL_TYPES[int(rng.random() * len(ITEM_ALL_TYPES))]
-                    if item_type in ITEM_PADDLE_SIDE:
+                    magnet_stage = paddle_stages[w]["magnet"]
+                    effective_miss_rate = max(
+                        MIN_ITEM_PICKUP_MISS_RATE,
+                        pickup_miss_base - magnet_reduction * magnet_stage)
+                    if rng.random() < effective_miss_rate:
+                        item_pickup_miss_total[w] += 1
+                    elif item_type in ITEM_PADDLE_SIDE:
                         prev_stage = paddle_stages[w][item_type]
                         if prev_stage < PADDLE_MAX_STAGE:
                             paddle_stages[w][item_type] += 1
@@ -299,6 +390,9 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                             if lost_ticks_queue[w][item_type]:
                                 t_lost = lost_ticks_queue[w][item_type].pop(0)
                                 recovery_times_per_world[w].append(tick - t_lost)
+                    elif item_type in ITEM_FIELD_SIDE:
+                        # weaken：場に属する時限効果（ball_effect_ticksに連動。捨象・報告書参照）
+                        weaken_ticks_left[w] = ball_effect_ticks
                     else:
                         b["ball_effect"] = {"type": item_type, "ticks_left": ball_effect_ticks}
 
@@ -306,8 +400,10 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                 # このtickで上昇跨ぎするかどうかは、このヒットより後に決まる
                 # 別のイベントなので、ヒット時点の既存levelで判定する）
                 if slope_kind is not None and b["level"] >= 1:
-                    wall_damage_total += wall_damage_for_level(
-                        b["level"], b["has_looped"], slope_kind)
+                    hit_dmg = wall_damage_for_level(b["level"], b["has_looped"], slope_kind)
+                    if item_on and weaken_ticks_left[w] > 0:
+                        hit_dmg *= weaken_multiplier
+                    wall_damage_total += hit_dmg
                     reinforced_hits_total += 1
                     while (wall_target_idx < len(wall_targets_sorted)
                            and wall_damage_total >= wall_targets_sorted[wall_target_idx]):
@@ -339,7 +435,8 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                 # b) パドルフェーズ（上昇しなかった場合のみ）
                 effective_catch_rate = paddle_catch_rate
                 if item_on:
-                    stage_sum = sum(paddle_stages[w].values())
+                    # guideは機構的不活性のため寄与対象から除外する（指示書07）
+                    stage_sum = sum(paddle_stages[w][it] for it in ITEM_CATCH_RATE_CONTRIBUTORS)
                     effective_catch_rate = min(
                         catch_cap, paddle_catch_rate + power_bonus * stage_sum)
 
@@ -383,6 +480,12 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
 
         balls_by_world = next_by_world
 
+        # 指示書07：weakenの残りtickを消費する（このtickの適用は上で既に済ませた後）
+        if item_on:
+            for w in range(N):
+                if weaken_ticks_left[w] > 0:
+                    weaken_ticks_left[w] -= 1
+
         # 指示書02：checkpointsで指定したtickの時点の累積値を記録する
         # （Q1「1セッション相当」の候補tick数ごとの分布を、1回の試行から
         # まとめて取得するため。tick=0起点なので「tickまでに」= tick+1個目の
@@ -413,7 +516,11 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         result["drop_events_per_world"] = drop_events_per_world              # B1
         result["recovery_times_per_world"] = recovery_times_per_world        # B2（tick差のリスト）
         result["ball_effect_active_frac_per_world"] = [
-            ball_effect_active_ticks[w] / ticks for w in range(N)]           # B3
+            ball_effect_active_ticks[w] / ticks for w in range(N)]           # B3（球側3種のみ）
+        result["weaken_active_frac_per_world"] = [
+            weaken_active_ticks[w] / ticks for w in range(N)]                # 参考値（B3に含めない）
+        result["item_pickup_miss_total_per_world"] = item_pickup_miss_total  # magnet裁量：参考値
+        result["laser_wall_damage_total_per_world"] = laser_wall_damage_total_per_world  # 参考値
     return result
 
 

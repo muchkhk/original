@@ -1,26 +1,23 @@
 {
   "script": "sim/ring_structure/item_sim.py",
-  "note": "指示書06でB1/B2/B5をシミュの判定対象から除外し、B3専用の再掃引に改訂した",
+  "note": "指示書07でアイテムを9種構成へ改訂し、掃引A（B3+weaken参考値）に更新した",
   "item_master_seed": 20260731,
   "session_ticks": 900,
   "trials_per_combo": 800,
   "b3_max_frac": 0.4,
   "drop_rates_swept": [
-    0.05,
     0.1,
     0.15,
     0.2,
-    0.3
+    0.25
   ],
   "ball_effect_ticks_swept": [
     2,
     3,
-    4,
-    5,
-    6
+    4
   ],
   "fixed_power_bonus_per_stage": 0.3,
   "fixed_paddle_catch_rate_cap": 0.999,
-  "b3_pass_count": 11,
-  "generated_at": "2026-07-29T16:07:45.648049+00:00"
+  "b3_pass_count": 8,
+  "generated_at": "2026-07-29T17:29:03.295483+00:00"
 }

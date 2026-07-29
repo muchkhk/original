@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書06 作業2</title>
+<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書07 作業1・2</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -29,7 +29,7 @@
   }
   legend { padding: 0 4px; color: #9aa0ad; font-size: 12px; }
   label.slider-row {
-    display: grid; grid-template-columns: 108px 1fr 56px; align-items: center;
+    display: grid; grid-template-columns: 132px 1fr 56px; align-items: center;
     gap: 6px; margin: 4px 0; font-size: 12px;
   }
   input[type=range] { width: 100%; }
@@ -41,9 +41,8 @@
   button:disabled { opacity: 0.4; cursor: default; }
   .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
   #hud { font-size: 12px; line-height: 1.7; white-space: pre; }
-  #hud .stage-full { color: #7fd0ff; }
   textarea#jsonOut {
-    width: 100%; height: 220px; background: #0a0b0e; color: #9fe0a0; border: 1px solid #3a3d46;
+    width: 100%; height: 240px; background: #0a0b0e; color: #9fe0a0; border: 1px solid #3a3d46;
     border-radius: 4px; font-family: Consolas, monospace; font-size: 11px; padding: 6px;
   }
   .legend-items { font-size: 11px; color: #9aa0ad; line-height: 1.8; }
@@ -57,7 +56,7 @@
 <div class="warn">
   これは「面白いかどうか」を確かめるゲームではなく、B1（落球頻度）・B2（パドル側1段喪失から同段回復までの実時間）を
   実物理・実時間で測定するための<strong>計測器具</strong>です。ストーリー・演出・音は一切ありません。
-  <strong>プレイテスト対象者には見せないこと。</strong>（指示書06 やること2）
+  <strong>プレイテスト対象者には見せないこと。</strong>（指示書06・指示書07）
 </div>
 
 <div class="layout">
@@ -86,6 +85,14 @@
         <input type="range" id="ballSpeed" min="100" max="700" step="10" value="260">
         <span id="ballSpeedVal"></span>
       </label>
+      <label class="slider-row">レーザー発射間隔基準(秒)
+        <input type="range" id="laserInterval" min="0.2" max="5" step="0.1" value="1.5">
+        <span id="laserIntervalVal"></span>
+      </label>
+      <label class="slider-row">弱体化効果時間(秒)
+        <input type="range" id="weakenDuration" min="1" max="20" step="0.5" value="6">
+        <span id="weakenDurationVal"></span>
+      </label>
     </fieldset>
 
     <fieldset>
@@ -103,27 +110,30 @@
     </fieldset>
 
     <fieldset>
-      <legend>アイテム凡例（全7種・7種均等抽選）</legend>
+      <legend>アイテム凡例（9種+抽選枠random・10エントリ均等）</legend>
       <div class="legend-items">
         <div><span class="swatch" style="background:#5aa9ff"></span>ENL 拡大（パドル側・3段）幅が段階的に広がる</div>
         <div><span class="swatch" style="background:#7fd0ff"></span>SPD 速度（パドル側・3段）パドル移動速度が上がる</div>
-        <div><span class="swatch" style="background:#9fb8ff"></span>GID 誘導（パドル側・3段）ボールがパドル中心へ弱く寄る</div>
-        <div><span class="swatch" style="background:#b39fff"></span>CLN 分身（パドル側・3段）左右に補助パドルが出現</div>
+        <div><span class="swatch" style="background:#9fb8ff"></span>GID ガイド（パドル側・3段）<strong>物理不介入</strong>。予測線を表示するのみ（自陣上端で打ち切り）</div>
+        <div><span class="swatch" style="background:#7fffb0"></span>MAG 磁石（パドル側・3段）落下アイテムをパドルへ引き寄せる（球には無関係）</div>
+        <div><span class="swatch" style="background:#ffe08a"></span>LAS レーザー（パドル側・3段）自動発射。段数で発射間隔短縮。弾は自陣上端で消滅</div>
         <div><span class="swatch" style="background:#ffb35a"></span>PRC 貫通（球側・時限）ブロックを跳ね返らず貫通</div>
         <div><span class="swatch" style="background:#ff8a5a"></span>EXP 爆発（球側・時限）命中時に周囲ブロックも破壊</div>
         <div><span class="swatch" style="background:#ff5a7a"></span>ACC 加速（球側・時限）ボール速度が上がる</div>
+        <div><span class="swatch" style="background:#c85aff"></span>WKN 自陣弱体化（場・時限）自陣の全ダメージ（球・レーザーとも）が2倍</div>
+        <div><span class="swatch" style="background:#888"></span>? 抽選枠random（取得時に上記9種から均等抽選で確定）</div>
       </div>
     </fieldset>
 
     <fieldset>
-      <legend>出力JSON（B1実測落球数・B2実測復帰時間）</legend>
+      <legend>出力JSON（B1実測落球数・B2実測復帰時間・新規アイテム統計）</legend>
       <textarea id="jsonOut" readonly placeholder="「セッション終了・JSON出力」を押すとここに出力されます"></textarea>
     </fieldset>
   </div>
 </div>
 
 <footer>
-  proto/ring_keep_calibration.html ― 指示書06 作業2。器具再割当（設計チャット20）によりB1・B2・B5はこのプロトタイプと
+  proto/ring_keep_calibration.html ― 指示書06 作業2・指示書07 作業1/2。器具再割当（設計チャット20）によりB1・B2はこのプロトタイプと
   プレイテストで確認する。ring_sim.py（抽象tickモデル）はB3・要求量のみを判定する。Firebase・オンライン同期なし、ローカル完結。
 </footer>
 
@@ -136,7 +146,7 @@
   var PADDLE_Y = CH - 24;
   var PADDLE_H = 12;
   var PADDLE_BASE_W = 90;
-  var PADDLE_BASE_SPEED = 900; // px/s、マウス追従なので実質未使用だが分身/速度段の基準に使う
+  var PADDLE_BASE_SPEED = 900; // px/s、マウス追従なので実質未使用だが速度段の基準に使う
   var BALL_R = 7;
   var BLOCK_ROWS = 5, BLOCK_COLS = 10;
   var BLOCK_MARGIN = 3;
@@ -146,18 +156,29 @@
   var BLOCK_H = 18;
   var BLOCK_HP_MAX = 2;
 
-  var PADDLE_SIDE_TYPES = ["enlarge", "speed", "guide", "clone"];
+  // 指示書07：分身(clone)を除去し磁石(magnet)・レーザー(laser)を追加。
+  // ガイド(guide)は物理不介入化（案(a)：予測線・自陣上端打ち切りの表示のみ）。
+  var PADDLE_SIDE_TYPES = ["enlarge", "speed", "guide", "magnet", "laser"];
   var BALL_SIDE_TYPES = ["pierce", "explode", "accel"];
-  var ALL_TYPES = PADDLE_SIDE_TYPES.concat(BALL_SIDE_TYPES);
+  var FIELD_SIDE_TYPES = ["weaken"]; // 自陣弱体化：場・時限・第3の型（新規採用）
+  var ALL_TYPES = PADDLE_SIDE_TYPES.concat(BALL_SIDE_TYPES).concat(FIELD_SIDE_TYPES); // 9種
   var MAX_STAGE = 3;
+  var WEAKEN_MULTIPLIER = 2.0;       // 固定。sim側DEFAULT_WEAKEN_MULTIPLIERと合わせる
+  var LASER_BOLT_DAMAGE = 1;         // 1発あたりのブロックHP減少量（固定・スライダー化しない）
+  var LASER_BOLT_SPEED = 420;        // px/s（固定）
+  var MAGNET_BASE_RADIUS = 60;       // 磁石1段あたりの引力半径基準
+  var MAGNET_RADIUS_PER_STAGE = 40;
+  var MAGNET_PULL_ACCEL = 260;       // px/s^2 相当（段数に比例）
 
   var ITEM_COLOR = {
-    enlarge: "#5aa9ff", speed: "#7fd0ff", guide: "#9fb8ff", clone: "#b39fff",
-    pierce: "#ffb35a", explode: "#ff8a5a", accel: "#ff5a7a"
+    enlarge: "#5aa9ff", speed: "#7fd0ff", guide: "#9fb8ff",
+    magnet: "#7fffb0", laser: "#ffe08a",
+    pierce: "#ffb35a", explode: "#ff8a5a", accel: "#ff5a7a",
+    weaken: "#c85aff"
   };
   var ITEM_CODE = {
-    enlarge: "ENL", speed: "SPD", guide: "GID", clone: "CLN",
-    pierce: "PRC", explode: "EXP", accel: "ACC"
+    enlarge: "ENL", speed: "SPD", guide: "GID", magnet: "MAG", laser: "LAS",
+    pierce: "PRC", explode: "EXP", accel: "ACC", weaken: "WKN"
   };
 
   // ---- DOM参照 ----------------------------------------------------------
@@ -174,14 +195,18 @@
     serveInterval: document.getElementById("serveInterval"),
     effectDuration: document.getElementById("effectDuration"),
     effectMagnitude: document.getElementById("effectMagnitude"),
-    ballSpeed: document.getElementById("ballSpeed")
+    ballSpeed: document.getElementById("ballSpeed"),
+    laserInterval: document.getElementById("laserInterval"),
+    weakenDuration: document.getElementById("weakenDuration")
   };
   var sliderVals = {
     dropRate: document.getElementById("dropRateVal"),
     serveInterval: document.getElementById("serveIntervalVal"),
     effectDuration: document.getElementById("effectDurationVal"),
     effectMagnitude: document.getElementById("effectMagnitudeVal"),
-    ballSpeed: document.getElementById("ballSpeedVal")
+    ballSpeed: document.getElementById("ballSpeedVal"),
+    laserInterval: document.getElementById("laserIntervalVal"),
+    weakenDuration: document.getElementById("weakenDurationVal")
   };
 
   function cfg() {
@@ -190,7 +215,9 @@
       serveIntervalSec: parseFloat(sliders.serveInterval.value),
       effectDurationSec: parseFloat(sliders.effectDuration.value),
       effectMagnitude: parseFloat(sliders.effectMagnitude.value),
-      ballSpeedPxS: parseFloat(sliders.ballSpeed.value)
+      ballSpeedPxS: parseFloat(sliders.ballSpeed.value),
+      laserIntervalBaseSec: parseFloat(sliders.laserInterval.value),
+      weakenDurationSec: parseFloat(sliders.weakenDuration.value)
     };
   }
 
@@ -201,6 +228,8 @@
     sliderVals.effectDuration.textContent = c.effectDurationSec.toFixed(1) + "s";
     sliderVals.effectMagnitude.textContent = c.effectMagnitude.toFixed(1) + "x";
     sliderVals.ballSpeed.textContent = c.ballSpeedPxS.toFixed(0);
+    sliderVals.laserInterval.textContent = c.laserIntervalBaseSec.toFixed(1) + "s";
+    sliderVals.weakenDuration.textContent = c.weakenDurationSec.toFixed(1) + "s";
   }
   Object.keys(sliders).forEach(function (k) {
     sliders[k].addEventListener("input", refreshSliderLabels);
@@ -215,13 +244,20 @@
   var lastT = null;
 
   function freshState() {
+    var stages = {};
+    PADDLE_SIDE_TYPES.forEach(function (t) { stages[t] = 0; });
+    var pickupCounts = {};
+    ALL_TYPES.forEach(function (t) { pickupCounts[t] = 0; });
+    var randomResolvedCounts = {};
+    ALL_TYPES.forEach(function (t) { randomResolvedCounts[t] = 0; });
+
     return {
       startedAt: null,
       elapsedSec: 0,
       config: cfg(),
 
       paddle: { x: CW / 2, w: PADDLE_BASE_W },
-      stages: { enlarge: 0, speed: 0, guide: 0, clone: 0 },
+      stages: stages,
       // クロスアイテムの取得順スタック（パドル側の段のみ）。LIFO落球ペナルティ対象。
       stageStack: [], // {type, stageIndex} stageIndex=1..3 (このpushで到達した段)
 
@@ -232,15 +268,24 @@
       blocks: [],
       wallDamage: 0,
 
-      drops: [], // 落ちてくるアイテムカプセル {x,y,vy,type}
+      drops: [], // 落ちてくるアイテムカプセル {x,y,vy,type}  type="random"は未確定
       ballEffects: {}, // type -> remainingSec (pierce/explode/accel)
+
+      weakenRemainingSec: 0,       // 自陣弱体化（場・時限）の残り
+      weakenActiveSecAccum: 0,     // 稼働秒数の累積（テレメトリ）
+
+      laserCooldownSec: 0,
+      laserBolts: [],              // {x,y,vy}
+      laserShotsTotal: 0,
+      laserWallDamageTotal: 0,     // レーザー弾由来のブロックHPダメージ累計
 
       // テレメトリ
       dropEvents: [], // B1: {tSec}
       pendingRecovery: {}, // type -> [{stageIndex, lostAtSec}] FIFO
       recoveryTimesSec: [], // B2実測
-      pickupCounts: { enlarge: 0, speed: 0, guide: 0, clone: 0, pierce: 0, explode: 0, accel: 0 },
-      missedPickups: 0
+      pickupCounts: pickupCounts,
+      missedPickups: 0,
+      randomResolvedCounts: randomResolvedCounts
     };
   }
 
@@ -275,13 +320,13 @@
     return (s.ballEffects[type] || 0) > 0;
   }
 
+  function weakenActive(s) {
+    return s.weakenRemainingSec > 0;
+  }
+
   function paddleWidth(s) {
     // 拡大段: 段ごとに+20%、上限3段
     return PADDLE_BASE_W * (1 + 0.2 * s.stages.enlarge);
-  }
-
-  function paddleMoveTargetX(s, pointerX) {
-    return pointerX;
   }
 
   // ---- LIFO落球ペナルティ ----------------------------------------------------------
@@ -307,6 +352,11 @@
 
   // ---- アイテム取得 ----------------------------------------------------------
   function onPickup(s, type) {
+    if (type === "random") {
+      // 指示書07：抽選枠。取得時に9種から均等抽選で確定する
+      type = ALL_TYPES[Math.floor(Math.random() * ALL_TYPES.length)];
+      s.randomResolvedCounts[type]++;
+    }
     s.pickupCounts[type]++;
     if (PADDLE_SIDE_TYPES.indexOf(type) >= 0) {
       if (s.stages[type] < MAX_STAGE) {
@@ -324,6 +374,9 @@
           }
         }
       }
+    } else if (FIELD_SIDE_TYPES.indexOf(type) >= 0) {
+      // weaken：場に属する時限効果。専用スライダーで持続時間を指定（再取得でリフレッシュ）
+      s.weakenRemainingSec = s.config.weakenDurationSec;
     } else {
       // 球側：時限効果を(再)付与
       s.ballEffects[type] = s.config.effectDurationSec;
@@ -332,7 +385,10 @@
 
   function spawnDropMaybe(s, x, y) {
     if (Math.random() < s.config.dropRate) {
-      var type = ALL_TYPES[Math.floor(Math.random() * ALL_TYPES.length)];
+      // 指示書07：10エントリ均等抽選（9種+抽選枠random）。randomは"?"のまま落下し、
+      // 取得時（onPickup）に9種へ均等抽選で確定する（等価性はselfcheckで検算済み）。
+      var slot = Math.floor(Math.random() * (ALL_TYPES.length + 1));
+      var type = slot < ALL_TYPES.length ? ALL_TYPES[slot] : "random";
       s.drops.push({ x: x, y: y, vy: 90, type: type });
     }
   }
@@ -362,9 +418,10 @@
     }
   }
 
-  function hitBlock(s, b) {
+  function hitBlock(s, b, dmg) {
     if (!b.alive) return;
-    b.hp -= 1;
+    var mult = weakenActive(s) ? WEAKEN_MULTIPLIER : 1;
+    b.hp -= dmg * mult;
     if (b.hp <= 0) destroyBlock(s, b, false);
   }
 
@@ -372,16 +429,52 @@
     return s.blocks.every(function (b) { return !b.alive; });
   }
 
+  // 指示書07 作業1：ガイド是正（案(a)）。球の物理には一切介入せず、現在の速度から
+  // 左右壁で反射する予測線を計算するだけの純粋表示用ヘルパー。自陣上端(y=0)に
+  // 到達したら、そこで線を打ち切る（越境先は見せない）。段数スケールの定義は
+  // 指示書06に明記が無いため、「段数で先読み反射回数が増える」を最小実装として
+  // 裁量で選んだ（1段=反射0回・直進のみ、2段=1回、3段=2回。報告書に明記）。
+  // 球が下向き（vy>=0、パドルへ戻る途中）の間は、上端到達の見込みが無いため表示しない。
+  function computeGuideSegments(s) {
+    if (!s.ball || s.stages.guide <= 0 || s.ball.vy >= 0) return [];
+    var maxBounces = s.stages.guide - 1;
+    var segs = [];
+    var x = s.ball.x, y = s.ball.y, vx = s.ball.vx, vy = s.ball.vy;
+    var bounces = 0;
+    for (var iter = 0; iter < 50; iter++) {
+      if (Math.abs(vx) < 1e-6 && Math.abs(vy) < 1e-6) break;
+      var tTop = vy < 0 ? (0 - y) / vy : Infinity;
+      var tLeft = vx < 0 ? (0 - x) / vx : Infinity;
+      var tRight = vx > 0 ? (CW - x) / vx : Infinity;
+      var t = Math.min(tTop, tLeft, tRight);
+      if (!isFinite(t) || t < 0) break;
+      var nx = x + vx * t, ny = y + vy * t;
+      segs.push({ x1: x, y1: y, x2: nx, y2: ny });
+      if (t === tTop) break; // 自陣上端で打ち切り（越境先は描画しない）
+      if (bounces >= maxBounces) break;
+      vx = -vx;
+      x = nx; y = ny;
+      bounces++;
+    }
+    return segs;
+  }
+
   function step(s, dt) {
     s.elapsedSec += dt;
     var c = s.config;
 
     // 球側時限効果の減衰
-    ALL_TYPES.forEach(function (t) {
-      if (BALL_SIDE_TYPES.indexOf(t) >= 0 && s.ballEffects[t] > 0) {
+    BALL_SIDE_TYPES.forEach(function (t) {
+      if (s.ballEffects[t] > 0) {
         s.ballEffects[t] = Math.max(0, s.ballEffects[t] - dt);
       }
     });
+
+    // weaken（場・時限）の残り時間と稼働秒数の集計
+    if (s.weakenRemainingSec > 0) {
+      s.weakenActiveSecAccum += dt;
+      s.weakenRemainingSec = Math.max(0, s.weakenRemainingSec - dt);
+    }
 
     // パドル追従（マウス位置は pointerX に都度更新）
     s.paddle.w = paddleWidth(s);
@@ -394,29 +487,44 @@
     var halfW = s.paddle.w / 2;
     s.paddle.x = Math.max(halfW, Math.min(CW - halfW, s.paddle.x));
 
-    // 分身補助パドル（stages.clone段数ぶん、左右に配置）
-    s.clonePads = [];
-    for (var i = 1; i <= s.stages.clone; i++) {
-      var off = 90 * i;
-      s.clonePads.push({ x: Math.max(30, s.paddle.x - off), w: 46 });
-      s.clonePads.push({ x: Math.min(CW - 30, s.paddle.x + off), w: 46 });
-    }
-
     // サーブ待ち
     if (s.serving) {
       s.serveTimer -= dt;
       if (s.serveTimer <= 0) serveBall(s);
     }
 
+    // 指示書07：レーザー（自動発射・段数で間隔短縮。弾は自陣上端で消滅＝越境しない）
+    if (s.stages.laser > 0) {
+      s.laserCooldownSec -= dt;
+      if (s.laserCooldownSec <= 0) {
+        s.laserBolts.push({ x: s.paddle.x, y: PADDLE_Y - 4, vy: -LASER_BOLT_SPEED });
+        s.laserShotsTotal++;
+        s.laserCooldownSec = c.laserIntervalBaseSec / s.stages.laser;
+      }
+    }
+    for (var li = s.laserBolts.length - 1; li >= 0; li--) {
+      var bolt = s.laserBolts[li];
+      bolt.y += bolt.vy * dt;
+      if (bolt.y < 0) { s.laserBolts.splice(li, 1); continue; } // 自陣上端で消滅（越境しない）
+      var hitOne = false;
+      for (var bj = 0; bj < s.blocks.length; bj++) {
+        var blk = s.blocks[bj];
+        if (!blk.alive) continue;
+        if (circleRectHit(bolt.x, bolt.y, 3, blk.x, blk.y, blk.w, blk.h)) {
+          var mult = weakenActive(s) ? WEAKEN_MULTIPLIER : 1;
+          s.laserWallDamageTotal += LASER_BOLT_DAMAGE * mult;
+          hitBlock(s, blk, LASER_BOLT_DAMAGE);
+          hitOne = true;
+          break;
+        }
+      }
+      if (hitOne) s.laserBolts.splice(li, 1);
+    }
+    if (allBlocksCleared(s)) s.blocks = makeBlocks();
+
     // ボール更新
     if (s.ball) {
       var b = s.ball;
-      // 誘導：パドル中心へ弱く水平方向を寄せる
-      if (s.stages.guide > 0 && b.vy > 0) {
-        var pull = 40 * s.stages.guide;
-        var toward = (s.paddle.x - b.x);
-        b.vx += Math.sign(toward) * Math.min(Math.abs(toward), 1) * pull * dt;
-      }
       b.x += b.vx * dt;
       b.y += b.vy * dt;
 
@@ -427,31 +535,21 @@
       // ブロック衝突
       var pierce = magActive(s, "pierce");
       for (var bi = 0; bi < s.blocks.length; bi++) {
-        var blk = s.blocks[bi];
-        if (!blk.alive) continue;
-        if (circleRectHit(b.x, b.y, BALL_R, blk.x, blk.y, blk.w, blk.h)) {
-          hitBlock(s, blk);
+        var blk2 = s.blocks[bi];
+        if (!blk2.alive) continue;
+        if (circleRectHit(b.x, b.y, BALL_R, blk2.x, blk2.y, blk2.w, blk2.h)) {
+          hitBlock(s, blk2, 1);
           if (!pierce) { b.vy *= -1; break; }
         }
       }
       if (allBlocksCleared(s)) s.blocks = makeBlocks();
 
-      // メインパドル衝突
+      // パドル衝突
       if (b.vy > 0 && circleRectHit(b.x, b.y, BALL_R, s.paddle.x - halfW, PADDLE_Y, s.paddle.w, PADDLE_H)) {
         b.y = PADDLE_Y - BALL_R;
         b.vy *= -1;
         var off = (b.x - s.paddle.x) / halfW; // -1..1
         b.vx += off * 120;
-      } else {
-        // 分身パドル衝突
-        for (var ci = 0; ci < s.clonePads.length; ci++) {
-          var cp = s.clonePads[ci];
-          if (b.vy > 0 && circleRectHit(b.x, b.y, BALL_R, cp.x - cp.w / 2, PADDLE_Y, cp.w, PADDLE_H)) {
-            b.y = PADDLE_Y - BALL_R;
-            b.vy *= -1;
-            break;
-          }
-        }
       }
 
       // 落球判定
@@ -460,17 +558,20 @@
       }
     }
 
-    // 落下アイテム更新
+    // 落下アイテム更新（指示書07：磁石の引力を適用）
     for (var di = s.drops.length - 1; di >= 0; di--) {
       var d = s.drops[di];
-      d.y += d.vy * dt;
-      var caught = circleRectHit(d.x, d.y, 6, s.paddle.x - halfW, PADDLE_Y, s.paddle.w, PADDLE_H);
-      if (!caught) {
-        for (var cj = 0; cj < s.clonePads.length; cj++) {
-          var cp2 = s.clonePads[cj];
-          if (circleRectHit(d.x, d.y, 6, cp2.x - cp2.w / 2, PADDLE_Y, cp2.w, PADDLE_H)) { caught = true; break; }
+      if (s.stages.magnet > 0) {
+        var radius = MAGNET_BASE_RADIUS + MAGNET_RADIUS_PER_STAGE * s.stages.magnet;
+        var ddx = s.paddle.x - d.x, ddy = PADDLE_Y - d.y;
+        var dist = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (dist < radius && dist > 1) {
+          var pull = MAGNET_PULL_ACCEL * s.stages.magnet;
+          d.x += (ddx / dist) * pull * dt;
         }
       }
+      d.y += d.vy * dt;
+      var caught = circleRectHit(d.x, d.y, 6, s.paddle.x - halfW, PADDLE_Y, s.paddle.w, PADDLE_H);
       if (caught) {
         onPickup(s, d.type);
         s.drops.splice(di, 1);
@@ -492,14 +593,32 @@
       ctx.fillRect(b.x, b.y, b.w, b.h);
     });
 
+    // ガイド予測線（案(a)：表示のみ。物理には一切影響しない）
+    var guideSegs = computeGuideSegments(s);
+    if (guideSegs.length) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(159,184,255,0.55)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      guideSegs.forEach(function (seg) {
+        ctx.beginPath();
+        ctx.moveTo(seg.x1, seg.y1);
+        ctx.lineTo(seg.x2, seg.y2);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    // レーザー弾
+    ctx.fillStyle = "#ffe08a";
+    s.laserBolts.forEach(function (bolt) {
+      ctx.fillRect(bolt.x - 1.5, bolt.y - 6, 3, 10);
+    });
+
     // パドル
     var halfW = s.paddle.w / 2;
-    ctx.fillStyle = "#d7dae0";
+    ctx.fillStyle = weakenActive(s) ? "#c85aff" : "#d7dae0";
     ctx.fillRect(s.paddle.x - halfW, PADDLE_Y, s.paddle.w, PADDLE_H);
-    ctx.fillStyle = "#8a8fa0";
-    (s.clonePads || []).forEach(function (cp) {
-      ctx.fillRect(cp.x - cp.w / 2, PADDLE_Y, cp.w, PADDLE_H);
-    });
 
     // ボール
     if (s.ball) {
@@ -512,12 +631,13 @@
 
     // 落下アイテム
     s.drops.forEach(function (d) {
-      ctx.fillStyle = ITEM_COLOR[d.type];
+      var isRandom = d.type === "random";
+      ctx.fillStyle = isRandom ? "#888" : ITEM_COLOR[d.type];
       ctx.fillRect(d.x - 7, d.y - 7, 14, 14);
       ctx.fillStyle = "#05060a";
       ctx.font = "8px monospace";
       ctx.textAlign = "center";
-      ctx.fillText(ITEM_CODE[d.type], d.x, d.y + 3);
+      ctx.fillText(isRandom ? "?" : ITEM_CODE[d.type], d.x, d.y + 3);
     });
 
     if (s.serving) {
@@ -551,6 +671,8 @@
       "壁ダメージ(累積破壊数): " + s.wallDamage + "\n" +
       "パドル段      : " + fmtStages(s) + "\n" +
       "球側効果残り  : " + fmtBallEffects(s) + "\n" +
+      "WKN残り時間   : " + (s.weakenRemainingSec > 0 ? s.weakenRemainingSec.toFixed(1) + "s" : "(なし)") + "\n" +
+      "LAS総発射数   : " + s.laserShotsTotal + "（弾由来ダメージ" + s.laserWallDamageTotal.toFixed(0) + "）\n" +
       "B1 落球回数   : " + s.dropEvents.length + "\n" +
       "B2 復帰回数   : " + s.recoveryTimesSec.length + "（直近 " + lastRec + "）\n" +
       "B2 復帰待ち中 : " + pendingCount + "\n" +
@@ -623,7 +745,11 @@
       item_pickup_counts: s.pickupCounts,
       item_missed_pickup_count: s.missedPickups,
       final_paddle_stages: s.stages,
-      final_wall_damage_block_count: s.wallDamage
+      final_wall_damage_block_count: s.wallDamage,
+      weaken_active_sec_total: Number(s.weakenActiveSecAccum.toFixed(2)),
+      laser_shots_total: s.laserShotsTotal,
+      laser_wall_damage_total: s.laserWallDamageTotal,
+      random_resolved_counts: s.randomResolvedCounts
     };
     jsonOutEl.value = JSON.stringify(out, null, 2);
   });
@@ -635,6 +761,12 @@
   ctx.font = "14px sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("「開始」を押してください", CW / 2, CH / 2);
+
+  // 指示書07 作業1：ガイド是正の検品（成功/失敗パス分離。CLAUDE.md §9-c）用に、
+  // 内部関数を検証専用に公開する。計測器具の性質上（非公開・非ゲーム）、
+  // 本番挙動には影響しない読み取り専用の参照公開であり、UIからは到達しない。
+  window.__calibTest = { freshState: freshState, step: step, makeBlocks: makeBlocks,
+                          computeGuideSegments: computeGuideSegments };
 })();
 </script>
 </body>
