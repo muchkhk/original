@@ -30,9 +30,16 @@ from ring_sim import simulate_trial, pct, MASTER_SEED, SEED_PRIME
 WALL_MASTER_SEED = MASTER_SEED + 1  # 指示書01のchild_seed系列と衝突しないよう+1しておく
 WALL_SEED_PRIME = 1_000_033
 
-# 「1セッション相当」の候補tick数（Q4のtick↔実時間較正が未実施のため、
-# 複数の候補を並行して報告し、Q4が届き次第どれが妥当か選べるようにする）
+# 「1セッション相当」の候補tick数（当初はQ4較正が未実施だったため複数候補を
+# 並行報告する設計にしていたが、指示書03でQ4実測（ユーザーが100tick×3回計測）が
+# 完了した。900tick(約21分)が「1セッション相当」の最有力候補（詳細は報告書参照）。
 WALL_CHECKPOINTS = [300, 900, 1800]
+
+# 指示書03 Q4：tick↔実時間較正の実測値（ユーザー実測、2026-07-29）
+# run1=139.15s, run2=147.69s, run3=131.64s（いずれも100tickあたりの経過秒数）
+Q4_CALIBRATION_RUNS_SEC_PER_100TICK = [139.15, 147.69, 131.64]
+Q4_MS_PER_TICK = (sum(Q4_CALIBRATION_RUNS_SEC_PER_100TICK)
+                  / len(Q4_CALIBRATION_RUNS_SEC_PER_100TICK) * 1000 / 100)
 PERCENTILES = [0.5, 0.9, 0.99]
 SAFETY_FACTORS = [2, 4, 8]
 SLOPE_KINDS = ["linear", "staged"]
@@ -99,17 +106,20 @@ def incidental_clear_rate(damages, requirement):
     return sum(1 for d in damages if d >= requirement) / len(damages)
 
 
-def run_relay(seed, slope_kind, wall_targets, trials, ticks):
+def run_relay(seed, slope_kind, wall_targets, trials, ticks, paddle_catch_rate=1.0):
     """意図的リレー成立を仮定した場合のクリア所要時間を推定する。
     paddle_catch_rate=1.0（球を絶対に落とさない）+ serve_mode='inf'（最大供給）を
     「協調して球を落とさないよう努める意図的リレー」の代理条件とした
     （実際の協調戦略そのものをモデル化したものではない。捨象した仮定として報告する）。
+
+    paddle_catch_rate<1.0を渡すと、「実卓のプレイヤーはリレー中も一定確率で
+    球を落とす」という、より保守的な代理条件になる（指示書03のcatch_rate感度検証用）。
     """
     rng = random.Random(seed)
     reach_ticks = {t: [] for t in wall_targets}
     for _ in range(trials):
         r = simulate_trial(rng, NATURAL_N, "inf", NATURAL_DECAY_ON, NATURAL_WEAKEST_VANISH,
-                            ticks, slope_kind=slope_kind, paddle_catch_rate=1.0,
+                            ticks, slope_kind=slope_kind, paddle_catch_rate=paddle_catch_rate,
                             wall_targets=wall_targets)
         for t in wall_targets:
             tick = r["wall_target_ticks"].get(t)
@@ -279,6 +289,14 @@ def main():
         "safety_factors": SAFETY_FACTORS, "slope_kinds": SLOPE_KINDS,
         "reference_serve_mode": REFERENCE_SERVE_MODE,
         "hits_per_unit": hits_per_unit,
+        "q4_calibration": {
+            "runs_sec_per_100tick": Q4_CALIBRATION_RUNS_SEC_PER_100TICK,
+            "ms_per_tick": Q4_MS_PER_TICK,
+            "checkpoint_minutes": {cp: round(cp * Q4_MS_PER_TICK / 1000 / 60, 2)
+                                    for cp in WALL_CHECKPOINTS},
+            "session_candidate_ticks": 900,
+            "note": "指示書03で測定・確定。900tick(約21分)が「1セッション相当」の最有力候補",
+        },
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
     with open(f"{args.out}/wall_meta.json", "w", encoding="utf-8") as f:

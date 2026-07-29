@@ -19,10 +19,15 @@ tools/check_firebase_auth.mjs と同じ命名規則（FAIL:/RESULT: PASS）。
 has_looped判定）を意図的に壊し、check_staged_slope_jumps_after_loopが
 確実にFAILすることを示す。
 
+--inject-catchrate-bug を付けると、指示書03の新規ロジック（run_relayの
+paddle_catch_rate引数）を意図的に無視する壊れた実装を注入し、
+check_catch_rate_slows_relayが確実にFAILすることを示す。
+
 使い方:
   python selfcheck.py                       # 正常系。RESULT: PASS を期待
   python selfcheck.py --inject-population-bug  # 異常系。RESULT: FAIL を期待
   python selfcheck.py --inject-wall-bug        # 異常系。RESULT: FAIL を期待
+  python selfcheck.py --inject-catchrate-bug   # 異常系。RESULT: FAIL を期待
 """
 import argparse
 import sys
@@ -30,6 +35,7 @@ import sys
 sys.path.insert(0, __file__.rsplit("/", 1)[0] if "/" in __file__ else ".")
 
 import ring_sim as rs
+import wall_sim as ws
 
 FAILURES = []
 
@@ -242,12 +248,54 @@ def check_checkpoint_reaches_final_tick():
           f"checkpoint_results keys={list(r_good['checkpoint_results'].keys())}")
 
 
+def check_catch_rate_slows_relay(inject_bug=False):
+    """
+    指示書03の新規ロジック：wall_sim.run_relay()にpaddle_catch_rateを渡せること、
+    かつ捕球率が下がるほどリレーのクリアが明確に遅くなる（または到達率が下がる）
+    ことを確認する。捕球率が下がれば球を落とす頻度が増え、周回・強化壁ダメージの
+    蓄積が遅くなるはず、という単調性のチェック。
+    """
+    target = 5000.0
+    trials, ticks = 60, 2000
+
+    if inject_bug:
+        # paddle_catch_rate引数を黙って無視し、常に1.0扱いする壊れた実装を注入する
+        orig_simulate_trial = ws.simulate_trial
+
+        def broken_simulate_trial(*args, **kwargs):
+            kwargs["paddle_catch_rate"] = 1.0
+            return orig_simulate_trial(*args, **kwargs)
+
+        ws.simulate_trial = broken_simulate_trial
+        try:
+            fast = ws.run_relay(101, "staged", [target], trials, ticks, paddle_catch_rate=1.0)
+            slow = ws.run_relay(101, "staged", [target], trials, ticks, paddle_catch_rate=0.5)
+        finally:
+            ws.simulate_trial = orig_simulate_trial
+    else:
+        fast = ws.run_relay(101, "staged", [target], trials, ticks, paddle_catch_rate=1.0)
+        slow = ws.run_relay(101, "staged", [target], trials, ticks, paddle_catch_rate=0.5)
+
+    fast_med, slow_med = fast[target]["median_tick"], slow[target]["median_tick"]
+    fast_reached, slow_reached = fast[target]["reached_frac"], slow[target]["reached_frac"]
+    slower_or_worse = (
+        (slow_med is None and fast_med is not None) or
+        (fast_med is not None and slow_med is not None and slow_med > fast_med) or
+        (slow_reached < fast_reached)
+    )
+    check("catch_rate_slows_relay: catch_rate=0.5はcatch_rate=1.0より明確に遅い（または到達率が下がる）",
+          slower_or_worse,
+          f"fast_median={fast_med}(reached={fast_reached}) slow_median={slow_med}(reached={slow_reached})")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--inject-population-bug", action="store_true",
                      help="過去に実在した越境流入バグを意図的に再現し、FAIL経路を実例で示す")
     ap.add_argument("--inject-wall-bug", action="store_true",
                      help="指示書02の強化壁ロジック(has_looped判定)を意図的に壊し、FAIL経路を実例で示す")
+    ap.add_argument("--inject-catchrate-bug", action="store_true",
+                     help="指示書03のpaddle_catch_rate引数を無視する壊れた実装を注入し、FAIL経路を実例で示す")
     args = ap.parse_args()
 
     check_ring_math()
@@ -259,6 +307,7 @@ def main():
     check_staged_slope_jumps_after_loop(inject_bug=args.inject_wall_bug)
     check_checkpoint_and_wall_target_consistency()
     check_checkpoint_reaches_final_tick()
+    check_catch_rate_slows_relay(inject_bug=args.inject_catchrate_bug)
 
     if FAILURES:
         print(f"RESULT: FAIL ({len(FAILURES)} check(s) failed: {', '.join(FAILURES)})")

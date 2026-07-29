@@ -13,10 +13,10 @@ PASS: wall_damage_fn: staged 未周回はSTAGE_SMALL
 PASS: wall_damage_fn: staged 周回済みはSTAGE_JUMP
 PASS: wall_damage_fn: STAGE_JUMPはSTAGE_SMALLより大きい（別格になる、の前提）
 PASS: staged_slope: 周回が実際に発生している（前提条件）
-FAIL: staged_slope: 周回後は平均ダメージ/ヒットがSTAGE_SMALLより明確に大きい (avg_dmg_per_hit=0.500 STAGE_SMALL=0.5)
+PASS: staged_slope: 周回後は平均ダメージ/ヒットがSTAGE_SMALLより明確に大きい
 PASS: checkpoint_wall_target_consistency: checkpoint値と同じ乱数系列でwall_targetを引くと、到達tickがcheckpoint tick以下
 PASS: checkpoint_boundary: ticks==checkpointだと、そのcheckpointは記録されない（呼び出し側はticks=checkpoint+1にする必要がある、という既知の仕様）
 PASS: checkpoint_boundary: ticks==checkpoint+1なら、そのcheckpointが記録される
-PASS: catch_rate_slows_relay: catch_rate=0.5はcatch_rate=1.0より明確に遅い（または到達率が下がる）
-RESULT: FAIL (1 check(s) failed: staged_slope: 周回後は平均ダメージ/ヒットがSTAGE_SMALLより明確に大きい)
+FAIL: catch_rate_slows_relay: catch_rate=0.5はcatch_rate=1.0より明確に遅い（または到達率が下がる） (fast_median=174(reached=1.0) slow_median=174(reached=1.0))
+RESULT: FAIL (1 check(s) failed: catch_rate_slows_relay: catch_rate=0.5はcatch_rate=1.0より明確に遅い（または到達率が下がる）)
 exit=1
