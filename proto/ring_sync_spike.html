@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>環構造 越境同期スパイク（Emulator専用）</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+  body{font-family:sans-serif;background:#1a1a20;color:#eee;margin:0;padding:16px}
+  h1{font-size:16px;margin:0 0 8px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  input,button,select{font-size:14px;padding:6px 10px;border-radius:4px;border:1px solid #555;background:#2a2a32;color:#eee}
+  button{cursor:pointer}
+  button:hover{background:#3a3a44}
+  #status{font-size:12px;color:#9ad}
+  .worlds{display:flex;gap:10px;margin:14px 0}
+  .world{width:150px;height:170px;border:2px solid #667;background:#22222a;position:relative;overflow:hidden;flex-shrink:0}
+  .world .label{position:absolute;top:4px;left:6px;font-size:12px;color:#9cf}
+  .world button{position:absolute;bottom:4px;left:4px;right:4px;font-size:11px;padding:4px}
+  .capsule{position:absolute;width:36px;height:22px;background:#e8b23d;border:1px solid #a87c1c;
+    color:#221;font-size:10px;display:flex;align-items:center;justify-content:center;
+    left:50%;top:50%;transform:translate(-50%,-50%);transition:opacity 2.2s linear}
+  .capsule.fade{opacity:0}
+  #log{font-family:monospace;font-size:11px;background:#111;border:1px solid #333;height:200px;
+    overflow-y:auto;padding:6px;white-space:pre-wrap}
+  #latency{font-size:12px;color:#9d9}
+  .badge{display:inline-block;padding:2px 6px;border-radius:3px;background:#553;font-size:11px}
+</style>
+</head>
+<body>
+<h1>環構造 越境同期スパイク（指示書01・単一HTML＋Firebase RTDB、Emulator専用）</h1>
+<div class="row">
+  <span class="badge" id="gateBadge">未接続</span>
+  <span id="status">-</span>
+</div>
+<div class="row">
+  <label>部屋コード <input id="roomCode" value="DEMO1" maxlength="12"></label>
+  <label>N <select id="nSelect"><option>3</option><option selected>4</option></select></label>
+  <button id="joinBtn">参加／作成</button>
+  <span id="clientLabel"></span>
+</div>
+<div class="worlds" id="worlds"></div>
+<div class="row">
+  <button id="pingBtn" disabled>🏓 Ping（往復遅延を計測）</button>
+  <span id="latency">往復計測: まだ無し</span>
+</div>
+<div id="log"></div>
+
+<script>
+// このファイルはローカルFirebase Emulator専用のスパイクです。
+// 本番Firebaseプロジェクトには一切接続しません（emulator=1 かつ localhost/127.0.0.1のみ動作）。
+const FIREBASE_CONFIG = {
+  apiKey: "fake-api-key-emulator-only",
+  authDomain: "ring-spike-test.firebaseapp.com",
+  databaseURL: "https://ring-spike-test-default-rtdb.firebaseio.com",
+  projectId: "ring-spike-test",
+};
+
+const qs = new URLSearchParams(location.search);
+const emulatorMode = qs.get("emulator") === "1" &&
+  (location.hostname === "localhost" || location.hostname === "127.0.0.1");
+
+const gateBadge = document.getElementById("gateBadge");
+const statusEl = document.getElementById("status");
+const logEl = document.getElementById("log");
+const worldsEl = document.getElementById("worlds");
+const latencyEl = document.getElementById("latency");
+const clientLabelEl = document.getElementById("clientLabel");
+const pingBtn = document.getElementById("pingBtn");
+
+function log(msg) {
+  const t = new Date().toISOString().split("T")[1].replace("Z", "");
+  logEl.textContent += `[${t}] ${msg}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+if (!emulatorMode) {
+  gateBadge.textContent = "本番接続なし（?emulator=1 が無いためFirebase未初期化）";
+  statusEl.textContent = "このファイルはEmulator専用です。?emulator=1 を付けてlocalhostから開いてください。";
+} else {
+  gateBadge.textContent = "LOCAL EMULATOR";
+  firebase.initializeApp(FIREBASE_CONFIG);
+  const auth = firebase.auth();
+  const db = firebase.database();
+  auth.useEmulator("http://127.0.0.1:9399");
+  db.useEmulator("127.0.0.1", 9370);
+
+  const clientId = "c-" + Math.random().toString(36).slice(2, 8);
+  clientLabelEl.textContent = `client=${clientId}`;
+  let N = 4;
+  let roomRef = null;
+  let myUid = null;
+  const pendingPings = {};
+
+  auth.signInAnonymously().catch(e => log("FAIL signIn: " + e.message));
+  auth.onAuthStateChanged(u => {
+    if (u) {
+      myUid = u.uid;
+      statusEl.textContent = `認証済み uid=...${u.uid.slice(-4)}`;
+      document.getElementById("joinBtn").disabled = false;
+    }
+  });
+
+  function renderWorlds() {
+    worldsEl.innerHTML = "";
+    for (let w = 0; w < N; w++) {
+      const div = document.createElement("div");
+      div.className = "world";
+      div.id = "world-" + w;
+      div.innerHTML = `<div class="label">世界 ${w}</div>
+        <button data-w="${w}">⚡上へ送る(${w}→${(w + 1) % N})</button>`;
+      worldsEl.appendChild(div);
+    }
+    worldsEl.querySelectorAll("button[data-w]").forEach(btn => {
+      btn.addEventListener("click", () => sendCrossing(parseInt(btn.dataset.w, 10)));
+    });
+  }
+
+  function spawnCapsule(world, level) {
+    const panel = document.getElementById("world-" + world);
+    if (!panel) return;
+    const cap = document.createElement("div");
+    cap.className = "capsule";
+    cap.textContent = "段" + level;
+    panel.appendChild(cap);
+    requestAnimationFrame(() => setTimeout(() => cap.classList.add("fade"), 1400));
+    setTimeout(() => cap.remove(), 3600);
+  }
+
+  function sendCrossing(fromWorld) {
+    const toWorld = (fromWorld + 1) % N;
+    const ev = {
+      ts: Date.now(), kind: "crossing", clientId,
+      fromWorld, toWorld, level: 1,
+      x: Math.round(Math.random() * 100), y: 0,
+      vx: 0, vy: -3,
+    };
+    roomRef.child("events").push(ev)
+      .then(() => log(`send crossing ${fromWorld}->${toWorld}`))
+      .catch(e => log("FAIL send crossing: " + e.message));
+  }
+
+  pingBtn.addEventListener("click", () => {
+    const ev = { ts: Date.now(), kind: "ping", clientId };
+    const ref = roomRef.child("events").push();
+    pendingPings[ref.key] = { sentAt: Date.now() };
+    ref.set(ev)
+      .then(() => log("send ping " + ref.key))
+      .catch(e => log("FAIL send ping: " + e.message));
+  });
+
+  function handleEvent(snap) {
+    const ev = snap.val();
+    if (!ev) return;
+    if (ev.kind === "crossing") {
+      spawnCapsule(ev.toWorld, ev.level);
+      log(`recv crossing ${ev.fromWorld}->${ev.toWorld} level=${ev.level} from=${ev.clientId} 伝搬${Date.now() - ev.ts}ms`);
+    } else if (ev.kind === "ping") {
+      if (ev.clientId === clientId) return; // 自分のpingには応答しない
+      roomRef.child("events").push({ ts: Date.now(), kind: "pong", clientId, refId: snap.key })
+        .then(() => log("recv ping " + snap.key + " -> send pong"));
+    } else if (ev.kind === "pong") {
+      const pending = pendingPings[ev.refId];
+      if (!pending) return;
+      const rtt = Date.now() - pending.sentAt;
+      delete pendingPings[ev.refId];
+      latencyEl.textContent = `直近往復: ${rtt}ms`;
+      log(`recv pong refId=${ev.refId} rtt=${rtt}ms`);
+    }
+  }
+
+  document.getElementById("joinBtn").addEventListener("click", async () => {
+    const code = document.getElementById("roomCode").value.trim();
+    if (!code) return;
+    N = parseInt(document.getElementById("nSelect").value, 10);
+    roomRef = db.ref("ringSpikeRooms/" + code);
+    try {
+      const metaSnap = await roomRef.child("meta").once("value");
+      if (!metaSnap.exists()) {
+        await roomRef.child("meta").set({ hostUid: myUid, createdAt: Date.now(), N });
+        log(`room ${code} created as host, N=${N}`);
+      } else {
+        N = metaSnap.val().N;
+        log(`room ${code} joined as guest, N=${N}`);
+      }
+      renderWorlds();
+      roomRef.child("events").on("child_added", handleEvent);
+      pingBtn.disabled = false;
+      statusEl.textContent = `部屋 ${code} に接続中（N=${N}）`;
+    } catch (e) {
+      log("FAIL join: " + e.message);
+    }
+  });
+}
+</script>
+</body>
+</html>

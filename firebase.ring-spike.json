@@ -1,0 +1,16 @@
+{
+  "database": {
+    "rules": "firebase/ring_spike_rules.json"
+  },
+  "emulators": {
+    "auth": {
+      "port": 9399
+    },
+    "database": {
+      "port": 9370
+    },
+    "ui": {
+      "enabled": false
+    }
+  }
+}

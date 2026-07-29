@@ -1,0 +1,39 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "ringSpikeRooms": {
+      "$roomId": {
+        "meta": {
+          ".read": "auth != null",
+          ".write": "auth != null && !data.exists() && newData.child('hostUid').val() === auth.uid",
+          ".validate": "newData.hasChildren(['hostUid','createdAt','N'])",
+          "hostUid": { ".validate": "newData.isString()" },
+          "createdAt": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "N": { ".validate": "newData.isNumber() && newData.val() >= 3 && newData.val() <= 8" },
+          "$other": { ".validate": false }
+        },
+        "events": {
+          ".read": "auth != null && root.child('ringSpikeRooms').child($roomId).child('meta').exists()",
+          "$eventId": {
+            ".write": "auth != null && !data.exists() && root.child('ringSpikeRooms').child($roomId).child('meta').exists()",
+            ".validate": "newData.hasChildren(['ts','kind','clientId']) && (newData.child('kind').val() === 'crossing' || newData.child('kind').val() === 'ping' || newData.child('kind').val() === 'pong')",
+            "ts": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "kind": { ".validate": "newData.isString()" },
+            "clientId": { ".validate": "newData.isString()" },
+            "fromWorld": { ".validate": "newData.isNumber()" },
+            "toWorld": { ".validate": "newData.isNumber()" },
+            "level": { ".validate": "newData.isNumber()" },
+            "x": { ".validate": "newData.isNumber()" },
+            "y": { ".validate": "newData.isNumber()" },
+            "vx": { ".validate": "newData.isNumber()" },
+            "vy": { ".validate": "newData.isNumber()" },
+            "refId": { ".validate": "newData.isString()" },
+            "$other": { ".validate": false }
+          }
+        },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}
