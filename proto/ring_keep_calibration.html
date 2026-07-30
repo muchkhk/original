@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書12 円形盤面改修</title>
+<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書13 循環入れ子トポロジー改修</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -52,13 +52,16 @@
 </head>
 <body>
 
-<h1>玉キープ束 較正用プロトタイプ（計測器具・円形盤面版）</h1>
+<h1>玉キープ束 較正用プロトタイプ（計測器具・循環入れ子トポロジー版）</h1>
 <div class="warn">
   これは「面白いかどうか」を確かめるゲームではなく、B1（落球頻度）・B2（パドル側1段喪失から同段回復までの実時間）を
   実物理・実時間で測定するための<strong>計測器具</strong>です。ストーリー・演出・音は一切ありません。
-  <strong>プレイテスト対象者には見せないこと。</strong>（指示書06・指示書07・指示書12）<br>
-  <strong>指示書12で円形盤面（重力井戸型）へ改修。</strong>外周=壁帯（ブロック）・中心=穴（出口専用）。
-  越境入射（他世界からの球の到来）は方角つきの模擬発生器で再現している（詳細は報告書参照）。
+  <strong>プレイテスト対象者には見せないこと。</strong>（指示書06・指示書07・指示書12・指示書13）<br>
+  <strong>指示書13で接続幾何を循環入れ子トポロジー（原典handoff16 §1-2）へ是正。</strong>
+  指示書12の方角円弧・入射貫入は撤去した（瑕疵ではなく作家判断による改訂）。
+  越境は二方向：外周突破＝内側隣人の中心穴から噴出／中心穴落下＝外側隣人の空からマルチボール
+  として降下（壁・ブロックをすり抜けて場に入る）。角度は入射角の連続写像（同じ角度θ）。
+  中心は開始時「床」（穴なし）で、初落球で割れて穴が開き、以後落球のたびに成長する。
 </div>
 
 <div class="layout">
@@ -66,18 +69,30 @@
 
   <div class="panel">
     <fieldset>
-      <legend>盤面幾何パラメータ（指示書12・裁量初期値）</legend>
+      <legend>盤面幾何パラメータ（指示書12/13・裁量初期値）</legend>
       <label class="slider-row">重力加速度(px/s²)
-        <input type="range" id="gravityAccel" min="0" max="600" step="10" value="220">
+        <input type="range" id="gravityAccel" min="0" max="400" step="5" value="100">
         <span id="gravityAccelVal"></span>
-      </label>
-      <label class="slider-row">穴半径(px)
-        <input type="range" id="holeR" min="15" max="90" step="1" value="40">
-        <span id="holeRVal"></span>
       </label>
       <label class="slider-row">パドル軌道半径(px)
         <input type="range" id="paddleOrbitR" min="60" max="160" step="1" value="105">
         <span id="paddleOrbitRVal"></span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>反転0：床の崩壊曲線（指示書13§2-5・裁量初期値）</legend>
+      <label class="slider-row">初期穴半径(px)
+        <input type="range" id="holeRInitial" min="10" max="60" step="1" value="35">
+        <span id="holeRInitialVal"></span>
+      </label>
+      <label class="slider-row">穴成長量/落球(px)
+        <input type="range" id="holeRGrowth" min="0" max="20" step="1" value="6">
+        <span id="holeRGrowthVal"></span>
+      </label>
+      <label class="slider-row">穴半径の上限(px)
+        <input type="range" id="holeRMax" min="30" max="100" step="1" value="80">
+        <span id="holeRMaxVal"></span>
       </label>
     </fieldset>
 
@@ -100,8 +115,12 @@
         <span id="effectMagnitudeVal"></span>
       </label>
       <label class="slider-row">ボール速度(px/s)
-        <input type="range" id="ballSpeed" min="100" max="700" step="10" value="260">
+        <input type="range" id="ballSpeed" min="40" max="700" step="10" value="220">
         <span id="ballSpeedVal"></span>
+      </label>
+      <label class="slider-row">終端速度(px/s)（新設）
+        <input type="range" id="terminalVelocity" min="80" max="500" step="10" value="200">
+        <span id="terminalVelocityVal"></span>
       </label>
       <label class="slider-row">レーザー発射間隔基準(秒)
         <input type="range" id="laserInterval" min="0.2" max="5" step="0.1" value="1.5">
@@ -132,7 +151,7 @@
       <div class="legend-items">
         <div><span class="swatch" style="background:#5aa9ff"></span>ENL 拡大（パドル側・3段）弧幅が段階的に広がる</div>
         <div><span class="swatch" style="background:#7fd0ff"></span>SPD 速度（パドル側・3段）パドル角速度が上がる</div>
-        <div><span class="swatch" style="background:#9fb8ff"></span>GID ガイド（パドル側・3段）<strong>物理不介入</strong>。予測線を表示するのみ（重力を含めた数値積分による曲線予測。サーブ待機中・外向き飛行中は外周まで／内向き落下中はパドル軌道面まで＝着地予測）</div>
+        <div><span class="swatch" style="background:#9fb8ff"></span>GID ガイド（パドル側・3段）<strong>物理不介入</strong>。予測線を表示するのみ（重力・終端速度を含めた数値積分による曲線予測。サーブ待機中・外向き飛行中は外周まで／内向き落下中はパドル軌道面まで＝着地予測）</div>
         <div><span class="swatch" style="background:#7fffb0"></span>MAG 磁石（パドル側・3段）落下アイテムをパドルへ引き寄せる（球には無関係）</div>
         <div><span class="swatch" style="background:#ffe08a"></span>LAS レーザー（パドル側・3段）自動発射。パドルの角度から外周へ向け放射状に発射。段数で発射間隔短縮。弾は外周で消滅</div>
         <div><span class="swatch" style="background:#ffb35a"></span>PRC 貫通（球側）<strong>3ブロック貫くまで持続</strong>（時限ではなくヒット数）</div>
@@ -141,36 +160,38 @@
         <div><span class="swatch" style="background:#c85aff"></span>WKN 自陣弱体化（場・時限）自陣の全ダメージ（球・レーザーとも）が2倍</div>
         <div><span class="swatch" style="background:#888"></span>? 抽選枠random（取得時に上記9種から均等抽選で確定）</div>
         <div><span class="swatch" style="background:#4a6fa5;border:2px solid #7fffb0"></span>緑枠 アイテム壁（各陣2個・破壊で必ず1アイテム確定ドロップ。仮配置）</div>
-        <div><span class="swatch" style="background:#ff4040"></span>橙点滅 越境入射（他世界からの球。外側から必ず貫通して場に入る。一周球は大きく壁を欠損）</div>
+        <div><span class="swatch" style="background:#40e0ff"></span>水色点滅 マルチボール（外側隣人の落球の模擬。壁をすり抜けて上空から降下。角度連続）</div>
+        <div><span class="swatch" style="background:#ffd070"></span>橙点滅 噴出球（内側隣人の外周突破の模擬。中心穴から噴出。角度連続）</div>
       </div>
     </fieldset>
 
     <fieldset>
-      <legend>出力JSON（B1実測落球数・B2実測復帰時間・越境入射統計・新規アイテム統計）</legend>
+      <legend>出力JSON（B1実測落球数・B2実測復帰時間・越境統計・新規アイテム統計）</legend>
       <textarea id="jsonOut" readonly placeholder="「セッション終了・JSON出力」を押すとここに出力されます"></textarea>
     </fieldset>
   </div>
 </div>
 
 <footer>
-  proto/ring_keep_calibration.html ― 指示書06 作業2・指示書07 作業1/2・指示書09 作業1〜3・指示書12（円形盤面改修）。
+  proto/ring_keep_calibration.html ― 指示書06 作業2・指示書07 作業1/2・指示書09 作業1〜3・
+  指示書12（円形盤面改修）・指示書13（循環入れ子トポロジー是正・順序則v2）。
   器具再割当（設計チャット20）によりB1・B2はこのプロトタイプとプレイテストで確認する。
-  ring_sim.py（抽象tickモデル）はB3・要求量のみを判定し、円形幾何の物理再現は行わない（経済抽象を維持。指示書12 作業4）。
-  Firebase・オンライン同期なし、ローカル完結。越境入射は方角つきの模擬発生器（このプロト内で完結・他world非接続）。
+  ring_sim.py（抽象tickモデル）はB3・要求量のみを判定し、円形幾何の物理再現は行わない（経済抽象を維持）。
+  Firebase・オンライン同期なし、ローカル完結。越境（マルチボール降下・噴出）は方角ではなく
+  角度連続写像の模擬発生器（このプロト内で完結・他world非接続）。
 </footer>
 
 <script>
 (function () {
   "use strict";
 
-  // ---- 定数：盤面幾何（指示書12・円形盤面改修） ----------------------------------------------------------
+  // ---- 定数：盤面幾何 ----------------------------------------------------------
   var CW = 560, CH = 560;
   var CX = CW / 2, CY = CH / 2;               // 盤面中心
   var BOARD_R = 250;                          // 盤面外周半径（描画上の外縁）
   var BALL_R = 6;
 
-  // 壁帯（ブロック）は外周付近の同心円リング状に配置する。指示書12§2「外周=壁帯」。
-  // リング内側半径はパドル軌道半径の初期値選定の基準にも使う（§2「盤面半径の中間帯」）。
+  // 壁帯（ブロック）は外周付近の同心円リング状に配置する。
   var RING_DEFS = [
     { rInner: 170, rOuter: 210 },  // 内側リング（穴・パドルに近い側）
     { rInner: 210, rOuter: 250 }   // 外側リング（盤面外縁）
@@ -181,23 +202,29 @@
   var PIERCE_HITS = 3;               // 指示書09：貫通は3ブロックヒットで終了（保護数字）
   var ITEM_WALL_BRICKS_PER_SIDE = 2; // 指示書09：各陣2個のアイテム壁（確定ドロップ）
 
-  // パドル：中心穴を中心とする固定半径の円軌道上を角度方向にのみ移動する（指示書12§2）。
-  // 初期値の選定根拠は報告書に記載する（穴上キャンプ＝小半径で角度被覆が過大になる問題を
-  // 避けるため、盤面半径の中間帯を初期値とした）。
+  // パドル：中心穴を中心とする固定半径の円軌道上を角度方向にのみ移動する。
   var PADDLE_ARC_HALF_BASE = 45 / 105; // 旧PADDLE_BASE_W=90pxを初期paddleOrbitR=105pxでの弧幅に換算
   var PADDLE_ANGULAR_SPEED_BASE = 900 / 105; // 旧PADDLE_BASE_SPEED=900px/sの角速度換算(rad/s)
 
-  // 指示書12§3：越境の接続幾何。3世界を三角形配置とみなし、越境球は送信元の方角の外周
-  // 円弧から内向きに入射する。このプロトは他worldと非接続（ローカル完結）のため、
-  // 「隣A（上昇跨ぎ元。sim: world=(w+1)%N）」「隣B（落下跨ぎ元。sim: world=(w-1)%N）」の
-  // 2方向を模擬発生器で再現する（角度は裁量。三角配置を横から見た下2頂点の方角を模した）。
-  var ENTRY_ANGLE_A = 210 * Math.PI / 180;  // 隣A：左下方向から入射
-  var ENTRY_ANGLE_B = 330 * Math.PI / 180;  // 隣B：右下方向から入射
-  var ENTRY_ARC_HALF_WIDTH = 0.35;          // 入射円弧の半角（rad）。裁量・報告
-  var ENTRY_SPAWN_INTERVAL_MIN = 3.0;       // 模擬発生器の間隔（秒）裁量値。指示書11実測の
-  var ENTRY_SPAWN_INTERVAL_MAX = 6.0;       // 初回越境24秒中央値・最大91秒よりは短い周期で
-                                             // 「気づきの機会」を反復提示する目的の裁量値
-  var ENTRY_LOOPED_PROB = 0.20;             // 模擬発生器が「一周球」を混ぜる確率（演出用・裁量）
+  // 【指示書13§2-5】反転0の円形版：中心は開始時「床」（穴なし）。最初に球が床へ到達した
+  // 瞬間に割れて穴が開く（hole_r_initial）。以後、落球のたびに穴が成長する
+  // （hole_r_growth_per_drop、上限hole_r_max）。3値ともスライダー化（作業2-5）。
+  var FLOOR_BREAK_RADIUS = 18; // 「中心床へ到達した」とみなす半径（保護のための最小しきい値。裁量）
+
+  // 【指示書13§2-2・2-3】循環入れ子トポロジー（原典handoff16 §1-2への回帰）。
+  // 越境は二方向：
+  //   上昇跨ぎ＝外周突破 → 内側隣人の中心穴から噴出（+1段相当）
+  //   落下跨ぎ＝中心穴落下 → 外側隣人の空からマルチボールとして降下（-1段相当）
+  // 角度は入射角の連続写像：送信側の角度θ→受信側の同じ角度θ。このプロトは他worldと
+  // 非接続のため、模擬発生器はθを乱数で振るが、写像規則自体（crossingAngleMap）は
+  // 実装しておく（指示書13§2-2）。
+  var MULTIBALL_SPAWN_INTERVAL_MIN = 3.0;
+  var MULTIBALL_SPAWN_INTERVAL_MAX = 6.0;
+  var ERUPTION_SPAWN_INTERVAL_MIN = 3.0;
+  var ERUPTION_SPAWN_INTERVAL_MAX = 6.0;
+  var MULTIBALL_ARRIVING_LABEL_SEC = 999; // 着地(すり抜け完了)までarriving表示を維持（rしきい値で解除するため実質未使用の上限）
+  var JUST_ERUPTED_TINT_SEC = 1.0;        // 噴出直後の識別表示（視覚のみ・物理には無関係）
+
   var MAX_LOCAL_BALLS_REFERENCE = 3;        // 参考値。SERVE_CAP(ring_sim.py)に合わせた目安
 
   // 指示書07：分身(clone)を除去し磁石(magnet)・レーザー(laser)を追加。
@@ -235,6 +262,13 @@
     return d;
   }
 
+  // 【指示書13§2-2】循環入れ子トポロジーの角度連続写像：送信側の角度θ→受信側の同じ角度θ。
+  // 実際の3盤面接続では送信側の実測角をこの関数へ渡すが、このプロトは他worldと非接続のため
+  // 模擬発生器はランダムなθをこの関数へ通す（写像規則自体はここに実装済み）。
+  function crossingAngleMap(theta) {
+    return theta;
+  }
+
   // ---- DOM参照 ----------------------------------------------------------
   var canvas = document.getElementById("game");
   var ctx = canvas.getContext("2d");
@@ -246,25 +280,31 @@
 
   var sliders = {
     gravityAccel: document.getElementById("gravityAccel"),
-    holeR: document.getElementById("holeR"),
     paddleOrbitR: document.getElementById("paddleOrbitR"),
+    holeRInitial: document.getElementById("holeRInitial"),
+    holeRGrowth: document.getElementById("holeRGrowth"),
+    holeRMax: document.getElementById("holeRMax"),
     dropRate: document.getElementById("dropRate"),
     serveInterval: document.getElementById("serveInterval"),
     effectDuration: document.getElementById("effectDuration"),
     effectMagnitude: document.getElementById("effectMagnitude"),
     ballSpeed: document.getElementById("ballSpeed"),
+    terminalVelocity: document.getElementById("terminalVelocity"),
     laserInterval: document.getElementById("laserInterval"),
     weakenDuration: document.getElementById("weakenDuration")
   };
   var sliderVals = {
     gravityAccel: document.getElementById("gravityAccelVal"),
-    holeR: document.getElementById("holeRVal"),
     paddleOrbitR: document.getElementById("paddleOrbitRVal"),
+    holeRInitial: document.getElementById("holeRInitialVal"),
+    holeRGrowth: document.getElementById("holeRGrowthVal"),
+    holeRMax: document.getElementById("holeRMaxVal"),
     dropRate: document.getElementById("dropRateVal"),
     serveInterval: document.getElementById("serveIntervalVal"),
     effectDuration: document.getElementById("effectDurationVal"),
     effectMagnitude: document.getElementById("effectMagnitudeVal"),
     ballSpeed: document.getElementById("ballSpeedVal"),
+    terminalVelocity: document.getElementById("terminalVelocityVal"),
     laserInterval: document.getElementById("laserIntervalVal"),
     weakenDuration: document.getElementById("weakenDurationVal")
   };
@@ -272,13 +312,16 @@
   function cfg() {
     return {
       gravityAccel: parseFloat(sliders.gravityAccel.value),
-      holeR: parseFloat(sliders.holeR.value),
       paddleOrbitR: parseFloat(sliders.paddleOrbitR.value),
+      holeRInitial: parseFloat(sliders.holeRInitial.value),
+      holeRGrowth: parseFloat(sliders.holeRGrowth.value),
+      holeRMax: parseFloat(sliders.holeRMax.value),
       dropRate: parseFloat(sliders.dropRate.value),
       serveIntervalSec: parseFloat(sliders.serveInterval.value),
       effectDurationSec: parseFloat(sliders.effectDuration.value),
       effectMagnitude: parseFloat(sliders.effectMagnitude.value),
       ballSpeedPxS: parseFloat(sliders.ballSpeed.value),
+      terminalVelocityPxS: parseFloat(sliders.terminalVelocity.value),
       laserIntervalBaseSec: parseFloat(sliders.laserInterval.value),
       weakenDurationSec: parseFloat(sliders.weakenDuration.value)
     };
@@ -287,13 +330,16 @@
   function refreshSliderLabels() {
     var c = cfg();
     sliderVals.gravityAccel.textContent = c.gravityAccel.toFixed(0);
-    sliderVals.holeR.textContent = c.holeR.toFixed(0) + "px";
     sliderVals.paddleOrbitR.textContent = c.paddleOrbitR.toFixed(0) + "px";
+    sliderVals.holeRInitial.textContent = c.holeRInitial.toFixed(0) + "px";
+    sliderVals.holeRGrowth.textContent = c.holeRGrowth.toFixed(0) + "px";
+    sliderVals.holeRMax.textContent = c.holeRMax.toFixed(0) + "px";
     sliderVals.dropRate.textContent = c.dropRate.toFixed(2);
     sliderVals.serveInterval.textContent = c.serveIntervalSec.toFixed(1) + "s";
     sliderVals.effectDuration.textContent = c.effectDurationSec.toFixed(1) + "s";
     sliderVals.effectMagnitude.textContent = c.effectMagnitude.toFixed(1) + "x";
     sliderVals.ballSpeed.textContent = c.ballSpeedPxS.toFixed(0);
+    sliderVals.terminalVelocity.textContent = c.terminalVelocityPxS.toFixed(0);
     sliderVals.laserInterval.textContent = c.laserIntervalBaseSec.toFixed(1) + "s";
     sliderVals.weakenDuration.textContent = c.weakenDurationSec.toFixed(1) + "s";
   }
@@ -322,38 +368,45 @@
       elapsedSec: 0,
       config: cfg(),
 
-      // パドル：円軌道上の角度のみで位置が決まる（指示書12§2）
+      // パドル：円軌道上の角度のみで位置が決まる
       paddle: { angle: -Math.PI / 2, halfArc: PADDLE_ARC_HALF_BASE },
       stages: stages,
       stageStack: [], // {type, stageIndex} LIFO落球ペナルティ対象
 
-      balls: [],       // {x,y,vx,vy, foreign(bool), foreignLooped(bool), enteredField(bool), ballEffect}
-      localBallOut: false, // 自分のサーブ球が現在場に出ているか（B1/B2のサーブサイクル判定用）
+      balls: [],       // {x,y,vx,vy, arriving(bool,マルチボール降下中=すり抜け中), justErupted(bool), ballEffect}
       serving: true,
       serveTimer: 0.4,
+
+      // 【指示書13§2-5】反転0の円形版：開始時は床（穴なし）
+      holeOpened: false,
+      currentHoleR: 0,
+      floorBreakEventTick: null, // テレメトリ：床が割れた時刻（参考値）
 
       blocks: [],
       wallDamage: 0,
 
-      drops: [], // 落下アイテムカプセル {x,y (絶対座標), r,angle (極座標キャッシュ), type}
-      ballEffects: {}, // 互換維持用（未使用。個々のballオブジェクトのballEffectを使う）
+      drops: [], // 落下アイテムカプセル {x,y, type, arriving(bool)}
+      ballEffects: {},
 
       weakenRemainingSec: 0,
       weakenActiveSecAccum: 0,
 
       laserCooldownSec: 0,
-      laserBolts: [],              // {angle, r, vr}
+      laserBolts: [],              // {angle, r}
       laserShotsTotal: 0,
       laserWallDamageTotal: 0,
 
       itemWallDropsTotal: 0,
 
-      // 指示書12：越境入射（模擬発生器）のテレメトリ
-      entrySpawnTimer: ENTRY_SPAWN_INTERVAL_MIN + Math.random() * (ENTRY_SPAWN_INTERVAL_MAX - ENTRY_SPAWN_INTERVAL_MIN),
-      entryPunchCount: 0,
-      entryPunchLoopedCount: 0,
-      entryPunchByDirection: { A: 0, B: 0 },
-      foreignBallMissCount: 0, // 参考値（B1には別途合算済み。原因内訳の可視化用）
+      // 【指示書13】越境テレメトリ（循環入れ子トポロジー版）
+      multiballSpawnTimer: MULTIBALL_SPAWN_INTERVAL_MIN + Math.random() * (MULTIBALL_SPAWN_INTERVAL_MAX - MULTIBALL_SPAWN_INTERVAL_MIN),
+      eruptionSpawnTimer: ERUPTION_SPAWN_INTERVAL_MIN + Math.random() * (ERUPTION_SPAWN_INTERVAL_MAX - ERUPTION_SPAWN_INTERVAL_MIN),
+      itemArrivalSpawnTimer: MULTIBALL_SPAWN_INTERVAL_MIN + Math.random() * (MULTIBALL_SPAWN_INTERVAL_MAX - MULTIBALL_SPAWN_INTERVAL_MIN),
+      multiballArrivedCount: 0,   // 落下入射（マルチボール）の到来数
+      eruptionCount: 0,           // 上昇噴出の到来数
+      eruptionMaxRReached: [],    // 噴出到達性の実測（各噴出球が到達した最大r）
+      breakoutCount: 0,           // 自球の外周突破（上昇跨ぎ）数
+      itemArrivalCount: 0,        // 模擬外来アイテムの到来数
 
       // テレメトリ（B1・B2）
       dropEvents: [], // B1: {tSec}
@@ -367,8 +420,6 @@
 
   // ---- 盤面（円形壁帯） ----------------------------------------------------------
   function makeBlocks() {
-    // 指示書12：外周付近の同心円リング状にブロックを配置する（角度セクタ×半径リング）。
-    // 指示書09のアイテム壁（各陣2個）は、リング1（外側）col=1,BLOCK_COLS-2 に仮配置する。
     var blocks = [];
     RING_DEFS.forEach(function (ring, ringIdx) {
       for (var c = 0; c < BLOCK_COLS; c++) {
@@ -383,7 +434,6 @@
         });
       }
     });
-    // 仮配置：外側リング(ring=1)の col=1・col=BLOCK_COLS-2 をアイテム壁にする（各陣2個相当）。
     var wallCols = [1, BLOCK_COLS - 2];
     blocks.forEach(function (b) {
       if (b.ring === 1 && wallCols.indexOf(b.col) >= 0) b.itemWall = true;
@@ -397,13 +447,10 @@
     return { x: CX + Math.cos(a) * r, y: CY + Math.sin(a) * r, a: a, r: r };
   }
 
-  // 極座標(r,angle)がブロックの角度・半径範囲内にあるか（ボール半径ぶんの許容を含む）
   function polarInBlock(r, angle, b) {
     if (r < b.rInner - BALL_R || r > b.rOuter + BALL_R) return false;
     var angPad = BALL_R / Math.max(1, r);
-    var d = angleDiff(b.aStart, angle);
     var span = b.aEnd - b.aStart;
-    // angleが[aStart-angPad, aEnd+angPad]内か（周回をまたぐ場合は無いためシンプルに判定できる）
     var rel = angleDiff(b.aStart, angle);
     if (rel < 0) rel += Math.PI * 2;
     return rel >= -angPad && rel <= span + angPad;
@@ -415,7 +462,6 @@
   }
 
   function paddleWidth(s) {
-    // 拡大段: 段ごとに弧の半角+20%、上限3段
     return PADDLE_ARC_HALF_BASE * (1 + 0.2 * s.stages.enlarge);
   }
 
@@ -431,15 +477,13 @@
     s.pendingRecovery[t].push({ stageIndex: entry.stageIndex, lostAtSec: s.elapsedSec });
   }
 
-  // 指示書05：落球（ミス）＝穴への落下。sim側drop_events_per_worldの定義に合わせ、
-  // 球の由来（自陣サーブ／越境入射後）を問わず、パドルで捕れず穴に落ちたら等しくB1へ計上する。
+  // 落球（ミス）＝穴（または初回のみ床）への到達。sim側drop_events_per_worldの定義に
+  // 合わせ、球の由来（自陣サーブ／噴出到来後）を問わず、パドルで捕れず落ちたら等しく
+  // B1へ計上する。
   function onBallMiss(s, ball) {
     s.dropEvents.push({ tSec: s.elapsedSec });
-    if (ball.foreign || ball.wasforeign) s.foreignBallMissCount++;
     applyDropPenalty(s);
-    if (!ball.foreign) {
-      // 自陣サーブ球のサイクル（B1/B2のサーブ間隔計測対象）
-      s.localBallOut = false;
+    if (!ball.arriving) {
       s.serving = true;
       s.serveTimer = s.config.serveIntervalSec;
     }
@@ -494,38 +538,61 @@
   function serveBall(s) {
     var c = s.config;
     var pp = paddlePos(s);
-    // パドル位置から外向きに射出する（指示書12§2「例：パドル位置から外向き射出」）
     var mag = c.ballSpeedPxS;
-    var dirA = s.paddle.angle; // パドルの半径方向 = 外向き
+    var dirA = s.paddle.angle;
     var jitter = (Math.random() * 0.4 - 0.2);
     var a = dirA + jitter;
     s.balls.push({
       x: pp.x, y: pp.y,
       vx: Math.cos(a) * mag, vy: Math.sin(a) * mag,
-      foreign: false, ballEffect: null
+      arriving: false, justErupted: false, ballEffect: null
     });
     s.serving = false;
-    s.localBallOut = true;
   }
 
-  // 指示書12§3：越境の接続幾何。送信元の方角の外周円弧から内向きに入射する模擬発生器。
-  // 他worldとは非接続（このプロト内で完結）。速度は基準値へ正規化（凍結文v2）。
-  function spawnForeignBall(s) {
-    var fromA = Math.random() < 0.5;
-    var baseAngle = fromA ? ENTRY_ANGLE_A : ENTRY_ANGLE_B;
-    var a = baseAngle + (Math.random() * 2 - 1) * ENTRY_ARC_HALF_WIDTH;
+  // 【指示書13§2-2】落下入射（マルチボール）：外側隣人の落球が自分の空から降る。
+  // 壁・ブロックとはすり抜け（衝突・ダメージなし）で場に入る。角度連続写像。
+  function spawnMultiball(s) {
+    var theta = crossingAngleMap(Math.random() * Math.PI * 2);
     var spawnR = BOARD_R + 24;
-    var x = CX + Math.cos(a) * spawnR;
-    var y = CY + Math.sin(a) * spawnR;
-    // 入射速度は基準値（現在のballSpeedスライダー）へ正規化し、内向き（中心方向）に射出する
-    var mag = s.config.ballSpeedPxS;
-    var vx = -Math.cos(a) * mag, vy = -Math.sin(a) * mag;
+    var x = CX + Math.cos(theta) * spawnR;
+    var y = CY + Math.sin(theta) * spawnR;
+    var mag = s.config.ballSpeedPxS; // 凍結文v2：速度は基準値へ正規化
+    var vx = -Math.cos(theta) * mag, vy = -Math.sin(theta) * mag;
     s.balls.push({
       x: x, y: y, vx: vx, vy: vy,
-      foreign: true, wasforeign: true, foreignLooped: Math.random() < ENTRY_LOOPED_PROB,
-      enteredField: false, entryDir: fromA ? "A" : "B",
-      ballEffect: null
+      arriving: true, justErupted: false, ballEffect: null
     });
+    s.multiballArrivedCount++;
+  }
+
+  // 【指示書13§2-3】上昇噴出：内側隣人の外周突破が自分の中心穴から噴く。角度連続写像。
+  // 噴出速度は基準値へ正規化（凍結文v2）。噴出後は通常球（すり抜けなし・壁と衝突する）。
+  function spawnEruption(s) {
+    var theta = crossingAngleMap(Math.random() * Math.PI * 2);
+    var spawnR = s.holeOpened ? s.currentHoleR : s.config.holeRInitial;
+    var x = CX + Math.cos(theta) * spawnR;
+    var y = CY + Math.sin(theta) * spawnR;
+    var mag = s.config.ballSpeedPxS; // 凍結文v2：速度は基準値へ正規化
+    var vx = Math.cos(theta) * mag, vy = Math.sin(theta) * mag;
+    var ball = {
+      x: x, y: y, vx: vx, vy: vy,
+      arriving: false, justErupted: true, justEruptedTimer: JUST_ERUPTED_TINT_SEC,
+      ballEffect: null, eruptionMaxR: spawnR
+    };
+    s.balls.push(ball);
+    s.eruptionCount++;
+  }
+
+  // 【指示書13§3】模擬の外来アイテム：壁すり抜け・角度連続で上空から降る。
+  function spawnArrivingItem(s) {
+    var theta = crossingAngleMap(Math.random() * Math.PI * 2);
+    var spawnR = BOARD_R + 24;
+    var x = CX + Math.cos(theta) * spawnR;
+    var y = CY + Math.sin(theta) * spawnR;
+    var type = ALL_TYPES[Math.floor(Math.random() * ALL_TYPES.length)];
+    s.drops.push({ x: x, y: y, type: type, arriving: true });
+    s.itemArrivalCount++;
   }
 
   // ---- 物理更新 ----------------------------------------------------------
@@ -554,7 +621,6 @@
   }
 
   function magActive2(s, type) {
-    // 「現在アクティブな球のいずれかがtype効果を持つか」（爆発の連鎖破壊判定用）
     return s.balls.some(function (bl) { return bl.ballEffect && bl.ballEffect.type === type; });
   }
 
@@ -569,46 +635,14 @@
     if (b.hp <= 0) destroyBlock(s, b, false);
   }
 
-  // 指示書12§4：一周球(has_looped相当)の貫入は視覚的に大きく壁を欠損させる（仮演出）。
-  // 【経済等価性についての設計判断】ring_sim.pyの跨ぎダメージ簿記（wall_damage_for_level）は
-  // 「越境が発生した瞬間」に抽象的な連続量を加算するだけで、球が物理的にどこへ・いつ着弾
-  // するかを一切表現していない（空間構造の無い抽象モデル）。本プロトの入射貫入エフェクトは
-  // 較正・体感確認のための可視化であり、ring_sim.py側の計上タイミング・量には一切影響しない
-  // （sim側は無改変。作業4参照）。したがって欠損の大小はプロト内の視覚表現として、staged
-  // 傾斜のSTAGE_JUMP/STAGE_SMALL比（6.0/0.5=12倍）の「桁の違い」を表現する目的にとどめ、
-  // sim側のダメージ量とのブロックHP単位での厳密対応は取らない（両者の単位系が本質的に
-  // 異なるため。詳細は報告書§4参照）。
-  function entryPunch(s, ball, hitBlockObj) {
-    ball.enteredField = true;
-    s.entryPunchCount++;
-    s.entryPunchByDirection[ball.entryDir] = (s.entryPunchByDirection[ball.entryDir] || 0) + 1;
-    if (ball.foreignLooped) {
-      s.entryPunchLoopedCount++;
-      // 大きな欠損：着弾ブロックと同リング内の隣接±2セクタをまとめて破壊（クレーター演出）
-      var radius = 2;
-      for (var i = 0; i < s.blocks.length; i++) {
-        var o = s.blocks[i];
-        if (!o.alive) continue;
-        if (o.ring === hitBlockObj.ring && Math.abs(o.col - hitBlockObj.col) <= radius) {
-          destroyBlock(s, o, true);
-        }
-      }
-    } else {
-      // 小さな欠損：着弾ブロック1個のみ通常ダメージ
-      hitBlock(s, hitBlockObj, 1);
-    }
-  }
-
-  // 指示書07 作業1 → 指示書09 作業1 → 指示書12：ガイド是正（案(a)）。球の物理には一切
-  // 介入せず、現在の速度・重力から予測線を計算するだけの純粋表示用ヘルパー。
-  // 円形化により直線予測ができなくなったため（中心向き重力で軌道が曲線になる）、
-  // step()と同じ重力積分を副作用なしで数値シミュレートし、短い線分列として返す。
+  // ガイド予測線：球の物理には一切介入せず、現在の速度・重力・終端速度から予測線を
+  // 計算するだけの純粋表示用ヘルパー（step()と同じ積分を副作用なしで数値シミュレート）。
   function computeGuideSegments(s) {
     if (s.stages.guide <= 0) return [];
     var maxBounces = s.stages.guide - 1;
     var x, y, vx, vy;
     var pp = paddlePos(s);
-    var localBall = s.balls.filter(function (b) { return !b.foreign; })[0];
+    var localBall = s.balls.filter(function (b) { return !b.arriving; })[0];
     if (s.serving || !localBall) {
       x = pp.x; y = pp.y;
       vx = Math.cos(s.paddle.angle) * s.config.ballSpeedPxS;
@@ -619,28 +653,54 @@
     var segs = [];
     var bounces = 0;
     var g = s.config.gravityAccel;
+    var vTerm = s.config.terminalVelocityPxS;
     var dtStep = 1 / 60;
     for (var seg = 0; seg < maxBounces + 1; seg++) {
       var sx = x, sy = y;
       var stopped = false;
-      for (var it = 0; it < 240; it++) { // 最大4秒ぶん先読み
+      for (var it = 0; it < 240; it++) {
         var rx = x - CX, ry = y - CY, rr = norm2(rx, ry);
-        if (rr > 1) { vx += (-rx / rr) * g * dtStep; vy += (-ry / rr) * g * dtStep; }
+        if (rr > 1) {
+          vx += (-rx / rr) * g * dtStep; vy += (-ry / rr) * g * dtStep;
+          var inwardSpeed = -(vx * rx + vy * ry) / rr; // 中心向き成分
+          if (inwardSpeed > vTerm) {
+            var scale = vTerm / inwardSpeed;
+            var radialX = (rx / rr) * (vx * rx + vy * ry) / rr;
+            var radialY = (ry / rr) * (vx * rx + vy * ry) / rr;
+            var tanX = vx - radialX, tanY = vy - radialY;
+            vx = tanX + radialX * scale; vy = tanY + radialY * scale;
+          }
+        }
         x += vx * dtStep; y += vy * dtStep;
         rr = norm2(x - CX, y - CY);
-        if (rr >= BOARD_R) { stopped = true; break; }             // 外周に到達＝自陣境界で打ち切り
-        if (rr <= s.config.paddleOrbitR && vx * (x - CX) + vy * (y - CY) < 0) { stopped = true; break; } // パドル軌道面まで＝着地予測
+        if (rr >= BOARD_R) { stopped = true; break; }
+        if (rr <= s.config.paddleOrbitR && vx * (x - CX) + vy * (y - CY) < 0) { stopped = true; break; }
       }
       segs.push({ x1: sx, y1: sy, x2: x, y2: y });
       if (stopped) break;
       if (bounces >= maxBounces) break;
-      // 外周反射（簡易：法線方向に反転）
       var nrx = (x - CX) / Math.max(1, norm2(x - CX, y - CY)), nry = (y - CY) / Math.max(1, norm2(x - CX, y - CY));
       var dot = vx * nrx + vy * nry;
       vx -= 2 * dot * nrx; vy -= 2 * dot * nry;
       bounces++;
     }
     return segs;
+  }
+
+  // 終端速度：中心向き速度成分（半径方向の内向き成分）にのみ上限を適用する
+  // （指示書13 作業2：「重力の手触りを残したまま落下局面の反応要求だけ抑える」）。
+  // 外向き成分（噴出等）には作用しない。
+  function applyTerminalVelocity(ball, vTerm) {
+    var rx = ball.x - CX, ry = ball.y - CY;
+    var r = norm2(rx, ry);
+    if (r < 1) return;
+    var nrx = rx / r, nry = ry / r;
+    var radial = ball.vx * nrx + ball.vy * nry; // >0=外向き, <0=内向き
+    if (radial < -vTerm) {
+      var tanX = ball.vx - radial * nrx, tanY = ball.vy - radial * nry;
+      ball.vx = tanX + (-vTerm) * nrx;
+      ball.vy = tanY + (-vTerm) * nry;
+    }
   }
 
   function updateBall(s, ball, dt) {
@@ -651,13 +711,17 @@
       ball.vx += (-rx / r) * g * dt;
       ball.vy += (-ry / r) * g * dt;
     }
+    applyTerminalVelocity(ball, s.config.terminalVelocityPxS);
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
 
-    // 球側時限効果の減衰（爆発・加速のみ。貫通はヒット数）
     if (ball.ballEffect && ball.ballEffect.type !== "pierce") {
       ball.ballEffect.ticksLeft -= dt;
       if (ball.ballEffect.ticksLeft <= 0) ball.ballEffect = null;
+    }
+    if (ball.justErupted) {
+      ball.justEruptedTimer -= dt;
+      if (ball.justEruptedTimer <= 0) ball.justErupted = false;
     }
   }
 
@@ -670,7 +734,6 @@
       s.weakenRemainingSec = Math.max(0, s.weakenRemainingSec - dt);
     }
 
-    // パドル追従（マウス位置の「中心からの角度」を目標角とする＝円形の自然な操作対応）
     s.paddle.halfArc = paddleWidth(s);
     var speedMul = 1 + 0.35 * s.stages.speed;
     var maxStep = PADDLE_ANGULAR_SPEED_BASE * speedMul * dt;
@@ -680,20 +743,28 @@
       s.paddle.angle += diff;
     }
 
-    // サーブ待ち（自陣サーブ球のみ。越境入射は独立スケジュール）
     if (s.serving) {
       s.serveTimer -= dt;
       if (s.serveTimer <= 0) serveBall(s);
     }
 
-    // 指示書12§3：越境入射の模擬発生器
-    s.entrySpawnTimer -= dt;
-    if (s.entrySpawnTimer <= 0) {
-      spawnForeignBall(s);
-      s.entrySpawnTimer = ENTRY_SPAWN_INTERVAL_MIN + Math.random() * (ENTRY_SPAWN_INTERVAL_MAX - ENTRY_SPAWN_INTERVAL_MIN);
+    // 【指示書13】越境の模擬発生器（循環入れ子トポロジー版）
+    s.multiballSpawnTimer -= dt;
+    if (s.multiballSpawnTimer <= 0) {
+      spawnMultiball(s);
+      s.multiballSpawnTimer = MULTIBALL_SPAWN_INTERVAL_MIN + Math.random() * (MULTIBALL_SPAWN_INTERVAL_MAX - MULTIBALL_SPAWN_INTERVAL_MIN);
+    }
+    s.eruptionSpawnTimer -= dt;
+    if (s.eruptionSpawnTimer <= 0) {
+      spawnEruption(s);
+      s.eruptionSpawnTimer = ERUPTION_SPAWN_INTERVAL_MIN + Math.random() * (ERUPTION_SPAWN_INTERVAL_MAX - ERUPTION_SPAWN_INTERVAL_MIN);
+    }
+    s.itemArrivalSpawnTimer -= dt;
+    if (s.itemArrivalSpawnTimer <= 0) {
+      spawnArrivingItem(s);
+      s.itemArrivalSpawnTimer = MULTIBALL_SPAWN_INTERVAL_MIN + Math.random() * (MULTIBALL_SPAWN_INTERVAL_MAX - MULTIBALL_SPAWN_INTERVAL_MIN);
     }
 
-    // 指示書07：レーザー（パドルの角度から外周へ放射状に発射。弾は外周で消滅＝越境しない）
     if (s.stages.laser > 0) {
       s.laserCooldownSec -= dt;
       if (s.laserCooldownSec <= 0) {
@@ -706,7 +777,7 @@
     for (var li = s.laserBolts.length - 1; li >= 0; li--) {
       var bolt = s.laserBolts[li];
       bolt.r += LASER_BOLT_SPEED * dt;
-      if (bolt.r >= BOARD_R) { s.laserBolts.splice(li, 1); continue; } // 外周で消滅（越境しない）
+      if (bolt.r >= BOARD_R) { s.laserBolts.splice(li, 1); continue; }
       var hitOne = false;
       for (var bj = 0; bj < s.blocks.length; bj++) {
         var blk = s.blocks[bj];
@@ -723,7 +794,7 @@
     }
     if (allBlocksCleared(s)) s.blocks = makeBlocks();
 
-    // ---- 球の更新（自陣サーブ球＋越境入射球を同一ループで扱う） ----
+    // ---- 球の更新 ----
     var pp = paddlePos(s);
     var halfArc = s.paddle.halfArc;
     for (var i = s.balls.length - 1; i >= 0; i--) {
@@ -733,42 +804,42 @@
       var r = norm2(rx, ry);
       var angle = Math.atan2(ry, rx);
 
-      // 外周を超えて飛び出した場合は跳ね返す（外向きの安全弁。通常は壁帯で止まる）
-      if (r > BOARD_R + BALL_R && !ball.foreign) {
-        var nrx = rx / r, nry = ry / r;
-        var dot = ball.vx * nrx + ball.vy * nry;
-        ball.vx -= 2 * dot * nrx; ball.vy -= 2 * dot * nry;
-        ball.x = CX + nrx * BOARD_R; ball.y = CY + nry * BOARD_R;
-        continue;
+      if (ball.eruptionMaxR != null && r > ball.eruptionMaxR) ball.eruptionMaxR = r; // 噴出到達性テレメトリ
+
+      // マルチボールが壁帯を抜けきったら「着地」＝以後は通常球（すり抜け解除）
+      if (ball.arriving && r < RING_DEFS[0].rInner) ball.arriving = false;
+
+      // 【指示書13§2-4】自球の外周突破＝上昇跨ぎ。arriving中（すり抜け降下中）は対象外。
+      if (!ball.arriving && r > BOARD_R) {
+        s.breakoutCount++;
+        if (ball.eruptionMaxR != null) s.eruptionMaxRReached.push(ball.eruptionMaxR);
+        s.balls.splice(i, 1);
+        continue; // 演出は仮：画面外へ消えるだけ（指示書13§2-4）
       }
 
-      // ブロック衝突
-      var pierce = ball.ballEffect && ball.ballEffect.type === "pierce" && ball.ballEffect.hitsLeft > 0;
-      var consumedThisFrame = false;
-      for (var bi = 0; bi < s.blocks.length && !consumedThisFrame; bi++) {
-        var blk2 = s.blocks[bi];
-        if (!blk2.alive) continue;
-        if (!polarInBlock(r, angle, blk2)) continue;
-
-        if (ball.foreign && !ball.enteredField) {
-          // 指示書12§4：外側から＝越境入射。必ず貫通して場に入る（反射しない）
-          entryPunch(s, ball, blk2);
-          consumedThisFrame = true; // このtickでの追加衝突判定は打ち切り（貫入は1回のみ）
-        } else if (pierce) {
-          destroyBlock(s, blk2, false);
-          ball.ballEffect.hitsLeft = Math.max(0, ball.ballEffect.hitsLeft - 1);
-          if (ball.ballEffect.hitsLeft <= 0) ball.ballEffect = null;
-          pierce = false;
-        } else {
-          // 内側から＝通常どおり反射・通常ダメージ
-          hitBlock(s, blk2, 1);
-          var nrx2 = Math.cos(angle), nry2 = Math.sin(angle);
-          var dot2 = ball.vx * nrx2 + ball.vy * nry2;
-          ball.vx -= 2 * dot2 * nrx2; ball.vy -= 2 * dot2 * nry2;
-          consumedThisFrame = true;
+      // ブロック衝突（arriving中はすり抜け＝衝突・ダメージなし。指示書13§2-2）
+      if (!ball.arriving) {
+        var pierce = ball.ballEffect && ball.ballEffect.type === "pierce" && ball.ballEffect.hitsLeft > 0;
+        var consumedThisFrame = false;
+        for (var bi = 0; bi < s.blocks.length && !consumedThisFrame; bi++) {
+          var blk2 = s.blocks[bi];
+          if (!blk2.alive) continue;
+          if (!polarInBlock(r, angle, blk2)) continue;
+          if (pierce) {
+            destroyBlock(s, blk2, false);
+            ball.ballEffect.hitsLeft = Math.max(0, ball.ballEffect.hitsLeft - 1);
+            if (ball.ballEffect.hitsLeft <= 0) ball.ballEffect = null;
+            pierce = false;
+          } else {
+            hitBlock(s, blk2, 1);
+            var nrx2 = Math.cos(angle), nry2 = Math.sin(angle);
+            var dot2 = ball.vx * nrx2 + ball.vy * nry2;
+            ball.vx -= 2 * dot2 * nrx2; ball.vy -= 2 * dot2 * nry2;
+            consumedThisFrame = true;
+          }
         }
+        if (allBlocksCleared(s)) s.blocks = makeBlocks();
       }
-      if (allBlocksCleared(s)) s.blocks = makeBlocks();
 
       // パドル衝突（半径がパドル軌道半径を内向きに横切り、角度がパドル弧の中）
       var movingInward = (ball.vx * rx + ball.vy * ry) < 0;
@@ -778,23 +849,39 @@
           var nrx3 = rx / Math.max(1, r), nry3 = ry / Math.max(1, r);
           var dot3 = ball.vx * nrx3 + ball.vy * nry3;
           ball.vx -= 2 * dot3 * nrx3; ball.vy -= 2 * dot3 * nry3;
-          // オフセットに応じた接線方向の「捻り」（旧off*120の円形版）
-          var off = angleDiff(s.paddle.angle, angle) / halfArc; // -1..1
+          var off = angleDiff(s.paddle.angle, angle) / halfArc;
           var tx = -Math.sin(angle), ty = Math.cos(angle);
           ball.vx += tx * off * 120; ball.vy += ty * off * 120;
-          if (ball.foreign) { ball.foreign = false; } // 捕球後は完全に自陣の球として扱う
+          if (ball.arriving) { ball.arriving = false; }
         }
       }
 
-      // 落球判定：中心の穴に到達（出口専用。ここから出てくるものは無い＝指示書12§2）
-      if (r <= c.holeR) {
-        onBallMiss(s, ball);
-        s.balls.splice(i, 1);
+      // 【指示書13§2-5】反転0の円形版：床/穴への到達判定
+      r = norm2(ball.x - CX, ball.y - CY); // パドル反射後の位置で再評価
+      if (!s.holeOpened) {
+        if (r <= FLOOR_BREAK_RADIUS) {
+          s.holeOpened = true;
+          s.currentHoleR = c.holeRInitial;
+          s.floorBreakEventTick = s.elapsedSec;
+          onBallMiss(s, ball);
+          if (ball.eruptionMaxR != null) s.eruptionMaxRReached.push(ball.eruptionMaxR);
+          s.balls.splice(i, 1);
+          continue;
+        }
+      } else {
+        if (r <= s.currentHoleR) {
+          onBallMiss(s, ball);
+          s.currentHoleR = Math.min(c.holeRMax, s.currentHoleR + c.holeRGrowth);
+          if (ball.eruptionMaxR != null) s.eruptionMaxRReached.push(ball.eruptionMaxR);
+          s.balls.splice(i, 1);
+          continue;
+        }
       }
     }
 
-    // 落下アイテム更新（極座標で中心へ向け一定速度で内向きドリフト。指示書07：磁石の引力）
+    // 落下アイテム更新（極座標で中心へ向け一定速度で内向きドリフト。磁石の引力）
     var halfArcNow = s.paddle.halfArc;
+    var currentHoleForItems = s.holeOpened ? s.currentHoleR : FLOOR_BREAK_RADIUS;
     for (var di = s.drops.length - 1; di >= 0; di--) {
       var d = s.drops[di];
       if (s.stages.magnet > 0) {
@@ -815,11 +902,13 @@
       }
       var da2 = Math.abs(angleDiff(s.paddle.angle, Math.atan2(dry, drx)));
       var newDr = norm2(d.x - CX, d.y - CY);
+      if (d.arriving && newDr < RING_DEFS[0].rInner) d.arriving = false;
       var caught = newDr <= pp.r + 8 && newDr >= pp.r - 8 && da2 <= halfArcNow;
       if (caught) {
-        onPickup(s, d.type, s.balls.filter(function (b) { return !b.foreign; })[0]);
+        onPickup(s, d.type, s.balls.filter(function (b) { return !b.arriving; })[0]);
         s.drops.splice(di, 1);
-      } else if (newDr <= c.holeR) {
+      } else if (newDr <= currentHoleForItems) {
+        // 【指示書13§3】取り逃したアイテムは中心穴（床）へ落ちて消える＝越境した体の演出
         s.missedPickups++;
         s.drops.splice(di, 1);
       }
@@ -835,23 +924,23 @@
     ctx.clearRect(0, 0, CW, CH);
     var c = s.config;
 
-    // 盤面外周・穴（中心）
+    // 盤面外周
     ctx.strokeStyle = "#2a2d36";
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(CX, CY, BOARD_R, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = "#05060a";
-    ctx.beginPath(); ctx.arc(CX, CY, c.holeR, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "#5a2020"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(CX, CY, c.holeR, 0, Math.PI * 2); ctx.stroke();
 
-    // 入射円弧（方角の可視化。指示書12「入射の可読性」確認用）
-    [ENTRY_ANGLE_A, ENTRY_ANGLE_B].forEach(function (a, idx) {
-      ctx.strokeStyle = idx === 0 ? "rgba(255,120,80,0.5)" : "rgba(120,180,255,0.5)";
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.arc(CX, CY, BOARD_R + 12, a - ENTRY_ARC_HALF_WIDTH, a + ENTRY_ARC_HALF_WIDTH);
-      ctx.stroke();
-    });
+    // 中心：床（穴が開く前）または穴（開いた後。半径は動的に成長）
+    if (!s.holeOpened) {
+      ctx.fillStyle = "#3a3428"; // 床（岩肌色）
+      ctx.beginPath(); ctx.arc(CX, CY, FLOOR_BREAK_RADIUS, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#7a6a3a"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(CX, CY, FLOOR_BREAK_RADIUS, 0, Math.PI * 2); ctx.stroke();
+    } else {
+      ctx.fillStyle = "#05060a";
+      ctx.beginPath(); ctx.arc(CX, CY, s.currentHoleR, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#5a2020"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(CX, CY, s.currentHoleR, 0, Math.PI * 2); ctx.stroke();
+    }
 
     // ブロック（円弧セクタ）
     s.blocks.forEach(function (b) {
@@ -900,12 +989,15 @@
     ctx.arc(CX, CY, pp.r, s.paddle.angle - s.paddle.halfArc, s.paddle.angle + s.paddle.halfArc);
     ctx.stroke();
 
-    // 球（越境入射で未貫入のものは橙点滅で区別）
+    // 球（マルチボール降下中=水色点滅／噴出直後=橙点滅／通常=白かグロー）
+    var blink = (Math.floor(s.elapsedSec * 6) % 2 === 0);
     s.balls.forEach(function (ball) {
       ctx.beginPath();
       var glowing = (ball.ballEffect && (ball.ballEffect.type === "pierce" || ball.ballEffect.type === "explode" || ball.ballEffect.type === "accel"));
-      if (ball.foreign && !ball.enteredField) {
-        ctx.fillStyle = (Math.floor(s.elapsedSec * 6) % 2 === 0) ? "#ff4040" : "#ffb0a0";
+      if (ball.arriving) {
+        ctx.fillStyle = blink ? "#40e0ff" : "#c0f0ff";
+      } else if (ball.justErupted) {
+        ctx.fillStyle = blink ? "#ffd070" : "#ffe8b0";
       } else {
         ctx.fillStyle = glowing ? "#ffe08a" : "#f0f0f0";
       }
@@ -913,7 +1005,7 @@
       ctx.fill();
     });
 
-    // 落下アイテム
+    // 落下アイテム（マルチアイテムはラベル"?"横に点表示。既存の描画を流用）
     s.drops.forEach(function (d) {
       var isRandom = d.type === "random";
       ctx.fillStyle = isRandom ? "#888" : ITEM_COLOR[d.type];
@@ -922,6 +1014,11 @@
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 1;
         ctx.strokeRect(d.x - 7, d.y - 7, 14, 14);
+      }
+      if (d.arriving) {
+        ctx.strokeStyle = "#40e0ff";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(d.x - 8, d.y - 8, 16, 16);
       }
       ctx.fillStyle = "#05060a";
       ctx.font = "8px monospace";
@@ -933,7 +1030,7 @@
       ctx.fillStyle = "#9aa0ad";
       ctx.font = "12px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("サーブ待ち " + Math.max(0, s.serveTimer).toFixed(1) + "s", CX, CY);
+      ctx.fillText("サーブ待ち " + Math.max(0, s.serveTimer).toFixed(1) + "s", CX, CY - (s.holeOpened ? s.currentHoleR : FLOOR_BREAK_RADIUS) - 14);
     }
   }
 
@@ -956,18 +1053,21 @@
     var lastRec = s.recoveryTimesSec.length ? s.recoveryTimesSec[s.recoveryTimesSec.length - 1].toFixed(1) + "s" : "-";
     var pendingCount = 0;
     Object.keys(s.pendingRecovery).forEach(function (k) { pendingCount += s.pendingRecovery[k].length; });
-    var foreignInFlight = s.balls.filter(function (b) { return b.foreign && !b.enteredField; }).length;
+    var maxEruptR = s.eruptionMaxRReached.length ? Math.max.apply(null, s.eruptionMaxRReached).toFixed(0) : "-";
     hudEl.textContent =
       "経過時間      : " + s.elapsedSec.toFixed(1) + "s\n" +
+      "床/穴         : " + (s.holeOpened ? ("穴 r=" + s.currentHoleR.toFixed(0) + "px（上限" + s.config.holeRMax.toFixed(0) + "px）") : "床（未破壊）") + "\n" +
       "壁ダメージ(累積破壊数): " + s.wallDamage + "\n" +
       "パドル段      : " + fmtStages(s) + "\n" +
       "球側効果残り  : " + fmtBallEffects(s) + "\n" +
       "WKN残り時間   : " + (s.weakenRemainingSec > 0 ? s.weakenRemainingSec.toFixed(1) + "s" : "(なし)") + "\n" +
       "LAS総発射数   : " + s.laserShotsTotal + "（弾由来ダメージ" + s.laserWallDamageTotal.toFixed(0) + "）\n" +
       "アイテム壁ドロップ: " + s.itemWallDropsTotal + "（確定ドロップ発生数）\n" +
-      "越境入射(飛来中/累計貫入): " + foreignInFlight + " / " + s.entryPunchCount +
-        "（一周球" + s.entryPunchLoopedCount + "・隣A" + s.entryPunchByDirection.A + "・隣B" + s.entryPunchByDirection.B + "）\n" +
-      "B1 落球回数   : " + s.dropEvents.length + "（うち越境由来参考" + s.foreignBallMissCount + "）\n" +
+      "マルチボール到来: " + s.multiballArrivedCount + " / 噴出到来: " + s.eruptionCount +
+        "（噴出最大到達r参考=" + maxEruptR + "px）\n" +
+      "自球の外周突破(上昇跨ぎ): " + s.breakoutCount + "\n" +
+      "外来アイテム到来: " + s.itemArrivalCount + "\n" +
+      "B1 落球回数   : " + s.dropEvents.length + "\n" +
       "B2 復帰回数   : " + s.recoveryTimesSec.length + "（直近 " + lastRec + "）\n" +
       "B2 復帰待ち中 : " + pendingCount + "\n" +
       "アイテム取得数: " + Object.keys(s.pickupCounts).map(function (k) {
@@ -1028,14 +1128,13 @@
     Object.keys(s.pendingRecovery).forEach(function (k) { pendingUnresolved += s.pendingRecovery[k].length; });
 
     var out = {
-      note: "これは計測器具（proto/ring_keep_calibration.html。指示書12で円形盤面へ改修）の出力であり、ゲームバランス確定値そのものではない。B1・B2は実測参考値としてNOW文書へ転記する。越境入射は方角つきの模擬発生器（他world非接続）による参考値。",
+      note: "これは計測器具（proto/ring_keep_calibration.html。指示書13で循環入れ子トポロジーへ是正）の出力であり、ゲームバランス確定値そのものではない。B1・B2は実測参考値としてNOW文書へ転記する。越境（マルチボール・噴出）は角度連続写像の模擬発生器（他world非接続）による参考値。",
       generated_at: new Date().toISOString(),
       started_at: s.startedAt,
       session_duration_sec: Number(s.elapsedSec.toFixed(2)),
       config: s.config,
       b1_drop_count: s.dropEvents.length,
       b1_drop_events_sec: s.dropEvents.map(function (e) { return Number(e.tSec.toFixed(2)); }),
-      b1_foreign_origin_miss_count_REFERENCE_ONLY: s.foreignBallMissCount,
       b2_recovery_count: s.recoveryTimesSec.length,
       b2_recovery_times_sec: s.recoveryTimesSec.map(function (v) { return Number(v.toFixed(2)); }),
       b2_pending_unresolved_at_end: pendingUnresolved,
@@ -1048,9 +1147,13 @@
       laser_wall_damage_total: s.laserWallDamageTotal,
       item_wall_drops_total: s.itemWallDropsTotal,
       random_resolved_counts: s.randomResolvedCounts,
-      entry_punch_total: s.entryPunchCount,
-      entry_punch_looped: s.entryPunchLoopedCount,
-      entry_punch_by_direction: s.entryPunchByDirection
+      hole_opened: s.holeOpened,
+      hole_r_final: s.holeOpened ? s.currentHoleR : 0,
+      floor_break_event_sec: s.floorBreakEventTick,
+      multiball_arrived_total: s.multiballArrivedCount,
+      eruption_total: s.eruptionCount,
+      breakout_total: s.breakoutCount,
+      item_arrival_total: s.itemArrivalCount
     };
     jsonOutEl.value = JSON.stringify(out, null, 2);
   });
@@ -1066,10 +1169,12 @@
   // 検品用に内部関数を公開（本番挙動には影響しない読み取り専用の参照公開。UIからは到達しない）
   window.__calibTest = { freshState: freshState, step: step, makeBlocks: makeBlocks,
                           computeGuideSegments: computeGuideSegments, onPickup: onPickup,
-                          spawnGuaranteedDrop: spawnGuaranteedDrop, spawnForeignBall: spawnForeignBall,
-                          entryPunch: entryPunch, polarInBlock: polarInBlock, paddlePos: paddlePos,
-                          blockCenter: blockCenter, PIERCE_HITS: PIERCE_HITS,
-                          CX: CX, CY: CY, BOARD_R: BOARD_R };
+                          spawnGuaranteedDrop: spawnGuaranteedDrop, spawnMultiball: spawnMultiball,
+                          spawnEruption: spawnEruption, spawnArrivingItem: spawnArrivingItem,
+                          crossingAngleMap: crossingAngleMap, polarInBlock: polarInBlock,
+                          paddlePos: paddlePos, blockCenter: blockCenter, PIERCE_HITS: PIERCE_HITS,
+                          FLOOR_BREAK_RADIUS: FLOOR_BREAK_RADIUS,
+                          CX: CX, CY: CY, BOARD_R: BOARD_R, RING_DEFS: RING_DEFS };
 })();
 </script>
 </body>
