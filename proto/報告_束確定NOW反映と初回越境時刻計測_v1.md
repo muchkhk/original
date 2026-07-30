@@ -246,8 +246,8 @@ pickup_miss_rate_base=0.20）、N=4世界、900tick（≈21分）セッション
 **本指示書11**：
 
 - ブランチ：`docs/now-v1-4-instructions-11-2026-07-30`
-- 作業コミット：（作成後に追記）
-- PR番号：（作成後に追記）
+- 作業コミット：`f80dd0a`（docs: 束確定のNOW反映(v1.3->v1.4)と初回越境時刻計測を実施（指示書11））
+- PR番号：[#16](https://github.com/muchkhk/original/pull/16)
 - マージコミット：（マージ後に追記）
 
 ---
