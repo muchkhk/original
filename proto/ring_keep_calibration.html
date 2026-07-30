@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書13 循環入れ子トポロジー改修</title>
+<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書14 盤面スケール拡大とペース密度整合</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -61,7 +61,11 @@
   指示書12の方角円弧・入射貫入は撤去した（瑕疵ではなく作家判断による改訂）。
   越境は二方向：外周突破＝内側隣人の中心穴から噴出／中心穴落下＝外側隣人の空からマルチボール
   として降下（壁・ブロックをすり抜けて場に入る）。角度は入射角の連続写像（同じ角度θ）。
-  中心は開始時「床」（穴なし）で、初落球で割れて穴が開き、以後落球のたびに成長する。
+  中心は開始時「床」（穴なし）で、初落球で割れて穴が開き、以後落球のたびに成長する。<br>
+  <strong>指示書14で盤面スケール拡大とペース密度の器具整合。</strong>盤面半径はビューポートへ
+  自動フィット（「画面に合わせてフィット」ボタンでも再計算可）。球・パドル弧・壁帯厚さは
+  拡大後の盤面に対して相対的に縮小した帯へ。噴出・マルチボール・外来アイテムの模擬発生間隔は
+  シム実測中央値（`sim/ring_structure/pace_measurement.py`）へ整合させた（器具忠実度原則）。
 </div>
 
 <div class="layout">
@@ -69,21 +73,76 @@
 
   <div class="panel">
     <fieldset>
+      <legend>盤面スケール（指示書14 作業1・裁量初期値）</legend>
+      <label class="slider-row">盤面半径(px)
+        <input type="range" id="boardR" min="150" max="600" step="5" value="250">
+        <span id="boardRVal"></span>
+      </label>
+      <div class="btnrow">
+        <button id="fitBtn" type="button">画面に合わせてフィット</button>
+      </div>
+      <label class="slider-row">球半径(px)
+        <input type="range" id="ballRadius" min="3" max="16" step="1" value="6">
+        <span id="ballRadiusVal"></span>
+      </label>
+      <label class="slider-row">パドル弧幅(度・半角)
+        <input type="range" id="paddleArcDeg" min="8" max="45" step="1" value="24">
+        <span id="paddleArcDegVal"></span>
+      </label>
+      <label class="slider-row">壁帯の厚さ(px)
+        <input type="range" id="wallBandThickness" min="20" max="180" step="5" value="80">
+        <span id="wallBandThicknessVal"></span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>ブロック規模（指示書14 3-4・裁量初期値）</legend>
+      <label class="slider-row">リング数
+        <input type="range" id="ringCount" min="1" max="4" step="1" value="3">
+        <span id="ringCountVal"></span>
+      </label>
+      <label class="slider-row">セクタ数/リング
+        <input type="range" id="sectorCount" min="8" max="32" step="1" value="20">
+        <span id="sectorCountVal"></span>
+      </label>
+      <label class="slider-row">ブロックHP
+        <input type="range" id="blockHP" min="1" max="6" step="1" value="3">
+        <span id="blockHPVal"></span>
+      </label>
+    </fieldset>
+
+    <fieldset>
       <legend>盤面幾何パラメータ（指示書12/13・裁量初期値）</legend>
       <label class="slider-row">重力加速度(px/s²)
         <input type="range" id="gravityAccel" min="0" max="400" step="5" value="100">
         <span id="gravityAccelVal"></span>
       </label>
       <label class="slider-row">パドル軌道半径(px)
-        <input type="range" id="paddleOrbitR" min="60" max="160" step="1" value="105">
+        <input type="range" id="paddleOrbitR" min="60" max="300" step="1" value="105">
         <span id="paddleOrbitRVal"></span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>越境ペース（指示書14 3-2・シム実測中央値を初期値に）</legend>
+      <label class="slider-row">噴出間隔(秒)
+        <input type="range" id="eruptionInterval" min="1" max="60" step="0.5" value="8.4">
+        <span id="eruptionIntervalVal"></span>
+      </label>
+      <label class="slider-row">マルチボール間隔(秒)
+        <input type="range" id="multiballInterval" min="1" max="400" step="1" value="35">
+        <span id="multiballIntervalVal"></span>
+      </label>
+      <label class="slider-row">外来アイテム間隔(秒)
+        <input type="range" id="itemArrivalInterval" min="1" max="400" step="1" value="57">
+        <span id="itemArrivalIntervalVal"></span>
       </label>
     </fieldset>
 
     <fieldset>
       <legend>反転0：床の崩壊曲線（指示書13§2-5・裁量初期値）</legend>
       <label class="slider-row">初期穴半径(px)
-        <input type="range" id="holeRInitial" min="10" max="60" step="1" value="35">
+        <input type="range" id="holeRInitial" min="10" max="80" step="1" value="35">
         <span id="holeRInitialVal"></span>
       </label>
       <label class="slider-row">穴成長量/落球(px)
@@ -91,7 +150,7 @@
         <span id="holeRGrowthVal"></span>
       </label>
       <label class="slider-row">穴半径の上限(px)
-        <input type="range" id="holeRMax" min="30" max="100" step="1" value="80">
+        <input type="range" id="holeRMax" min="30" max="200" step="1" value="80">
         <span id="holeRMaxVal"></span>
       </label>
     </fieldset>
@@ -103,7 +162,7 @@
         <span id="dropRateVal"></span>
       </label>
       <label class="slider-row">サーブ間隔(秒)
-        <input type="range" id="serveInterval" min="0.2" max="10" step="0.1" value="2.0">
+        <input type="range" id="serveInterval" min="0.2" max="90" step="0.2" value="55.8">
         <span id="serveIntervalVal"></span>
       </label>
       <label class="slider-row">効果時間(秒)
@@ -186,15 +245,18 @@
   "use strict";
 
   // ---- 定数：盤面幾何 ----------------------------------------------------------
+  // 【指示書14 作業1】盤面幾何は固定定数ではなく、recomputeGeometry()でスライダー
+  // （盤面半径・球半径・パドル弧幅・壁帯厚さ・リング数・セクタ数・ブロックHP）から
+  // 都度再計算する可変値へ変更した。以下は初回描画までの暫定初期値（すぐ上書きされる）。
   var CW = 560, CH = 560;
   var CX = CW / 2, CY = CH / 2;               // 盤面中心
   var BOARD_R = 250;                          // 盤面外周半径（描画上の外縁）
   var BALL_R = 6;
 
-  // 壁帯（ブロック）は外周付近の同心円リング状に配置する。
+  // 壁帯（ブロック）は外周付近の同心円リング状に配置する（index 0=最内リング）。
   var RING_DEFS = [
-    { rInner: 170, rOuter: 210 },  // 内側リング（穴・パドルに近い側）
-    { rInner: 210, rOuter: 250 }   // 外側リング（盤面外縁）
+    { rInner: 170, rOuter: 210 },
+    { rInner: 210, rOuter: 250 }
   ];
   var BLOCK_COLS = 16;             // リングあたりの角度分割数
   var BLOCK_GAP_FRAC = 0.10;       // セクタ間の視覚的な隙間（角度の割合）
@@ -203,8 +265,22 @@
   var ITEM_WALL_BRICKS_PER_SIDE = 2; // 指示書09：各陣2個のアイテム壁（確定ドロップ）
 
   // パドル：中心穴を中心とする固定半径の円軌道上を角度方向にのみ移動する。
-  var PADDLE_ARC_HALF_BASE = 45 / 105; // 旧PADDLE_BASE_W=90pxを初期paddleOrbitR=105pxでの弧幅に換算
-  var PADDLE_ANGULAR_SPEED_BASE = 900 / 105; // 旧PADDLE_BASE_SPEED=900px/sの角速度換算(rad/s)
+  var PADDLE_ARC_HALF_BASE = 24 * Math.PI / 180; // パドル弧幅スライダー（度）から都度更新
+  var PADDLE_ANGULAR_SPEED_BASE = 900 / 105; // 旧PADDLE_BASE_SPEED=900px/sの角速度換算(rad/s)。
+                                              // paddleOrbitRの現在値で都度再計算する（recomputeGeometry）
+
+  // 【指示書14 作業1】重力・球速・終端速度の盤面スケール正規化（recomputeGeometry参照）。
+  var REFERENCE_BOARD_R = 250; // 指示書13で機械検証済みの基準盤面半径
+  var GEOMETRY_SCALE = 1.0;    // BOARD_R/REFERENCE_BOARD_R。都度recomputeGeometry()で更新
+
+  // 【指示書14 作業1】盤面スケール比の裁量根拠（報告書に詳細記載）：
+  // 旧比（BOARD_R=250基準）壁帯厚さ比0.32→新比0.20、パドル軌道半径比0.42→0.45、
+  // 初期穴半径比0.14→0.10、穴半径上限比0.32→0.28。プレイ空間（軌道〜壁帯内縁）の
+  // 比率は0.26→0.40へ拡大する設計とした（狭さの主因への直接対処）。
+  var SCALE_RATIO = {
+    wallBandThickness: 0.20, paddleOrbitR: 0.45,
+    holeRInitial: 0.10, holeRGrowth: 0.024, holeRMax: 0.28
+  };
 
   // 【指示書13§2-5】反転0の円形版：中心は開始時「床」（穴なし）。最初に球が床へ到達した
   // 瞬間に割れて穴が開く（hole_r_initial）。以後、落球のたびに穴が成長する
@@ -218,14 +294,22 @@
   // 角度は入射角の連続写像：送信側の角度θ→受信側の同じ角度θ。このプロトは他worldと
   // 非接続のため、模擬発生器はθを乱数で振るが、写像規則自体（crossingAngleMap）は
   // 実装しておく（指示書13§2-2）。
-  var MULTIBALL_SPAWN_INTERVAL_MIN = 3.0;
-  var MULTIBALL_SPAWN_INTERVAL_MAX = 6.0;
-  var ERUPTION_SPAWN_INTERVAL_MIN = 3.0;
-  var ERUPTION_SPAWN_INTERVAL_MAX = 6.0;
+  //
+  // 【指示書14 3-2】固定3〜6秒を廃し、3本の模擬発生器の間隔を個別スライダー化した。
+  // デフォルトはsim/ring_structure/pace_measurement.pyの実測中央値（噴出=上昇跨ぎ
+  // 到来間隔・マルチボール=下降跨ぎ到来間隔・外来アイテム=アイテム取りこぼし到来間隔）。
+  // スライダー値は「平均間隔」として扱い、±20%の一様乱数ジッターを加えて次回発生
+  // タイマーを決める（機械的な周期発生に見えないための裁量。中心値は実測に忠実）。
+  var SPAWN_JITTER_FRAC = 0.20;
+  function nextSpawnDelaySec(meanSec) {
+    return meanSec * (1 - SPAWN_JITTER_FRAC + Math.random() * 2 * SPAWN_JITTER_FRAC);
+  }
   var MULTIBALL_ARRIVING_LABEL_SEC = 999; // 着地(すり抜け完了)までarriving表示を維持（rしきい値で解除するため実質未使用の上限）
   var JUST_ERUPTED_TINT_SEC = 1.0;        // 噴出直後の識別表示（視覚のみ・物理には無関係）
 
   var MAX_LOCAL_BALLS_REFERENCE = 3;        // 参考値。SERVE_CAP(ring_sim.py)に合わせた目安
+  var BALL_COUNT_OVERFLOW_THRESHOLD = 3;    // 【指示書14 3-5】「球過多」の判定閾値。
+                                             // ring_sim.pyのOVERFLOW_THRESHOLD(=SERVE_CAP)と揃えた
 
   // 指示書07：分身(clone)を除去し磁石(magnet)・レーザー(laser)を追加。
   // ガイド(guide)は物理不介入化（案(a)：予測線・自陣外周打ち切りの表示のみ）。
@@ -279,6 +363,16 @@
   var endBtn = document.getElementById("endBtn");
 
   var sliders = {
+    boardR: document.getElementById("boardR"),
+    ballRadius: document.getElementById("ballRadius"),
+    paddleArcDeg: document.getElementById("paddleArcDeg"),
+    wallBandThickness: document.getElementById("wallBandThickness"),
+    ringCount: document.getElementById("ringCount"),
+    sectorCount: document.getElementById("sectorCount"),
+    blockHP: document.getElementById("blockHP"),
+    eruptionInterval: document.getElementById("eruptionInterval"),
+    multiballInterval: document.getElementById("multiballInterval"),
+    itemArrivalInterval: document.getElementById("itemArrivalInterval"),
     gravityAccel: document.getElementById("gravityAccel"),
     paddleOrbitR: document.getElementById("paddleOrbitR"),
     holeRInitial: document.getElementById("holeRInitial"),
@@ -294,6 +388,16 @@
     weakenDuration: document.getElementById("weakenDuration")
   };
   var sliderVals = {
+    boardR: document.getElementById("boardRVal"),
+    ballRadius: document.getElementById("ballRadiusVal"),
+    paddleArcDeg: document.getElementById("paddleArcDegVal"),
+    wallBandThickness: document.getElementById("wallBandThicknessVal"),
+    ringCount: document.getElementById("ringCountVal"),
+    sectorCount: document.getElementById("sectorCountVal"),
+    blockHP: document.getElementById("blockHPVal"),
+    eruptionInterval: document.getElementById("eruptionIntervalVal"),
+    multiballInterval: document.getElementById("multiballIntervalVal"),
+    itemArrivalInterval: document.getElementById("itemArrivalIntervalVal"),
     gravityAccel: document.getElementById("gravityAccelVal"),
     paddleOrbitR: document.getElementById("paddleOrbitRVal"),
     holeRInitial: document.getElementById("holeRInitialVal"),
@@ -311,6 +415,16 @@
 
   function cfg() {
     return {
+      boardR: parseFloat(sliders.boardR.value),
+      ballRadiusPx: parseFloat(sliders.ballRadius.value),
+      paddleArcDeg: parseFloat(sliders.paddleArcDeg.value),
+      wallBandThickness: parseFloat(sliders.wallBandThickness.value),
+      ringCount: parseInt(sliders.ringCount.value, 10),
+      sectorCount: parseInt(sliders.sectorCount.value, 10),
+      blockHP: parseInt(sliders.blockHP.value, 10),
+      eruptionIntervalSec: parseFloat(sliders.eruptionInterval.value),
+      multiballIntervalSec: parseFloat(sliders.multiballInterval.value),
+      itemArrivalIntervalSec: parseFloat(sliders.itemArrivalInterval.value),
       gravityAccel: parseFloat(sliders.gravityAccel.value),
       paddleOrbitR: parseFloat(sliders.paddleOrbitR.value),
       holeRInitial: parseFloat(sliders.holeRInitial.value),
@@ -327,8 +441,88 @@
     };
   }
 
+  // 【指示書14 作業1】盤面幾何（BOARD_R・BALL_R・RING_DEFS・BLOCK_COLS・BLOCK_HP_MAX・
+  // PADDLE_ARC_HALF_BASE・PADDLE_ANGULAR_SPEED_BASE）をスライダー値から再計算する。
+  // セッション開始時・フィットボタン押下時に呼ぶ（プレイ中の形状変化はしない）。
+  function recomputeGeometry() {
+    var c = cfg();
+    BOARD_R = c.boardR;
+    BALL_R = c.ballRadiusPx;
+    BLOCK_COLS = c.sectorCount;
+    BLOCK_HP_MAX = c.blockHP;
+    var perRing = c.wallBandThickness / c.ringCount;
+    RING_DEFS = [];
+    for (var i = 0; i < c.ringCount; i++) {
+      var rOuter = BOARD_R - (c.ringCount - 1 - i) * perRing;
+      var rInner = rOuter - perRing;
+      RING_DEFS.push({ rInner: Math.max(0, rInner), rOuter: rOuter });
+    }
+    PADDLE_ARC_HALF_BASE = c.paddleArcDeg * Math.PI / 180;
+    PADDLE_ANGULAR_SPEED_BASE = 900 / Math.max(1, c.paddleOrbitR);
+    CX = CW / 2; CY = CH / 2;
+    // 【指示書14 作業1・注意事項への対応】重力・球速・終端速度はpx単位のスライダーの
+    // ため、盤面だけ拡大すると（絶対px値は不変のまま）体感速度が相対的に遅くなり、
+    // 噴出到達性（指示書13§2-3の停止則対象）も壊れる（実測：BOARD_R=355pxで
+    // 旧絶対値のままだと最大到達276px<壁帯内縁285pxとなり届かなくなることを確認）。
+    // スライダーの見た目の単位・表示値は変えず（指示書14§2の注記どおり）、内部の
+    // 物理計算にだけ「盤面半径比」を掛けて正規化する（GEOMETRY_SCALE）。基準は
+    // 指示書13で機械検証済みのBOARD_R=250px。
+    GEOMETRY_SCALE = BOARD_R / REFERENCE_BOARD_R;
+  }
+
+  // 【指示書14 作業1】盤面半径をビューポートへ自動フィットする（短辺基準・余白確保）。
+  // パネル幅・見出し/警告文の実測高さを差し引いた利用可能領域の短辺から算出する。
+  function fitBoardR() {
+    var panel = document.querySelector(".panel");
+    var warnEl = document.querySelector(".warn");
+    var h1El = document.querySelector("h1");
+    var panelWidth = (panel ? panel.getBoundingClientRect().width : 380) + 16 /* layout gap */;
+    var headerHeight = (h1El ? h1El.getBoundingClientRect().height : 24)
+      + (warnEl ? warnEl.getBoundingClientRect().height : 80) + 24 /* margins */;
+    var pagePadding = 32; // body padding 16px*2
+    var availW = Math.max(300, window.innerWidth - panelWidth - pagePadding);
+    var availH = Math.max(300, window.innerHeight - headerHeight - pagePadding);
+    var shortSide = Math.min(availW, availH);
+    var MARGIN = 0.92; // 余白確保
+    var fitted = Math.round((shortSide / 2) * MARGIN);
+    fitted = Math.max(parseFloat(sliders.boardR.min), Math.min(parseFloat(sliders.boardR.max), fitted));
+    sliders.boardR.value = fitted;
+
+    // 盤面拡大に伴うデフォルト再選定（比率固定。裁量・報告書§2参照）
+    var clampToSlider = function (slider, val) {
+      return Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), val));
+    };
+    sliders.wallBandThickness.value = Math.round(clampToSlider(sliders.wallBandThickness, fitted * SCALE_RATIO.wallBandThickness));
+    sliders.paddleOrbitR.value = Math.round(clampToSlider(sliders.paddleOrbitR, fitted * SCALE_RATIO.paddleOrbitR));
+    sliders.holeRInitial.value = Math.round(clampToSlider(sliders.holeRInitial, fitted * SCALE_RATIO.holeRInitial));
+    sliders.holeRGrowth.value = Math.round(clampToSlider(sliders.holeRGrowth, fitted * SCALE_RATIO.holeRGrowth));
+    sliders.holeRMax.value = Math.round(clampToSlider(sliders.holeRMax, fitted * SCALE_RATIO.holeRMax));
+
+    CW = fitted * 2 + 20; CH = fitted * 2 + 20; // 盤面外周+わずかな余白
+    canvas.width = CW; canvas.height = CH;
+    CX = CW / 2; CY = CH / 2;
+    recomputeGeometry();
+    refreshSliderLabels();
+    if (!running) {
+      // 未開始時はプレースホルダを再描画（フィット結果を即時反映）
+      ctx.fillStyle = "#05060a"; ctx.fillRect(0, 0, CW, CH);
+      ctx.fillStyle = "#5a5f6d"; ctx.font = "14px sans-serif"; ctx.textAlign = "center";
+      ctx.fillText("「開始」を押してください", CX, CY);
+    }
+  }
+
   function refreshSliderLabels() {
     var c = cfg();
+    sliderVals.boardR.textContent = c.boardR.toFixed(0) + "px";
+    sliderVals.ballRadius.textContent = c.ballRadiusPx.toFixed(0) + "px";
+    sliderVals.paddleArcDeg.textContent = c.paddleArcDeg.toFixed(0) + "°";
+    sliderVals.wallBandThickness.textContent = c.wallBandThickness.toFixed(0) + "px";
+    sliderVals.ringCount.textContent = c.ringCount.toFixed(0);
+    sliderVals.sectorCount.textContent = c.sectorCount.toFixed(0);
+    sliderVals.blockHP.textContent = c.blockHP.toFixed(0);
+    sliderVals.eruptionInterval.textContent = c.eruptionIntervalSec.toFixed(1) + "s";
+    sliderVals.multiballInterval.textContent = c.multiballIntervalSec.toFixed(0) + "s";
+    sliderVals.itemArrivalInterval.textContent = c.itemArrivalIntervalSec.toFixed(0) + "s";
     sliderVals.gravityAccel.textContent = c.gravityAccel.toFixed(0);
     sliderVals.paddleOrbitR.textContent = c.paddleOrbitR.toFixed(0) + "px";
     sliderVals.holeRInitial.textContent = c.holeRInitial.toFixed(0) + "px";
@@ -362,11 +556,12 @@
     ALL_TYPES.forEach(function (t) { pickupCounts[t] = 0; });
     var randomResolvedCounts = {};
     ALL_TYPES.forEach(function (t) { randomResolvedCounts[t] = 0; });
+    var initCfg = cfg();
 
     return {
       startedAt: null,
       elapsedSec: 0,
-      config: cfg(),
+      config: initCfg,
 
       // パドル：円軌道上の角度のみで位置が決まる
       paddle: { angle: -Math.PI / 2, halfArc: PADDLE_ARC_HALF_BASE },
@@ -399,14 +594,17 @@
       itemWallDropsTotal: 0,
 
       // 【指示書13】越境テレメトリ（循環入れ子トポロジー版）
-      multiballSpawnTimer: MULTIBALL_SPAWN_INTERVAL_MIN + Math.random() * (MULTIBALL_SPAWN_INTERVAL_MAX - MULTIBALL_SPAWN_INTERVAL_MIN),
-      eruptionSpawnTimer: ERUPTION_SPAWN_INTERVAL_MIN + Math.random() * (ERUPTION_SPAWN_INTERVAL_MAX - ERUPTION_SPAWN_INTERVAL_MIN),
-      itemArrivalSpawnTimer: MULTIBALL_SPAWN_INTERVAL_MIN + Math.random() * (MULTIBALL_SPAWN_INTERVAL_MAX - MULTIBALL_SPAWN_INTERVAL_MIN),
+      multiballSpawnTimer: nextSpawnDelaySec(initCfg.multiballIntervalSec),
+      eruptionSpawnTimer: nextSpawnDelaySec(initCfg.eruptionIntervalSec),
+      itemArrivalSpawnTimer: nextSpawnDelaySec(initCfg.itemArrivalIntervalSec),
       multiballArrivedCount: 0,   // 落下入射（マルチボール）の到来数
       eruptionCount: 0,           // 上昇噴出の到来数
       eruptionMaxRReached: [],    // 噴出到達性の実測（各噴出球が到達した最大r）
       breakoutCount: 0,           // 自球の外周突破（上昇跨ぎ）数
       itemArrivalCount: 0,        // 模擬外来アイテムの到来数
+
+      // 【指示書14 3-5】同時球数の時系列サマリ（毎フレーム集計。配列を持たずランニング統計のみ）
+      ballCountMax: 0, ballCountSum: 0, ballCountSamples: 0, ballCountOverflowSamples: 0,
 
       // テレメトリ（B1・B2）
       dropEvents: [], // B1: {tSec}
@@ -434,9 +632,11 @@
         });
       }
     });
+    var outermostRing = RING_DEFS.length - 1; // 【指示書14】リング数が可変になったため、
+                                               // 常に最外リングをアイテム壁の配置先とする
     var wallCols = [1, BLOCK_COLS - 2];
     blocks.forEach(function (b) {
-      if (b.ring === 1 && wallCols.indexOf(b.col) >= 0) b.itemWall = true;
+      if (b.ring === outermostRing && wallCols.indexOf(b.col) >= 0) b.itemWall = true;
     });
     return blocks;
   }
@@ -538,7 +738,7 @@
   function serveBall(s) {
     var c = s.config;
     var pp = paddlePos(s);
-    var mag = c.ballSpeedPxS;
+    var mag = c.ballSpeedPxS * GEOMETRY_SCALE; // 【指示書14】盤面半径比で正規化
     var dirA = s.paddle.angle;
     var jitter = (Math.random() * 0.4 - 0.2);
     var a = dirA + jitter;
@@ -557,7 +757,7 @@
     var spawnR = BOARD_R + 24;
     var x = CX + Math.cos(theta) * spawnR;
     var y = CY + Math.sin(theta) * spawnR;
-    var mag = s.config.ballSpeedPxS; // 凍結文v2：速度は基準値へ正規化
+    var mag = s.config.ballSpeedPxS * GEOMETRY_SCALE; // 凍結文v2：速度は基準値へ正規化（指示書14：盤面半径比で正規化）
     var vx = -Math.cos(theta) * mag, vy = -Math.sin(theta) * mag;
     s.balls.push({
       x: x, y: y, vx: vx, vy: vy,
@@ -573,7 +773,7 @@
     var spawnR = s.holeOpened ? s.currentHoleR : s.config.holeRInitial;
     var x = CX + Math.cos(theta) * spawnR;
     var y = CY + Math.sin(theta) * spawnR;
-    var mag = s.config.ballSpeedPxS; // 凍結文v2：速度は基準値へ正規化
+    var mag = s.config.ballSpeedPxS * GEOMETRY_SCALE; // 凍結文v2：速度は基準値へ正規化（指示書14：盤面半径比で正規化）
     var vx = Math.cos(theta) * mag, vy = Math.sin(theta) * mag;
     var ball = {
       x: x, y: y, vx: vx, vy: vy,
@@ -645,15 +845,16 @@
     var localBall = s.balls.filter(function (b) { return !b.arriving; })[0];
     if (s.serving || !localBall) {
       x = pp.x; y = pp.y;
-      vx = Math.cos(s.paddle.angle) * s.config.ballSpeedPxS;
-      vy = Math.sin(s.paddle.angle) * s.config.ballSpeedPxS;
+      vx = Math.cos(s.paddle.angle) * s.config.ballSpeedPxS * GEOMETRY_SCALE;
+      vy = Math.sin(s.paddle.angle) * s.config.ballSpeedPxS * GEOMETRY_SCALE;
     } else {
       x = localBall.x; y = localBall.y; vx = localBall.vx; vy = localBall.vy;
     }
     var segs = [];
     var bounces = 0;
-    var g = s.config.gravityAccel;
-    var vTerm = s.config.terminalVelocityPxS;
+    // 【指示書14】実際の物理（updateBall/applyTerminalVelocity）と同じGEOMETRY_SCALE正規化
+    var g = s.config.gravityAccel * GEOMETRY_SCALE;
+    var vTerm = s.config.terminalVelocityPxS * GEOMETRY_SCALE;
     var dtStep = 1 / 60;
     for (var seg = 0; seg < maxBounces + 1; seg++) {
       var sx = x, sy = y;
@@ -704,14 +905,16 @@
   }
 
   function updateBall(s, ball, dt) {
-    var g = s.config.gravityAccel;
+    // 【指示書14 作業1】GEOMETRY_SCALEで盤面半径比に正規化する（recomputeGeometry参照）。
+    // スライダー表示値そのものは不変（見た目の単位は変えない）。
+    var g = s.config.gravityAccel * GEOMETRY_SCALE;
     var rx = ball.x - CX, ry = ball.y - CY;
     var r = norm2(rx, ry);
     if (r > 1) {
       ball.vx += (-rx / r) * g * dt;
       ball.vy += (-ry / r) * g * dt;
     }
-    applyTerminalVelocity(ball, s.config.terminalVelocityPxS);
+    applyTerminalVelocity(ball, s.config.terminalVelocityPxS * GEOMETRY_SCALE);
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
 
@@ -748,21 +951,22 @@
       if (s.serveTimer <= 0) serveBall(s);
     }
 
-    // 【指示書13】越境の模擬発生器（循環入れ子トポロジー版）
+    // 【指示書13】越境の模擬発生器（循環入れ子トポロジー版）。
+    // 【指示書14 3-2】間隔はスライダー値（シム実測中央値が既定）±20%ジッター。
     s.multiballSpawnTimer -= dt;
     if (s.multiballSpawnTimer <= 0) {
       spawnMultiball(s);
-      s.multiballSpawnTimer = MULTIBALL_SPAWN_INTERVAL_MIN + Math.random() * (MULTIBALL_SPAWN_INTERVAL_MAX - MULTIBALL_SPAWN_INTERVAL_MIN);
+      s.multiballSpawnTimer = nextSpawnDelaySec(c.multiballIntervalSec);
     }
     s.eruptionSpawnTimer -= dt;
     if (s.eruptionSpawnTimer <= 0) {
       spawnEruption(s);
-      s.eruptionSpawnTimer = ERUPTION_SPAWN_INTERVAL_MIN + Math.random() * (ERUPTION_SPAWN_INTERVAL_MAX - ERUPTION_SPAWN_INTERVAL_MIN);
+      s.eruptionSpawnTimer = nextSpawnDelaySec(c.eruptionIntervalSec);
     }
     s.itemArrivalSpawnTimer -= dt;
     if (s.itemArrivalSpawnTimer <= 0) {
       spawnArrivingItem(s);
-      s.itemArrivalSpawnTimer = MULTIBALL_SPAWN_INTERVAL_MIN + Math.random() * (MULTIBALL_SPAWN_INTERVAL_MAX - MULTIBALL_SPAWN_INTERVAL_MIN);
+      s.itemArrivalSpawnTimer = nextSpawnDelaySec(c.itemArrivalIntervalSec);
     }
 
     if (s.stages.laser > 0) {
@@ -776,7 +980,7 @@
     }
     for (var li = s.laserBolts.length - 1; li >= 0; li--) {
       var bolt = s.laserBolts[li];
-      bolt.r += LASER_BOLT_SPEED * dt;
+      bolt.r += LASER_BOLT_SPEED * GEOMETRY_SCALE * dt; // 【指示書14】盤面半径比で正規化
       if (bolt.r >= BOARD_R) { s.laserBolts.splice(li, 1); continue; }
       var hitOne = false;
       for (var bj = 0; bj < s.blocks.length; bj++) {
@@ -879,6 +1083,13 @@
       }
     }
 
+    // 【指示書14 3-5】同時球数の時系列サマリ（ランニング統計）
+    var ballCountNow = s.balls.length;
+    s.ballCountMax = Math.max(s.ballCountMax, ballCountNow);
+    s.ballCountSum += ballCountNow;
+    s.ballCountSamples++;
+    if (ballCountNow >= BALL_COUNT_OVERFLOW_THRESHOLD) s.ballCountOverflowSamples++;
+
     // 落下アイテム更新（極座標で中心へ向け一定速度で内向きドリフト。磁石の引力）
     var halfArcNow = s.paddle.halfArc;
     var currentHoleForItems = s.holeOpened ? s.currentHoleR : FLOOR_BREAK_RADIUS;
@@ -889,7 +1100,7 @@
         var ddx = pp.x - d.x, ddy = pp.y - d.y;
         var dist = norm2(ddx, ddy);
         if (dist < radius && dist > 1) {
-          var pull = MAGNET_PULL_ACCEL * s.stages.magnet;
+          var pull = MAGNET_PULL_ACCEL * GEOMETRY_SCALE * s.stages.magnet; // 【指示書14】盤面半径比で正規化
           d.x += (ddx / dist) * pull * dt;
           d.y += (ddy / dist) * pull * dt;
         }
@@ -897,8 +1108,8 @@
       var drx = d.x - CX, dry = d.y - CY;
       var dr = norm2(drx, dry);
       if (dr > 1) {
-        d.x -= (drx / dr) * DROP_INWARD_SPEED * dt;
-        d.y -= (dry / dr) * DROP_INWARD_SPEED * dt;
+        d.x -= (drx / dr) * DROP_INWARD_SPEED * GEOMETRY_SCALE * dt; // 【指示書14】盤面半径比で正規化
+        d.y -= (dry / dr) * DROP_INWARD_SPEED * GEOMETRY_SCALE * dt;
       }
       var da2 = Math.abs(angleDiff(s.paddle.angle, Math.atan2(dry, drx)));
       var newDr = norm2(d.x - CX, d.y - CY);
@@ -1067,6 +1278,10 @@
         "（噴出最大到達r参考=" + maxEruptR + "px）\n" +
       "自球の外周突破(上昇跨ぎ): " + s.breakoutCount + "\n" +
       "外来アイテム到来: " + s.itemArrivalCount + "\n" +
+      "同時球数(現在/平均/最大/球過多割合): " + s.balls.length + " / " +
+        (s.ballCountSamples ? (s.ballCountSum / s.ballCountSamples).toFixed(2) : "-") + " / " +
+        s.ballCountMax + " / " +
+        (s.ballCountSamples ? (s.ballCountOverflowSamples / s.ballCountSamples * 100).toFixed(1) + "%" : "-") + "\n" +
       "B1 落球回数   : " + s.dropEvents.length + "\n" +
       "B2 復帰回数   : " + s.recoveryTimesSec.length + "（直近 " + lastRec + "）\n" +
       "B2 復帰待ち中 : " + pendingCount + "\n" +
@@ -1095,7 +1310,11 @@
     state.pointerAngle = Math.atan2(my - CY, mx - CX);
   });
 
+  var fitBtn = document.getElementById("fitBtn");
+  fitBtn.addEventListener("click", function () { fitBoardR(); });
+
   startBtn.addEventListener("click", function () {
+    recomputeGeometry(); // 【指示書14 作業1】現在のスライダー値で盤面幾何を確定する
     state = freshState();
     state.blocks = makeBlocks();
     state.pointerAngle = -Math.PI / 2;
@@ -1153,20 +1372,22 @@
       multiball_arrived_total: s.multiballArrivedCount,
       eruption_total: s.eruptionCount,
       breakout_total: s.breakoutCount,
-      item_arrival_total: s.itemArrivalCount
+      item_arrival_total: s.itemArrivalCount,
+      // 【指示書14 3-5】同時球数の時系列サマリ
+      ball_count_max: s.ballCountMax,
+      ball_count_mean: s.ballCountSamples ? Number((s.ballCountSum / s.ballCountSamples).toFixed(3)) : 0,
+      ball_count_overflow_frac: s.ballCountSamples ? Number((s.ballCountOverflowSamples / s.ballCountSamples).toFixed(4)) : 0,
+      ball_count_overflow_threshold: BALL_COUNT_OVERFLOW_THRESHOLD
     };
     jsonOutEl.value = JSON.stringify(out, null, 2);
   });
 
-  // 初期描画（未開始プレースホルダ）
-  ctx.fillStyle = "#05060a";
-  ctx.fillRect(0, 0, CW, CH);
-  ctx.fillStyle = "#5a5f6d";
-  ctx.font = "14px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("「開始」を押してください", CX, CY);
+  // 【指示書14 作業1】初期描画：ビューポートへ自動フィットしたうえで未開始プレースホルダを表示
+  fitBoardR();
 
-  // 検品用に内部関数を公開（本番挙動には影響しない読み取り専用の参照公開。UIからは到達しない）
+  // 検品用に内部関数を公開（本番挙動には影響しない読み取り専用の参照公開。UIからは到達しない）。
+  // BOARD_R等は指示書14でセッション開始時に再計算される可変値になったため、スナップショットで
+  // はなく現在値を返すgetterとして公開する（呼び出し時点の実際の値を返す）。
   window.__calibTest = { freshState: freshState, step: step, makeBlocks: makeBlocks,
                           computeGuideSegments: computeGuideSegments, onPickup: onPickup,
                           spawnGuaranteedDrop: spawnGuaranteedDrop, spawnMultiball: spawnMultiball,
@@ -1174,7 +1395,12 @@
                           crossingAngleMap: crossingAngleMap, polarInBlock: polarInBlock,
                           paddlePos: paddlePos, blockCenter: blockCenter, PIERCE_HITS: PIERCE_HITS,
                           FLOOR_BREAK_RADIUS: FLOOR_BREAK_RADIUS,
-                          CX: CX, CY: CY, BOARD_R: BOARD_R, RING_DEFS: RING_DEFS };
+                          recomputeGeometry: recomputeGeometry, fitBoardR: fitBoardR,
+                          getGeometry: function () {
+                            return { CX: CX, CY: CY, CW: CW, CH: CH, BOARD_R: BOARD_R,
+                                     BALL_R: BALL_R, RING_DEFS: RING_DEFS, BLOCK_COLS: BLOCK_COLS,
+                                     BLOCK_HP_MAX: BLOCK_HP_MAX, PADDLE_ARC_HALF_BASE: PADDLE_ARC_HALF_BASE };
+                          } };
 })();
 </script>
 </body>

@@ -1,0 +1,59 @@
+{
+  "script": "sim/ring_structure/pace_measurement.py",
+  "design_serve_mode": "interval",
+  "serve_interval_ticks": 40,
+  "N": 4,
+  "session_ticks": 900,
+  "trials": 1000,
+  "ms_per_tick": 1394.9333333333334,
+  "fixed_bundle": {
+    "drop_rate": 0.05,
+    "weaken_multiplier": 1.3,
+    "laser_target_frac": 0.05,
+    "laser_dps_per_stage": 0.375,
+    "ball_effect_ticks": 2,
+    "pierce_hits": 3,
+    "item_wall_bricks": 2,
+    "pickup_miss_rate_base": 0.2,
+    "requirement": 68700
+  },
+  "non_interference": {
+    "a_original_vs_clone_off_identical": true,
+    "b_clone_off_vs_on_identical": true,
+    "tracking_actually_recorded_events": true,
+    "trials": 200
+  },
+  "up_crossing_interval": {
+    "n": 401142,
+    "median_tick": 6,
+    "p10_tick": 1,
+    "p90_tick": 19,
+    "median_sec": 8.3696,
+    "p10_sec": 1.3949333333333334,
+    "p90_sec": 26.503733333333333
+  },
+  "down_crossing_interval": {
+    "n": 261,
+    "median_tick": 25,
+    "p10_tick": 4,
+    "p90_tick": 230,
+    "median_sec": 34.873333333333335,
+    "p10_sec": 5.579733333333333,
+    "p90_sec": 320.8346666666667
+  },
+  "item_miss_interval": {
+    "n": 24022,
+    "median_tick": 41,
+    "p10_tick": 5,
+    "p90_tick": 255,
+    "median_sec": 57.19226666666667,
+    "p10_sec": 6.974666666666667,
+    "p90_sec": 355.708
+  },
+  "population": {
+    "mean_pop_mean": 2.8666666666666667,
+    "mean_pop_max": 7.32275,
+    "overflow_frac_mean": 0.5683825
+  },
+  "generated_at": "2026-07-30T04:49:28.413528+00:00"
+}
