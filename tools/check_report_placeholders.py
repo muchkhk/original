@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-報告書プレースホルダ検出リント（指示書12 作業0-2）
+報告書プレースホルダ検出リント（指示書12 作業0-2。順序則v2＝指示書13 0-1で改訂）
 
 CLAUDE.md §9-j「報告書はPR番号・ハッシュを空欄で納品しない」の機械的な検査。
 指示書05・06・07・報告11で計4回、ハッシュ欄が「作成後に追記」「（マージ後に追記）」等の
@@ -9,8 +9,8 @@ CLAUDE.md §9-j「報告書はPR番号・ハッシュを空欄で納品しない
 納品前に必ず本スクリプトを通し、プレースホルダが残っていないことを確認する。
 
 検出パターン（指示書12が名指ししたもの。目標合わせでパターンを増減させない）：
-  1. 「ラベル：（後に追記）」形の空欄（例：マージコミット：（マージ後に追記）／
-     PR番号：（作成後に追記））。コロン＋括弧という「ラベルの値」の形に絞ることで、
+  1. 「ラベル：（後に追記）」形の空欄（例：PR番号：（作成後に追記）／
+     作業コミット：（push後に追記））。コロン＋括弧という「ラベルの値」の形に絞ることで、
      過去の違反事例を地の文で説明する文章（例：「報告08の『（マージ後に追記予定）』を
      回収した」）を誤検知しない
   2. 「TBD」（大文字小文字を区別しない）
@@ -23,6 +23,13 @@ CLAUDE.md §9-j「報告書はPR番号・ハッシュを空欄で納品しない
   - 全角鉤括弧「」で囲まれた引用（＝過去の違反事例を逐語引用した地の文）は対象外とする
     （この2点は本リポジトリの報告書の実際の書き方――コード識別子はバッククォート、
      過去の逐語引用は鉤括弧――を機械的に踏まえたもので、パターンの追加ではない）
+  - **【順序則v2・指示書13】「マージコミット」ラベルの行はパターン1の対象から除外する。**
+    CLAUDE.md §9-j（順序則v2）により、マージコミット欄は納品の必須項目ではなくなった
+    （マージのタイミングはClaude Codeの作業完了時点では未確定なことが多く、これを
+    必須にすると報告書が「マージされるまで書けない」という逆転が生じるため。マージ後の
+    実マージコミットは、マッチのマージ後に次の照合チャットが直接確認する運用へ変更）。
+    作業コミット・PR番号欄の空欄検出は維持する（これらはローカルcommit・`gh pr create`
+    の時点で確定するため、報告書執筆前に必ず埋められる）。
 
 対象：`proto/報告_*.md`（報告書。他のMarkdownは対象外＝納品物のみを検査する）。
 
@@ -48,6 +55,8 @@ DEFAULT_GLOB = "proto/報告_*.md"
 
 INLINE_CODE_RE = re.compile(r"`[^`]*`")
 QUOTED_CITATION_RE = re.compile(r"「[^」]*」")
+MERGE_COMMIT_LABEL = "マージコミット"
+MERGE_COMMIT_LABEL_WINDOW = 12  # ラベルとコロンの間に許容する最大文字数（記号・空白込み）
 
 
 def _strip_code_spans(line):
@@ -62,6 +71,15 @@ def _is_inside_quoted_citation(line, start, end):
         if m.start() <= start and end <= m.end():
             return True
     return False
+
+
+def _is_merge_commit_label(line, match_start):
+    """【順序則v2】マッチ直前のラベルが「マージコミット」かを判定する。
+    マージコミット欄は納品の必須項目ではないため、この行はプレースホルダとして
+    数えない（モジュールdocstring参照）。"""
+    window_start = max(0, match_start - MERGE_COMMIT_LABEL_WINDOW - len(MERGE_COMMIT_LABEL))
+    preceding = line[window_start:match_start]
+    return MERGE_COMMIT_LABEL in preceding
 
 
 def scan_text(text):
@@ -82,6 +100,8 @@ def scan_text(text):
             for m in pattern.finditer(line):
                 if _is_inside_quoted_citation(line, m.start(), m.end()):
                     continue
+                if name == "ラベル：（…後に追記）" and _is_merge_commit_label(line, m.start()):
+                    continue  # 順序則v2：マージコミット欄は必須項目から除外
                 hits.append((lineno, name, raw_line.strip()))
                 break  # 同一パターン・同一行の重複記録は避ける
     return hits
@@ -112,15 +132,20 @@ def run_check(pattern=DEFAULT_GLOB, quiet=False):
 
 def selftest():
     """故意注入によるFAIL実証つきの自己診断。成功パス・失敗パスが必ず別の出力に
-    なることを確認する（CLAUDE.md §9-c）。"""
+    なることを確認する（CLAUDE.md §9-c）。順序則v2（マージコミット欄は必須項目
+    から除外）の挙動も併せて実証する。"""
     ok = True
     with tempfile.TemporaryDirectory() as tmpdir:
         bad_path = os.path.join(tmpdir, "報告_selftest_bad.md")
         with open(bad_path, "w", encoding="utf-8") as f:
-            f.write("# 自己診断用ダミー\n\n- マージコミット：（マージ後に追記）\n")
+            # 順序則v2でも必須のまま残る欄（PR番号）で故意注入する
+            f.write("# 自己診断用ダミー\n\n- PR番号：（作成後に追記）\n")
         clean_path = os.path.join(tmpdir, "報告_selftest_clean.md")
         with open(clean_path, "w", encoding="utf-8") as f:
-            f.write("# 自己診断用ダミー\n\n- マージコミット：`abc1234`\n"
+            f.write("# 自己診断用ダミー\n\n- 作業コミット：`abc1234`\n"
+                     "- PR番号：[#99](https://example.invalid/pull/99)\n"
+                     # 順序則v2：マージコミット欄は未記載でもFAILしない
+                     "- マージコミット：（マージ後に追記。順序則v2では必須ではない）\n"
                      "- コード例（連続アンダースコアを含む識別子がコードブロック内のみに"
                      "あることを確認する）:\n"
                      "```python\ndef dunder_init(self):\n    pass\n```\n"
@@ -129,20 +154,22 @@ def selftest():
         bad_hits = scan_file(bad_path)
         clean_hits = scan_file(clean_path)
 
-        print(f"[selftest] 故意注入ファイル（プレースホルダあり）: "
+        print(f"[selftest] 故意注入ファイル（PR番号が未記載）: "
               f"{'検出=FAIL(想定どおり)' if bad_hits else '検出なし=異常'}")
         if not bad_hits:
             print("RESULT: FAIL (selftest: 故意注入したプレースホルダを検出できなかった)")
             ok = False
 
-        print(f"[selftest] クリーンファイル（プレースホルダなし・コードブロック内__init__含む）: "
+        print(f"[selftest] クリーンファイル（作業コミット・PR番号は記載済み。マージコミットは"
+              f"順序則v2により未記載でも許容・コードブロック内__init__含む）: "
               f"{'誤検出なし=正常' if not clean_hits else '誤検出=異常'}")
         if clean_hits:
             print(f"RESULT: FAIL (selftest: 誤検出 {clean_hits})")
             ok = False
 
     if ok:
-        print("RESULT: PASS (selftest: 成功パス・失敗パスとも想定どおりに分離した)")
+        print("RESULT: PASS (selftest: 成功パス・失敗パスとも想定どおりに分離した。"
+              "順序則v2のマージコミット除外も正しく機能した)")
     return ok
 
 
