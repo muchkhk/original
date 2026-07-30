@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書15 模擬ペースのB1帯整合と噴出オンセット遅延</title>
+<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書16 操作系是正（Pointer Lock相対移動とパドル軌道半径較正）</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -19,10 +19,18 @@
     padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; line-height: 1.6;
   }
   .layout { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+  .canvasWrap { position: relative; }
   canvas {
     background: #05060a; border: 1px solid #3a3d46; border-radius: 4px; display: block;
     cursor: none;
   }
+  /* 【指示書16 作業1】Pointer Lock解除中の「クリックで操作再開」表示 */
+  .lockOverlay {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(5,6,10,0.75); color: #f0d090; font-size: 14px; text-align: center;
+    border-radius: 4px; pointer-events: none; padding: 16px;
+  }
+  .lockOverlay.show { display: flex; }
   .panel { width: 380px; display: flex; flex-direction: column; gap: 10px; }
   fieldset {
     border: 1px solid #3a3d46; border-radius: 4px; padding: 8px 10px; margin: 0;
@@ -70,11 +78,23 @@
   マルチボール間隔の既定値は落球頻度帯B1（2〜10回/900tickセッション）由来の210秒へ
   変更した。噴出には既定60秒のオンセット遅延を新設（精密化#9：猶予の対象は無偽装
   イベント〈噴出・自球突破〉のみ。偽装済みチャネル〈マルチボール・外来アイテム〉には
-  遅延を適用しない）。
+  遅延を適用しない）。<br>
+  <strong>指示書16で操作系是正（Pointer Lock相対移動・パドル軌道半径の較正化）。</strong>
+  マッチの較正プレイ所見（①バーと壁が近すぎる②カーソルが迷子になる）への対処。
+  既定の操作方式を、盤面クリックで取得するPointer Lockによる<strong>相対移動</strong>
+  （マウスの移動量をパドル角度増分へ変換）へ変更した。ESCで解除中はパドルが現在角で
+  停止し「クリックで操作再開」と表示される（セッション計時は継続）。従来の絶対角追従は
+  トグルで残置し、Pointer Lock非対応・取得拒否時は自動的にそちらへフォールバックする。
+  パドル軌道半径は盤面比の較正スライダー化し、壁反射球への反応猶予と噴出迎撃猶予の
+  トレードオフを探索できるようにした。角度被覆率（穴上キャンプ自明化の監視用）を
+  HUD・出力JSONへ追加した。
 </div>
 
 <div class="layout">
-  <canvas id="game" width="560" height="560"></canvas>
+  <div class="canvasWrap">
+    <canvas id="game" width="560" height="560"></canvas>
+    <div id="lockOverlay" class="lockOverlay">クリックで操作再開（相対移動モード）</div>
+  </div>
 
   <div class="panel">
     <fieldset>
@@ -122,9 +142,24 @@
         <input type="range" id="gravityAccel" min="0" max="400" step="5" value="100">
         <span id="gravityAccelVal"></span>
       </label>
-      <label class="slider-row">パドル軌道半径(px)
-        <input type="range" id="paddleOrbitR" min="60" max="300" step="1" value="105">
+      <label class="slider-row">パドル軌道半径(盤面比)（指示書16・較正化）
+        <input type="range" id="paddleOrbitR" min="0.30" max="0.72" step="0.01" value="0.45">
         <span id="paddleOrbitRVal"></span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>操作方式（指示書16 作業1・新設）</legend>
+      <label class="slider-row">方式
+        <select id="controlMode" style="width:100%">
+          <option value="relative">相対移動（Pointer Lock・既定）</option>
+          <option value="absolute">絶対角追従（従来方式）</option>
+        </select>
+        <span></span>
+      </label>
+      <label class="slider-row">感度(度/px)（新設）
+        <input type="range" id="pointerLockSensitivity" min="0.1" max="1.5" step="0.05" value="0.5">
+        <span id="pointerLockSensitivityVal"></span>
       </label>
     </fieldset>
 
@@ -286,8 +321,11 @@
   // 旧比（BOARD_R=250基準）壁帯厚さ比0.32→新比0.20、パドル軌道半径比0.42→0.45、
   // 初期穴半径比0.14→0.10、穴半径上限比0.32→0.28。プレイ空間（軌道〜壁帯内縁）の
   // 比率は0.26→0.40へ拡大する設計とした（狭さの主因への直接対処）。
+  // 【指示書16 作業2】paddleOrbitRはfit時点のpx値へ都度上書きするのではなく、
+  // スライダー自体を「盤面比」として持たせ、cfg()内でBOARD_R×比率から常時導出する
+  // 方式へ変更した（fitBoardR()での上書きが不要になったため、この一覧からは除外）。
   var SCALE_RATIO = {
-    wallBandThickness: 0.20, paddleOrbitR: 0.45,
+    wallBandThickness: 0.20,
     holeRInitial: 0.10, holeRGrowth: 0.024, holeRMax: 0.28
   };
 
@@ -370,6 +408,10 @@
   var startBtn = document.getElementById("startBtn");
   var pauseBtn = document.getElementById("pauseBtn");
   var endBtn = document.getElementById("endBtn");
+  // 【指示書16 作業1】操作方式（相対/絶対）とロック状態表示
+  var controlModeSelect = document.getElementById("controlMode");
+  var lockOverlayEl = document.getElementById("lockOverlay");
+  var pointerLockSupported = !!(canvas.requestPointerLock && ("onpointerlockchange" in document || "pointerLockElement" in document));
 
   var sliders = {
     boardR: document.getElementById("boardR"),
@@ -385,6 +427,7 @@
     itemArrivalInterval: document.getElementById("itemArrivalInterval"),
     gravityAccel: document.getElementById("gravityAccel"),
     paddleOrbitR: document.getElementById("paddleOrbitR"),
+    pointerLockSensitivity: document.getElementById("pointerLockSensitivity"),
     holeRInitial: document.getElementById("holeRInitial"),
     holeRGrowth: document.getElementById("holeRGrowth"),
     holeRMax: document.getElementById("holeRMax"),
@@ -411,6 +454,7 @@
     itemArrivalInterval: document.getElementById("itemArrivalIntervalVal"),
     gravityAccel: document.getElementById("gravityAccelVal"),
     paddleOrbitR: document.getElementById("paddleOrbitRVal"),
+    pointerLockSensitivity: document.getElementById("pointerLockSensitivityVal"),
     holeRInitial: document.getElementById("holeRInitialVal"),
     holeRGrowth: document.getElementById("holeRGrowthVal"),
     holeRMax: document.getElementById("holeRMaxVal"),
@@ -425,8 +469,10 @@
   };
 
   function cfg() {
+    var boardRPx = parseFloat(sliders.boardR.value);
+    var paddleOrbitRRatio = parseFloat(sliders.paddleOrbitR.value);
     return {
-      boardR: parseFloat(sliders.boardR.value),
+      boardR: boardRPx,
       ballRadiusPx: parseFloat(sliders.ballRadius.value),
       paddleArcDeg: parseFloat(sliders.paddleArcDeg.value),
       wallBandThickness: parseFloat(sliders.wallBandThickness.value),
@@ -438,7 +484,13 @@
       multiballIntervalSec: parseFloat(sliders.multiballInterval.value),
       itemArrivalIntervalSec: parseFloat(sliders.itemArrivalInterval.value),
       gravityAccel: parseFloat(sliders.gravityAccel.value),
-      paddleOrbitR: parseFloat(sliders.paddleOrbitR.value),
+      // 【指示書16 作業2】paddleOrbitRは「盤面比」スライダーへ変更。既存の下流参照
+      // （paddlePos等）は絶対px値を前提とするため、ここでBOARD_R×比率へ変換して
+      // 従来どおりpx値として渡す。比率そのものはpaddleOrbitRRatioとして別途保持する。
+      paddleOrbitR: paddleOrbitRRatio * boardRPx,
+      paddleOrbitRRatio: paddleOrbitRRatio,
+      pointerLockSensitivityDegPerPx: parseFloat(sliders.pointerLockSensitivity.value),
+      controlMode: controlModeSelect.value,
       holeRInitial: parseFloat(sliders.holeRInitial.value),
       holeRGrowth: parseFloat(sliders.holeRGrowth.value),
       holeRMax: parseFloat(sliders.holeRMax.value),
@@ -505,7 +557,8 @@
       return Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), val));
     };
     sliders.wallBandThickness.value = Math.round(clampToSlider(sliders.wallBandThickness, fitted * SCALE_RATIO.wallBandThickness));
-    sliders.paddleOrbitR.value = Math.round(clampToSlider(sliders.paddleOrbitR, fitted * SCALE_RATIO.paddleOrbitR));
+    // 【指示書16 作業2】paddleOrbitRは盤面比スライダーへ変更したため、fit時の
+    // px上書きは不要（cfg()内でBOARD_R×比率から都度導出される。SCALE_RATIO参照）。
     sliders.holeRInitial.value = Math.round(clampToSlider(sliders.holeRInitial, fitted * SCALE_RATIO.holeRInitial));
     sliders.holeRGrowth.value = Math.round(clampToSlider(sliders.holeRGrowth, fitted * SCALE_RATIO.holeRGrowth));
     sliders.holeRMax.value = Math.round(clampToSlider(sliders.holeRMax, fitted * SCALE_RATIO.holeRMax));
@@ -537,7 +590,8 @@
     sliderVals.multiballInterval.textContent = c.multiballIntervalSec.toFixed(0) + "s";
     sliderVals.itemArrivalInterval.textContent = c.itemArrivalIntervalSec.toFixed(0) + "s";
     sliderVals.gravityAccel.textContent = c.gravityAccel.toFixed(0);
-    sliderVals.paddleOrbitR.textContent = c.paddleOrbitR.toFixed(0) + "px";
+    sliderVals.paddleOrbitR.textContent = c.paddleOrbitRRatio.toFixed(2) + "（" + c.paddleOrbitR.toFixed(0) + "px）";
+    sliderVals.pointerLockSensitivity.textContent = c.pointerLockSensitivityDegPerPx.toFixed(2) + "°/px";
     sliderVals.holeRInitial.textContent = c.holeRInitial.toFixed(0) + "px";
     sliderVals.holeRGrowth.textContent = c.holeRGrowth.toFixed(0) + "px";
     sliderVals.holeRMax.textContent = c.holeRMax.toFixed(0) + "px";
@@ -1286,10 +1340,13 @@
     var pendingCount = 0;
     Object.keys(s.pendingRecovery).forEach(function (k) { pendingCount += s.pendingRecovery[k].length; });
     var maxEruptR = s.eruptionMaxRReached.length ? Math.max.apply(null, s.eruptionMaxRReached).toFixed(0) : "-";
+    var coverageFrac = paddleWidth(s) / Math.PI; // 【指示書16 作業2】角度被覆率＝弧長/軌道円周
     hudEl.textContent =
       "経過時間      : " + s.elapsedSec.toFixed(1) + "s\n" +
       "床/穴         : " + (s.holeOpened ? ("穴 r=" + s.currentHoleR.toFixed(0) + "px（上限" + s.config.holeRMax.toFixed(0) + "px）") : "床（未破壊）") + "\n" +
       "壁ダメージ(累積破壊数): " + s.wallDamage + "\n" +
+      "軌道半径/角度被覆率: " + s.config.paddleOrbitR.toFixed(0) + "px（比" + s.config.paddleOrbitRRatio.toFixed(2)
+        + "） / " + (coverageFrac * 100).toFixed(1) + "%\n" +
       "パドル段      : " + fmtStages(s) + "\n" +
       "球側効果残り  : " + fmtBallEffects(s) + "\n" +
       "WKN残り時間   : " + (s.weakenRemainingSec > 0 ? s.weakenRemainingSec.toFixed(1) + "s" : "(なし)") + "\n" +
@@ -1323,8 +1380,58 @@
     rafId = requestAnimationFrame(loop);
   }
 
+  // 【指示書16 作業1】Pointer Lock相対移動化。
+  // movementX→パドル角度増分への純粋な変換（テスト用にwindow.__calibTestへも公開）。
+  function relativeAngleDelta(movementXPx, sensitivityDegPerPx) {
+    return movementXPx * sensitivityDegPerPx * Math.PI / 180;
+  }
+  function wrapAngle(a) {
+    var twoPi = Math.PI * 2;
+    return ((a % twoPi) + twoPi) % twoPi;
+  }
+  function updateLockOverlay() {
+    var shouldShow = controlModeSelect.value === "relative" && pointerLockSupported
+      && document.pointerLockElement !== canvas && !!state && running && !paused;
+    lockOverlayEl.classList.toggle("show", shouldShow);
+  }
+  function setControlMode(mode) {
+    controlModeSelect.value = mode;
+    if (mode !== "relative" && document.pointerLockElement === canvas) {
+      document.exitPointerLock();
+    }
+    updateLockOverlay();
+  }
+  if (!pointerLockSupported) {
+    // 【指示書16 作業1】非対応時は絶対へ自動フォールバック（相対オプションは選択不可にする）
+    var relOpt = controlModeSelect.querySelector('option[value="relative"]');
+    if (relOpt) relOpt.disabled = true;
+    setControlMode("absolute");
+  }
+  controlModeSelect.addEventListener("change", function () {
+    setControlMode(controlModeSelect.value);
+  });
+  canvas.addEventListener("click", function () {
+    if (controlModeSelect.value === "relative" && pointerLockSupported
+        && document.pointerLockElement !== canvas) {
+      canvas.requestPointerLock();
+    }
+  });
+  document.addEventListener("pointerlockchange", function () {
+    updateLockOverlay();
+  });
+  document.addEventListener("pointerlockerror", function () {
+    // 【指示書16 作業1】取得拒否時は絶対へ自動フォールバック
+    setControlMode("absolute");
+  });
   canvas.addEventListener("mousemove", function (ev) {
     if (!state) return;
+    if (controlModeSelect.value === "relative") {
+      // ロック未取得（解除中含む）は「クリックで操作再開」表示のまま、角度更新をしない
+      if (document.pointerLockElement !== canvas) return;
+      var sens = state.config ? state.config.pointerLockSensitivityDegPerPx : parseFloat(sliders.pointerLockSensitivity.value);
+      state.pointerAngle = wrapAngle(state.pointerAngle + relativeAngleDelta(ev.movementX, sens));
+      return;
+    }
     var rect = canvas.getBoundingClientRect();
     var mx = (ev.clientX - rect.left) * (CW / rect.width);
     var my = (ev.clientY - rect.top) * (CH / rect.height);
@@ -1347,6 +1454,7 @@
     pauseBtn.textContent = "一時停止";
     jsonOutEl.value = "";
     rafId = requestAnimationFrame(loop);
+    updateLockOverlay(); // 【指示書16 作業1】相対移動モードなら「クリックで操作再開」を表示
   });
 
   pauseBtn.addEventListener("click", function () {
@@ -1354,6 +1462,7 @@
     paused = !paused;
     pauseBtn.textContent = paused ? "再開" : "一時停止";
     if (!paused) { lastT = null; rafId = requestAnimationFrame(loop); }
+    updateLockOverlay();
   });
 
   endBtn.addEventListener("click", function () {
@@ -1362,6 +1471,7 @@
     startBtn.disabled = false;
     pauseBtn.disabled = true;
     endBtn.disabled = true;
+    updateLockOverlay(); // running=falseになったため非表示化
 
     var s = state;
     var pendingUnresolved = 0;
@@ -1398,7 +1508,9 @@
       ball_count_max: s.ballCountMax,
       ball_count_mean: s.ballCountSamples ? Number((s.ballCountSum / s.ballCountSamples).toFixed(3)) : 0,
       ball_count_overflow_frac: s.ballCountSamples ? Number((s.ballCountOverflowSamples / s.ballCountSamples).toFixed(4)) : 0,
-      ball_count_overflow_threshold: BALL_COUNT_OVERFLOW_THRESHOLD
+      ball_count_overflow_threshold: BALL_COUNT_OVERFLOW_THRESHOLD,
+      // 【指示書16 作業2】角度被覆率（穴上キャンプ自明化の監視用。セッション終了時点の値）
+      paddle_angular_coverage_frac: Number((paddleWidth(s) / Math.PI).toFixed(4))
     };
     jsonOutEl.value = JSON.stringify(out, null, 2);
   });
@@ -1417,6 +1529,12 @@
                           paddlePos: paddlePos, blockCenter: blockCenter, PIERCE_HITS: PIERCE_HITS,
                           FLOOR_BREAK_RADIUS: FLOOR_BREAK_RADIUS,
                           recomputeGeometry: recomputeGeometry, fitBoardR: fitBoardR,
+                          paddleWidth: paddleWidth,
+                          relativeAngleDelta: relativeAngleDelta, wrapAngle: wrapAngle,
+                          setControlMode: setControlMode,
+                          getControlMode: function () { return controlModeSelect.value; },
+                          isLockOverlayShown: function () { return lockOverlayEl.classList.contains("show"); },
+                          updateHud: updateHud,
                           getGeometry: function () {
                             return { CX: CX, CY: CY, CW: CW, CH: CH, BOARD_R: BOARD_R,
                                      BALL_R: BALL_R, RING_DEFS: RING_DEFS, BLOCK_COLS: BLOCK_COLS,
