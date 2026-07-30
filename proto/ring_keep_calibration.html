@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書16 操作系是正（Pointer Lock相対移動とパドル軌道半径較正）</title>
+<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書17 操作系是正・第2次（キーボード操作と壁反射の接線減衰）</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -87,7 +87,14 @@
   トグルで残置し、Pointer Lock非対応・取得拒否時は自動的にそちらへフォールバックする。
   パドル軌道半径は盤面比の較正スライダー化し、壁反射球への反応猶予と噴出迎撃猶予の
   トレードオフを探索できるようにした。角度被覆率（穴上キャンプ自明化の監視用）を
-  HUD・出力JSONへ追加した。
+  HUD・出力JSONへ追加した。<br>
+  <strong>指示書17で操作系是正・第2次（キーボード操作追加と壁反射の接線減衰）。</strong>
+  マッチの較正プレイ所見2件（①パドルをキーボードでも操作したい②球が60度反射の
+  星型軌道に入り続けパドルへ届かない）への対処。←/→・A/Dによるパドル回転を
+  マウス操作と併用可能な第3の入力として追加した（回転速度スライダー新設）。
+  壁帯反射時に接線速度成分へ減衰係数k（既定0.85・k=1.0=従来と完全一致）を乗算し、
+  角運動量の保存を意図的に破ることで、接線優位な球が有限回のバウンドで必ず
+  パドル軌道半径まで降りてくるようにした（パドル反射・穴・越境処理には未適用）。
 </div>
 
 <div class="layout">
@@ -149,8 +156,8 @@
     </fieldset>
 
     <fieldset>
-      <legend>操作方式（指示書16 作業1・新設）</legend>
-      <label class="slider-row">方式
+      <legend>操作方式（指示書16 作業1・指示書17 作業1）</legend>
+      <label class="slider-row">方式（マウス）
         <select id="controlMode" style="width:100%">
           <option value="relative">相対移動（Pointer Lock・既定）</option>
           <option value="absolute">絶対角追従（従来方式）</option>
@@ -160,6 +167,18 @@
       <label class="slider-row">感度(度/px)（新設）
         <input type="range" id="pointerLockSensitivity" min="0.1" max="1.5" step="0.05" value="0.5">
         <span id="pointerLockSensitivityVal"></span>
+      </label>
+      <label class="slider-row">キーボード回転速度(度/秒)（指示書17・新設）
+        <input type="range" id="keyboardRotationSpeed" min="30" max="450" step="10" value="200">
+        <span id="keyboardRotationSpeedVal"></span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>壁反射の接線減衰（指示書17 作業2・案A・新設）</legend>
+      <label class="slider-row">減衰係数k
+        <input type="range" id="wallTangentialDamping" min="0.50" max="1.00" step="0.01" value="0.85">
+        <span id="wallTangentialDampingVal"></span>
       </label>
     </fieldset>
 
@@ -428,6 +447,8 @@
     gravityAccel: document.getElementById("gravityAccel"),
     paddleOrbitR: document.getElementById("paddleOrbitR"),
     pointerLockSensitivity: document.getElementById("pointerLockSensitivity"),
+    keyboardRotationSpeed: document.getElementById("keyboardRotationSpeed"),
+    wallTangentialDamping: document.getElementById("wallTangentialDamping"),
     holeRInitial: document.getElementById("holeRInitial"),
     holeRGrowth: document.getElementById("holeRGrowth"),
     holeRMax: document.getElementById("holeRMax"),
@@ -455,6 +476,8 @@
     gravityAccel: document.getElementById("gravityAccelVal"),
     paddleOrbitR: document.getElementById("paddleOrbitRVal"),
     pointerLockSensitivity: document.getElementById("pointerLockSensitivityVal"),
+    keyboardRotationSpeed: document.getElementById("keyboardRotationSpeedVal"),
+    wallTangentialDamping: document.getElementById("wallTangentialDampingVal"),
     holeRInitial: document.getElementById("holeRInitialVal"),
     holeRGrowth: document.getElementById("holeRGrowthVal"),
     holeRMax: document.getElementById("holeRMaxVal"),
@@ -491,6 +514,11 @@
       paddleOrbitRRatio: paddleOrbitRRatio,
       pointerLockSensitivityDegPerPx: parseFloat(sliders.pointerLockSensitivity.value),
       controlMode: controlModeSelect.value,
+      // 【指示書17 作業1】キーボード回転速度（度/秒スライダー→内部はrad/sで保持）
+      keyboardRotationSpeedDegPerSec: parseFloat(sliders.keyboardRotationSpeed.value),
+      keyboardRotationSpeedRadPerSec: parseFloat(sliders.keyboardRotationSpeed.value) * Math.PI / 180,
+      // 【指示書17 作業2】壁帯反射の接線減衰係数k（k=1.0=無減衰=改修前と一致）
+      wallTangentialDamping: parseFloat(sliders.wallTangentialDamping.value),
       holeRInitial: parseFloat(sliders.holeRInitial.value),
       holeRGrowth: parseFloat(sliders.holeRGrowth.value),
       holeRMax: parseFloat(sliders.holeRMax.value),
@@ -592,6 +620,8 @@
     sliderVals.gravityAccel.textContent = c.gravityAccel.toFixed(0);
     sliderVals.paddleOrbitR.textContent = c.paddleOrbitRRatio.toFixed(2) + "（" + c.paddleOrbitR.toFixed(0) + "px）";
     sliderVals.pointerLockSensitivity.textContent = c.pointerLockSensitivityDegPerPx.toFixed(2) + "°/px";
+    sliderVals.keyboardRotationSpeed.textContent = c.keyboardRotationSpeedDegPerSec.toFixed(0) + "°/s";
+    sliderVals.wallTangentialDamping.textContent = c.wallTangentialDamping.toFixed(2);
     sliderVals.holeRInitial.textContent = c.holeRInitial.toFixed(0) + "px";
     sliderVals.holeRGrowth.textContent = c.holeRGrowth.toFixed(0) + "px";
     sliderVals.holeRMax.textContent = c.holeRMax.toFixed(0) + "px";
@@ -646,6 +676,7 @@
 
       blocks: [],
       wallDamage: 0,
+      wallBounceTotal: 0, // 【指示書17 作業2】壁帯反射（接線減衰の適用回数）テレメトリ
 
       drops: [], // 落下アイテムカプセル {x,y, type, arriving(bool)}
       ballEffects: {},
@@ -721,6 +752,29 @@
     var rel = angleDiff(b.aStart, angle);
     if (rel < 0) rel += Math.PI * 2;
     return rel >= -angPad && rel <= span + angPad;
+  }
+
+  // 【指示書17 作業2・案A】壁帯反射の接線減衰。
+  // 現行の壁帯反射は円の法線近似（ball自身の角度位置=cos/sin(angle)を法線とする）を
+  // ブロックのどの面に当たったかによらず一律に用いており、これは鏡面反射（半径成分の
+  // 反転・接線成分の保存）そのものである。接線成分保存は中心まわりの角運動量保存を
+  // 意味し、接線優位（60度入射相当）の球は重力の強弱によらず永久に中心へ近づけない
+  // （診断結果。報告書§2参照）。半径成分は従来どおり反転のみ、接線成分にのみ減衰係数
+  // k（k=1.0で従来と完全一致）を乗算することで、角運動量を意図的に単調減少させる。
+  var MIN_BALL_SPEED_AFTER_WALL_DAMPING = 30; // 【指示書17 作業2】速度下限の保護（裁量・報告書§7参照）
+  function reflectOffWallBand(ball, angle, k) {
+    var nx = Math.cos(angle), ny = Math.sin(angle);
+    var dot = ball.vx * nx + ball.vy * ny;
+    var radialX = dot * nx, radialY = dot * ny;
+    var tanX = ball.vx - radialX, tanY = ball.vy - radialY;
+    ball.vx = -radialX + k * tanX;
+    ball.vy = -radialY + k * tanY;
+    var speed = norm2(ball.vx, ball.vy);
+    var floor = MIN_BALL_SPEED_AFTER_WALL_DAMPING * GEOMETRY_SCALE;
+    if (speed > 0 && speed < floor) {
+      var scale = floor / speed;
+      ball.vx *= scale; ball.vy *= scale;
+    }
   }
 
   function paddlePos(s) {
@@ -1007,6 +1061,14 @@
     s.paddle.halfArc = paddleWidth(s);
     var speedMul = 1 + 0.35 * s.stages.speed;
     var maxStep = PADDLE_ANGULAR_SPEED_BASE * speedMul * dt;
+    // 【指示書17 作業1】キーボード操作：マウス操作（相対/絶対いずれのモードでも）と
+    // 常時併用可能な第3の入力。目標角（pointerAngle）へ直接加算し、下のクランプ済み
+    // 追従ロジックへそのまま合流させる（マウスの相対移動と同じ経路を共有する設計）。
+    var kbDir = (keyRightDown ? 1 : 0) - (keyLeftDown ? 1 : 0); // 同時押しは0（相殺）
+    if (kbDir !== 0) {
+      if (s.pointerAngle == null) s.pointerAngle = s.paddle.angle;
+      s.pointerAngle = wrapAngle(s.pointerAngle + kbDir * c.keyboardRotationSpeedRadPerSec * dt);
+    }
     if (s.pointerAngle != null) {
       var diff = angleDiff(s.paddle.angle, s.pointerAngle);
       if (Math.abs(diff) > maxStep) diff = maxStep * Math.sign(diff);
@@ -1111,9 +1173,8 @@
             pierce = false;
           } else {
             hitBlock(s, blk2, 1);
-            var nrx2 = Math.cos(angle), nry2 = Math.sin(angle);
-            var dot2 = ball.vx * nrx2 + ball.vy * nry2;
-            ball.vx -= 2 * dot2 * nrx2; ball.vy -= 2 * dot2 * nry2;
+            reflectOffWallBand(ball, angle, s.config.wallTangentialDamping);
+            s.wallBounceTotal++;
             consumedThisFrame = true;
           }
         }
@@ -1423,6 +1484,19 @@
     // 【指示書16 作業1】取得拒否時は絶対へ自動フォールバック
     setControlMode("absolute");
   });
+
+  // 【指示書17 作業1】キーボード操作（←/→・A/D固定割当。画面位置に応じた左右反転はしない）。
+  // ←(A)=反時計回り＝角度を減算、→(D)=時計回り＝角度を加算（step()内でkeyboardRotationSpeed
+  // を用いて実際に加算する。ここでは押下状態の追跡のみ）。
+  var keyLeftDown = false, keyRightDown = false;
+  window.addEventListener("keydown", function (ev) {
+    if (ev.code === "ArrowLeft" || ev.code === "KeyA") keyLeftDown = true;
+    else if (ev.code === "ArrowRight" || ev.code === "KeyD") keyRightDown = true;
+  });
+  window.addEventListener("keyup", function (ev) {
+    if (ev.code === "ArrowLeft" || ev.code === "KeyA") keyLeftDown = false;
+    else if (ev.code === "ArrowRight" || ev.code === "KeyD") keyRightDown = false;
+  });
   canvas.addEventListener("mousemove", function (ev) {
     if (!state) return;
     if (controlModeSelect.value === "relative") {
@@ -1492,6 +1566,7 @@
       item_missed_pickup_count: s.missedPickups,
       final_paddle_stages: s.stages,
       final_wall_damage_block_count: s.wallDamage,
+      wall_bounce_total: s.wallBounceTotal,
       weaken_active_sec_total: Number(s.weakenActiveSecAccum.toFixed(2)),
       laser_shots_total: s.laserShotsTotal,
       laser_wall_damage_total: s.laserWallDamageTotal,
@@ -1535,6 +1610,9 @@
                           getControlMode: function () { return controlModeSelect.value; },
                           isLockOverlayShown: function () { return lockOverlayEl.classList.contains("show"); },
                           updateHud: updateHud,
+                          getKeyState: function () { return { left: keyLeftDown, right: keyRightDown }; },
+                          reflectOffWallBand: reflectOffWallBand,
+                          MIN_BALL_SPEED_AFTER_WALL_DAMPING: MIN_BALL_SPEED_AFTER_WALL_DAMPING,
                           getGeometry: function () {
                             return { CX: CX, CY: CY, CW: CW, CH: CH, BOARD_R: BOARD_R,
                                      BALL_R: BALL_R, RING_DEFS: RING_DEFS, BLOCK_COLS: BLOCK_COLS,
