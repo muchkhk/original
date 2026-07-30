@@ -150,6 +150,24 @@ DEFAULT_WEAKEN_MULTIPLIER = 2.0
 # ため、既定値は0.0（未指定なら完全に無効＝指示書06までの挙動と後方互換）。
 DEFAULT_LASER_DPS_PER_STAGE = 0.0
 
+# 【指示書09】貫通（pierce）は他の球側効果（ball_effect_ticks＝時限）から分離し、
+# 「ブロックに3回ヒットするまで持続」の固定ヒット数に変更した（設計チャット22 #4）。
+# 抽象シムでは1tick=1ラリー=1ブロックヒットなので、pierceのball_effectの
+# ticks_leftをPIERCE_HITS=3で初期化することが「3ヒット持続」に対応する
+# （explode/accelは従来どおりball_effect_ticks＝2で初期化）。3は保護数字であり、
+# 掃引で基準を通すために短縮してはならない。
+PIERCE_HITS = 3
+
+# 【指示書09】アイテム壁（確定ドロップ・ブロック）：各陣に固定数のアイテム壁を置き、
+# 破壊時に必ず1アイテム（9種均等）がドロップする（Ricochet系Power-Up Brick方式の
+# 併存型。設計チャット22 #5）。抽象シムにはブロックの空間構造が無いため、
+# 「各陣の破壊進行に伴い確定ドロップがk回発生する」を時間連動で近似する
+# （k=item_wall_bricks個/セッションを、SESSION_TICKS窓の中で等間隔に発火。
+# 相対的な理由は報告書§で明記）。item_wall_bricks=0（既定）なら完全に無効
+# （指示書08までの挙動と後方互換）。
+DEFAULT_ITEM_WALL_BRICKS = 0
+ITEM_WALL_WINDOW_TICKS = 900  # 「1セッション相当」窓（item_sim.SESSION_TICKSと一致）
+
 
 def wall_damage_for_level(level, has_looped, slope_kind):
     if level < 1:
@@ -164,7 +182,7 @@ def wall_damage_for_level(level, has_looped, slope_kind):
 def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                     f_max=F_MAX, g_max=G_MAX, slope_kind=None, checkpoints=None,
                     paddle_catch_rate=PADDLE_CATCH_RATE, wall_targets=None,
-                    item_system=None):
+                    item_system=None, _debug_record_first_pierce=False):
     """1試行を実行し、Q1〜Q3に必要な生データを辞書で返す。
 
     slope_kind=None の場合、強化壁の集計は一切行わない（指示書01時点の
@@ -183,6 +201,7 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         "magnet_reduction_per_stage": float,    # 省略可(デフォルトあり)
         "laser_dps_per_stage": float,           # 省略可(デフォルト0.0=無効)
         "weaken_multiplier": float,             # 省略可(デフォルト2.0)
+        "item_wall_bricks": int,                # 省略可(デフォルト0=無効)。指示書09：アイテム壁
       }
     球側3種（貫通・爆発・加速）は、このモデルに空間構造（隣接ブロック・弾道）が
     無いため、いずれも「このヒットのHIT_DECREMENTにball_effect_magnitudeを
@@ -259,6 +278,15 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                                             DEFAULT_MAGNET_MISS_REDUCTION_PER_STAGE)
         laser_dps_per_stage = item_system.get("laser_dps_per_stage", DEFAULT_LASER_DPS_PER_STAGE)
         weaken_multiplier = item_system.get("weaken_multiplier", DEFAULT_WEAKEN_MULTIPLIER)
+        item_wall_bricks = item_system.get("item_wall_bricks", DEFAULT_ITEM_WALL_BRICKS)
+        # 【指示書09】アイテム壁の確定ドロップ発火tick（SESSION_TICKS窓内で等間隔）。
+        # k個のbrickをwindowの (i+1)/(k+1) 位置に置く（k=2なら300/600tick）。
+        if item_wall_bricks > 0:
+            guaranteed_offsets = set(
+                round(ITEM_WALL_WINDOW_TICKS * (i + 1) / (item_wall_bricks + 1))
+                for i in range(item_wall_bricks))
+        else:
+            guaranteed_offsets = set()
 
         # world(=プレイヤー)ごとの状態
         paddle_stages = [{it: 0 for it in ITEM_PADDLE_SIDE} for _ in range(N)]
@@ -271,8 +299,41 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         weaken_active_ticks = [0] * N          # weaken稼働tick数（B3には含めない参考値）
         item_pickup_miss_total = [0] * N       # magnet裁量導入：取りこぼし参考カウンタ
         laser_wall_damage_total_per_world = [0.0] * N  # レーザー由来の壁ダメージ内訳（参考値）
+        guaranteed_drops_fired_per_world = [0] * N  # 【指示書09】アイテム壁の確定ドロップ発火数（参考・検品用）
+        debug_first_pierce = [None]  # 【指示書09】検品用：最初にpierceへ付与したticks_left（_debug_record_first_pierce時のみ）
         # 追加測定(a)の球涸れ(STARVE)は、既存のsimultaneous_counts（下記で常に記録）を
         # 呼び出し側(item_sim.py)で集計すれば求まるため、ここでは重複して持たない。
+
+        # 【指示書09】ドロップの解決を1箇所へ集約する（ランダム落下・アイテム壁の確定
+        # ドロップの両方から呼ぶ）。RNG消費順は従来のランダム落下パスと同一
+        # （抽選→取りこぼし判定→効果適用）を保つため、item_wall_bricks=0（既定）なら
+        # 確定ドロップは一切発火せず、指示書08までとbit-for-bit互換になる。
+        def resolve_pickup(w, item_type, ball_for_effect, tick):
+            """抽選済みのitem_typeについて、取りこぼし判定→（成功時）効果適用を行う。"""
+            magnet_stage = paddle_stages[w]["magnet"]
+            effective_miss_rate = max(
+                MIN_ITEM_PICKUP_MISS_RATE, pickup_miss_base - magnet_reduction * magnet_stage)
+            if rng.random() < effective_miss_rate:
+                item_pickup_miss_total[w] += 1
+                return
+            if item_type in ITEM_PADDLE_SIDE:
+                prev_stage = paddle_stages[w][item_type]
+                if prev_stage < PADDLE_MAX_STAGE:
+                    paddle_stages[w][item_type] += 1
+                    paddle_stack[w].append(item_type)
+                    if lost_ticks_queue[w][item_type]:
+                        t_lost = lost_ticks_queue[w][item_type].pop(0)
+                        recovery_times_per_world[w].append(tick - t_lost)
+            elif item_type in ITEM_FIELD_SIDE:
+                weaken_ticks_left[w] = ball_effect_ticks
+            else:
+                # 球側：貫通は3ヒット固定（指示書09・保護数字）、他はball_effect_ticks。
+                duration = PIERCE_HITS if item_type == "pierce" else ball_effect_ticks
+                if ball_for_effect is not None:
+                    ball_for_effect["ball_effect"] = {"type": item_type, "ticks_left": duration}
+                    if (_debug_record_first_pierce and item_type == "pierce"
+                            and debug_first_pierce[0] is None):
+                        debug_first_pierce[0] = duration
 
     def spawn(world, tick):
         nonlocal next_ball_id
@@ -345,6 +406,18 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                         wall_target_ticks[wall_targets_sorted[wall_target_idx]] = tick
                         wall_target_idx += 1
 
+            # 指示書09：アイテム壁の確定ドロップ。SESSION_TICKS窓の等間隔offsetで、
+            # world1つあたり1回ずつ「必ず1アイテムがドロップ」する（9種均等抽選）。
+            # ドロップ自体は確定だが、取りこぼし（pickup_miss）はランダム落下と同様に
+            # かかる（アイテム壁は「落ちること」を保証するが「拾えること」は保証しない）。
+            # 球側効果はそのworldの先頭の球へ付与する（球が居なければ付与先が無く消える）。
+            if guaranteed_offsets and (tick % ITEM_WALL_WINDOW_TICKS) in guaranteed_offsets:
+                for w in range(N):
+                    item_type = ITEM_ALL_TYPES[int(rng.random() * len(ITEM_ALL_TYPES))]
+                    ball_for_effect = balls_by_world[w][0] if balls_by_world[w] else None
+                    guaranteed_drops_fired_per_world[w] += 1
+                    resolve_pickup(w, item_type, ball_for_effect, tick)
+
         # --- 各球のラリー処理 ---
         # 重要：このtickで跨いだ球を、跨いだ先のworldへ即座に混ぜてはいけない。
         # worldをw=0..N-1の順で処理するため、即座に混ぜると「跨いだ直後にもう一度
@@ -372,29 +445,11 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
 
                 # 指示書05：アイテムドロップ判定（ブロック接触1回につき1回）
                 # 【指示書07】9種均等抽選（10エントリ・random再抽選との等価性はselfcheckで検算）。
-                # magnet裁量導入：抽選後にpickup_miss判定を挟み、外れたら何も起きない
-                # （取りこぼし。段数はmagnet自身の既存段数で決まる＝自分の取得判定にも掛かる）。
+                # 【指示書09】抽選→取りこぼし判定→効果適用はresolve_pickup()へ集約した
+                # （アイテム壁の確定ドロップと同一経路。RNG消費順は従来と同一）。
                 if item_on and rng.random() < drop_rate:
                     item_type = ITEM_ALL_TYPES[int(rng.random() * len(ITEM_ALL_TYPES))]
-                    magnet_stage = paddle_stages[w]["magnet"]
-                    effective_miss_rate = max(
-                        MIN_ITEM_PICKUP_MISS_RATE,
-                        pickup_miss_base - magnet_reduction * magnet_stage)
-                    if rng.random() < effective_miss_rate:
-                        item_pickup_miss_total[w] += 1
-                    elif item_type in ITEM_PADDLE_SIDE:
-                        prev_stage = paddle_stages[w][item_type]
-                        if prev_stage < PADDLE_MAX_STAGE:
-                            paddle_stages[w][item_type] += 1
-                            paddle_stack[w].append(item_type)
-                            if lost_ticks_queue[w][item_type]:
-                                t_lost = lost_ticks_queue[w][item_type].pop(0)
-                                recovery_times_per_world[w].append(tick - t_lost)
-                    elif item_type in ITEM_FIELD_SIDE:
-                        # weaken：場に属する時限効果（ball_effect_ticksに連動。捨象・報告書参照）
-                        weaken_ticks_left[w] = ball_effect_ticks
-                    else:
-                        b["ball_effect"] = {"type": item_type, "ticks_left": ball_effect_ticks}
+                    resolve_pickup(w, item_type, b, tick)
 
                 # 指示書02：強化壁ダメージ（このヒットの時点でのlevelを使う。
                 # このtickで上昇跨ぎするかどうかは、このヒットより後に決まる
@@ -521,6 +576,9 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
             weaken_active_ticks[w] / ticks for w in range(N)]                # 参考値（B3に含めない）
         result["item_pickup_miss_total_per_world"] = item_pickup_miss_total  # magnet裁量：参考値
         result["laser_wall_damage_total_per_world"] = laser_wall_damage_total_per_world  # 参考値
+        result["guaranteed_drops_fired_per_world"] = guaranteed_drops_fired_per_world  # 指示書09：アイテム壁
+        if _debug_record_first_pierce:
+            result["debug_first_pierce_ticks_left"] = debug_first_pierce[0]
     return result
 
 

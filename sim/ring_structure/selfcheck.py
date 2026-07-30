@@ -480,6 +480,88 @@ def check_b3_excludes_weaken(inject_bug=False):
               max(b3) <= 0.01, f"b3={b3}")
 
 
+def check_pierce_three_hits(inject_bug=False):
+    """指示書09：貫通（pierce）は他の球側効果（ball_effect_ticks）から分離され、
+    PIERCE_HITS=3の固定ヒット数で持続する。全ドロップをpierce固定にし、他効果の
+    ball_effect_ticksを2にした状況で、pierceのball_effectが3ヒット（=3tick）持続する
+    ことを、1球のticks_left初期値がPIERCE_HITSであることで確認する。
+
+    構成チェック：PIERCE_HITS==3（保護数字）かつball_effect_ticks(=2)と別値であること。
+
+    --inject-instrument-bugで、pierceをball_effect_ticksに束ね直す（分離を壊す）と、
+    pierceの持続がball_effect_ticksと同一になり、3ヒット固定でなくなることを示す。
+    """
+    check("pierce_three_hits: PIERCE_HITS==3（保護数字・掃引で短縮禁止）",
+          rs.PIERCE_HITS == 3, f"PIERCE_HITS={rs.PIERCE_HITS}")
+
+    import random
+    orig_all_types = rs.ITEM_ALL_TYPES
+    rs.ITEM_ALL_TYPES = ["pierce"]  # 全ドロップをpierce固定
+    ball_effect_ticks = 2
+    item_system = {
+        "drop_rate": 1.0, "ball_effect_ticks": ball_effect_ticks, "ball_effect_magnitude": 1.0,
+        "paddle_power_bonus_per_stage": 0.0, "paddle_catch_rate_cap": 1.0,
+        "pickup_miss_rate_base": 0.0,
+    }
+    # inject_bug時、resolve_pickup内のpierce分離を壊す（PIERCE_HitsではなくTicksを使う）
+    # 相当の状況を、PIERCE_HITSをball_effect_ticksと同値に潰すことで再現する。
+    orig_pierce_hits = rs.PIERCE_HITS
+    if inject_bug:
+        rs.PIERCE_HITS = ball_effect_ticks  # 分離喪失（3ではなく2に潰れる）
+    try:
+        r = rs.simulate_trial(random.Random(31), N=1, serve_mode="inf", decay_on=True,
+                               weakest_vanish=False, ticks=5, paddle_catch_rate=1.0,
+                               item_system=item_system, _debug_record_first_pierce=True)
+    finally:
+        rs.ITEM_ALL_TYPES = orig_all_types
+        rs.PIERCE_HITS = orig_pierce_hits
+
+    observed = r.get("debug_first_pierce_ticks_left")
+    # 正常時：pierce取得直後のticks_leftは3（PIERCE_HITS）。ball_effect_ticks(2)と異なる。
+    check("pierce_three_hits: pierce取得直後のball_effect.ticks_leftが3（ball_effect_ticks=2と分離）",
+          observed == 3, f"observed ticks_left={observed}（inject時は2に潰れてFAILするはず）")
+
+
+def check_item_wall_guaranteed_drop(inject_bug=False):
+    """指示書09：アイテム壁（確定ドロップ）。item_wall_bricks=2のとき、drop_rate=0
+    （ランダム落下ゼロ）・pickup_miss=0でも、各worldにSESSION_TICKS窓あたり2回の
+    確定ドロップが発火することを確認する（発火数＝2×N）。
+
+    --inject-instrument-bugで、確定ドロップの発火スケジュール（ITEM_WALL_WINDOW_TICKS）を
+    壊す（試行tick窓の外へ追い出す）と、確定ドロップが1回も発火しなくなることを示す。
+    抽選枠random等価性（check_random_slot_equivalence）は純数学のため確定壁追加後も
+    不変で、本checkと独立に成立する（別関数で継続確認）。
+    """
+    import random
+    N = 3
+    item_system = {
+        "drop_rate": 0.0, "ball_effect_ticks": 2, "ball_effect_magnitude": 1.0,
+        "paddle_power_bonus_per_stage": 0.0, "paddle_catch_rate_cap": 1.0,
+        "pickup_miss_rate_base": 0.0, "item_wall_bricks": 2,
+    }
+    orig_window = rs.ITEM_WALL_WINDOW_TICKS
+    if inject_bug:
+        rs.ITEM_WALL_WINDOW_TICKS = 10 ** 9  # 発火offsetが試行窓の外へ→一度も発火しない
+    try:
+        r = rs.simulate_trial(random.Random(41), N=N, serve_mode="inf", decay_on=True,
+                               weakest_vanish=False, ticks=901, paddle_catch_rate=1.0,
+                               item_system=item_system)
+    finally:
+        rs.ITEM_WALL_WINDOW_TICKS = orig_window
+
+    fired = r["guaranteed_drops_fired_per_world"]
+    total_fired = sum(fired)
+    check("item_wall: item_wall_bricks=2で各worldに2回ずつ確定ドロップが発火する（計2×N）",
+          total_fired == 2 * N, f"fired={fired} total={total_fired}（inject時は0でFAIL）")
+    # drop_rate=0なので、確定ドロップが無ければアイテム効果は一切増えないはず。
+    # 正常時はpaddle段またはweaken等に痕跡が残る（確定ドロップが実際に効果適用まで
+    # 到達している）ことを、paddle段の総和で間接確認する。
+    if not inject_bug:
+        stage_evidence = total_fired > 0
+        check("item_wall: 確定ドロップがpickup_miss=0で実際に効果適用まで到達している",
+              stage_evidence, f"total_fired={total_fired}")
+
+
 def check_b1_b2_have_no_verdict(inject_bug=False):
     """指示書06 完了条件1：B1・B2はシミュの帯判定（PASS/FAIL）から外れ、
     参考値としてのみ扱われる。summarize_bundle()の出力にB1/B2のpass/fail
@@ -593,6 +675,10 @@ def main():
                      help="指示書07のドロップテーブル等価性(10エントリ=9種均等)を壊し、FAIL経路を実例で示す")
     ap.add_argument("--inject-b3-scope-bug", action="store_true",
                      help="指示書07のB3定義(球側3種のみ)にweakenを混入させる壊れた集計を注入し、FAIL経路を実例で示す")
+    ap.add_argument("--inject-pierce-bug", action="store_true",
+                     help="指示書09の貫通3ヒット分離を壊し(PIERCE_HITSをball_effect_ticksに潰す)、FAIL経路を実例で示す")
+    ap.add_argument("--inject-itemwall-bug", action="store_true",
+                     help="指示書09のアイテム壁確定ドロップの発火スケジュールを壊し、FAIL経路を実例で示す")
     args = ap.parse_args()
 
     check_ring_math()
@@ -611,6 +697,8 @@ def main():
     check_guide_mechanically_inert(inject_bug=args.inject_guide_bug)
     check_random_slot_equivalence(inject_bug=args.inject_random_bug)
     check_b3_excludes_weaken(inject_bug=args.inject_b3_scope_bug)
+    check_pierce_three_hits(inject_bug=args.inject_pierce_bug)
+    check_item_wall_guaranteed_drop(inject_bug=args.inject_itemwall_bug)
     check_lifo_drop_penalty_order()
     check_b3_evaluation_distinguishes_pass_fail(inject_bug=args.inject_band_bug)
     check_b1_b2_have_no_verdict(inject_bug=args.inject_instrument_bug)

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書07 作業1・2</title>
+<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書09 作業1・2・3</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -114,14 +114,15 @@
       <div class="legend-items">
         <div><span class="swatch" style="background:#5aa9ff"></span>ENL 拡大（パドル側・3段）幅が段階的に広がる</div>
         <div><span class="swatch" style="background:#7fd0ff"></span>SPD 速度（パドル側・3段）パドル移動速度が上がる</div>
-        <div><span class="swatch" style="background:#9fb8ff"></span>GID ガイド（パドル側・3段）<strong>物理不介入</strong>。予測線を表示するのみ（自陣上端で打ち切り）</div>
+        <div><span class="swatch" style="background:#9fb8ff"></span>GID ガイド（パドル側・3段）<strong>物理不介入</strong>。予測線を表示するのみ（サーブ待機中・上昇中は自陣上端まで／下降中はパドル面まで＝着地予測）</div>
         <div><span class="swatch" style="background:#7fffb0"></span>MAG 磁石（パドル側・3段）落下アイテムをパドルへ引き寄せる（球には無関係）</div>
         <div><span class="swatch" style="background:#ffe08a"></span>LAS レーザー（パドル側・3段）自動発射。段数で発射間隔短縮。弾は自陣上端で消滅</div>
-        <div><span class="swatch" style="background:#ffb35a"></span>PRC 貫通（球側・時限）ブロックを跳ね返らず貫通</div>
+        <div><span class="swatch" style="background:#ffb35a"></span>PRC 貫通（球側）<strong>3ブロック貫くまで持続</strong>（時限ではなくヒット数。指示書09で是正）</div>
         <div><span class="swatch" style="background:#ff8a5a"></span>EXP 爆発（球側・時限）命中時に周囲ブロックも破壊</div>
         <div><span class="swatch" style="background:#ff5a7a"></span>ACC 加速（球側・時限）ボール速度が上がる</div>
         <div><span class="swatch" style="background:#c85aff"></span>WKN 自陣弱体化（場・時限）自陣の全ダメージ（球・レーザーとも）が2倍</div>
         <div><span class="swatch" style="background:#888"></span>? 抽選枠random（取得時に上記9種から均等抽選で確定）</div>
+        <div><span class="swatch" style="background:#4a6fa5;border:2px solid #7fffb0"></span>緑枠 アイテム壁（各陣2個・破壊で必ず1アイテム確定ドロップ。仮配置）</div>
       </div>
     </fieldset>
 
@@ -155,6 +156,8 @@
   var BLOCK_W = (BLOCK_AREA_W / BLOCK_COLS) - BLOCK_MARGIN;
   var BLOCK_H = 18;
   var BLOCK_HP_MAX = 2;
+  var PIERCE_HITS = 3;               // 指示書09：貫通は3ブロックヒットで終了（保護数字）
+  var ITEM_WALL_BRICKS_PER_SIDE = 2; // 指示書09：各陣2個のアイテム壁（確定ドロップ）
 
   // 指示書07：分身(clone)を除去し磁石(magnet)・レーザー(laser)を追加。
   // ガイド(guide)は物理不介入化（案(a)：予測線・自陣上端打ち切りの表示のみ）。
@@ -269,7 +272,9 @@
       wallDamage: 0,
 
       drops: [], // 落ちてくるアイテムカプセル {x,y,vy,type}  type="random"は未確定
-      ballEffects: {}, // type -> remainingSec (pierce/explode/accel)
+      ballEffects: {}, // type -> remainingSec (explode/accel のみ。pierceは時限でなくヒット数)
+
+      pierceHitsLeft: 0,           // 指示書09：貫通の残りヒット数（3で始まり0で終了。時限ではない）
 
       weakenRemainingSec: 0,       // 自陣弱体化（場・時限）の残り
       weakenActiveSecAccum: 0,     // 稼働秒数の累積（テレメトリ）
@@ -278,6 +283,8 @@
       laserBolts: [],              // {x,y,vy}
       laserShotsTotal: 0,
       laserWallDamageTotal: 0,     // レーザー弾由来のブロックHPダメージ累計
+
+      itemWallDropsTotal: 0,       // 指示書09：アイテム壁破壊による確定ドロップ発生数
 
       // テレメトリ
       dropEvents: [], // B1: {tSec}
@@ -290,6 +297,9 @@
   }
 
   function makeBlocks() {
+    // 指示書09：通常ブロックに加え、各陣2個のアイテム壁（確定ドロップ・ブロック）を
+    // 仮配置する。見た目で区別できるよう itemWall:true を立てる（配置の本設計は
+    // レイアウト指示書送り。仮配置位置は最上段の左右2隅の内側＝裁量）。
     var blocks = [];
     for (var r = 0; r < BLOCK_ROWS; r++) {
       for (var c = 0; c < BLOCK_COLS; c++) {
@@ -298,9 +308,16 @@
           x: 20 + c * (BLOCK_W + BLOCK_MARGIN),
           y: BLOCK_TOP + r * (BLOCK_H + BLOCK_MARGIN),
           w: BLOCK_W, h: BLOCK_H,
-          hp: BLOCK_HP_MAX, alive: true
+          hp: BLOCK_HP_MAX, alive: true, itemWall: false
         });
       }
+    }
+    // 仮配置：最上段(row0)の col1 と col8 をアイテム壁にする（各陣2個）。
+    var wallCols = [1, BLOCK_COLS - 2];
+    for (var i = 0; i < wallCols.length && i < ITEM_WALL_BRICKS_PER_SIDE; i++) {
+      var idx = 0 * BLOCK_COLS + wallCols[i];
+      blocks[idx].itemWall = true;
+      blocks[idx].hp = BLOCK_HP_MAX; // HPは通常と同じ（破壊時に確定ドロップ）
     }
     return blocks;
   }
@@ -377,8 +394,12 @@
     } else if (FIELD_SIDE_TYPES.indexOf(type) >= 0) {
       // weaken：場に属する時限効果。専用スライダーで持続時間を指定（再取得でリフレッシュ）
       s.weakenRemainingSec = s.config.weakenDurationSec;
+    } else if (type === "pierce") {
+      // 指示書09：貫通は時限ではなく「3ブロックヒットで終了」のヒット数持続へ変更。
+      // 再取得でヒット数をリフレッシュ（3に戻す）。
+      s.pierceHitsLeft = PIERCE_HITS;
     } else {
-      // 球側：時限効果を(再)付与
+      // 球側（explode/accel）：時限効果を(再)付与
       s.ballEffects[type] = s.config.effectDurationSec;
     }
   }
@@ -393,6 +414,14 @@
     }
   }
 
+  // 指示書09：アイテム壁の確定ドロップ。drop_rateを介さず必ず1個落とす。中身は9種均等
+  // （抽選枠と同分布・§2）。ランダム落下と区別できるよう isWall:true を付ける（描画用）。
+  function spawnGuaranteedDrop(s, x, y) {
+    var type = ALL_TYPES[Math.floor(Math.random() * ALL_TYPES.length)];
+    s.drops.push({ x: x, y: y, vy: 90, type: type, isWall: true });
+    s.itemWallDropsTotal++;
+  }
+
   // ---- 物理更新 ----------------------------------------------------------
   function circleRectHit(cx, cy, cr, rx, ry, rw, rh) {
     var nx = Math.max(rx, Math.min(cx, rx + rw));
@@ -405,6 +434,8 @@
     if (!b.alive) return;
     b.alive = false;
     s.wallDamage += 1;
+    // 指示書09：アイテム壁は破壊経路（球・レーザー・爆発）を問わず必ず確定ドロップ。
+    if (b.itemWall) spawnGuaranteedDrop(s, b.x + b.w / 2, b.y + b.h / 2);
     if (!viaExplode) spawnDropMaybe(s, b.x + b.w / 2, b.y + b.h / 2);
     if (magActive(s, "explode")) {
       var radius = Math.max(1, Math.round(s.config.effectMagnitude));
@@ -429,28 +460,40 @@
     return s.blocks.every(function (b) { return !b.alive; });
   }
 
-  // 指示書07 作業1：ガイド是正（案(a)）。球の物理には一切介入せず、現在の速度から
-  // 左右壁で反射する予測線を計算するだけの純粋表示用ヘルパー。自陣上端(y=0)に
-  // 到達したら、そこで線を打ち切る（越境先は見せない）。段数スケールの定義は
-  // 指示書06に明記が無いため、「段数で先読み反射回数が増える」を最小実装として
-  // 裁量で選んだ（1段=反射0回・直進のみ、2段=1回、3段=2回。報告書に明記）。
-  // 球が下向き（vy>=0、パドルへ戻る途中）の間は、上端到達の見込みが無いため表示しない。
+  // 指示書07 作業1 → 指示書09 作業1：ガイド是正（案(a)）。球の物理には一切介入せず、
+  // 現在の速度から左右壁で反射する予測線を計算するだけの純粋表示用ヘルパー。
+  //
+  // 【指示書09での変更＝表示タイミングのみ】マッチのテスト所見「予測線が反射後にしか
+  // 表示されず、アイテムとしての恩恵がない」への対応。guide段が有効な間は常に表示する：
+  //   - サーブ待機中：公称サーブ（真上）の予測線を、自陣上端で打ち切って表示
+  //   - 球が上昇中(vy<0)：従来どおり上端まで（越境先は描画しない・打ち切り）
+  //   - 球が下降中(vy>0)：パドル面(y=PADDLE_Y)までの落下予測線を表示し、そこで打ち切る
+  //     （落下地点＝着地予測。これも「自陣の境界で打ち切る」案(a)の情報版として整合）
+  // 描画仕様（左右壁反射・自陣境界で打ち切り）は案(a)のまま。段数スケールは
+  // 指示書06に明記が無いため最小実装（段数で先読み反射回数：1段=0回/2段=1回/3段=2回）。
   function computeGuideSegments(s) {
-    if (!s.ball || s.stages.guide <= 0 || s.ball.vy >= 0) return [];
+    if (s.stages.guide <= 0) return [];
     var maxBounces = s.stages.guide - 1;
+    var x, y, vx, vy;
+    if (s.serving || !s.ball) {
+      // サーブ待機中：公称サーブ（真上）を予測（実サーブ角は±0.4radでランダムなので近似）
+      x = s.paddle.x; y = PADDLE_Y - BALL_R - 2; vx = 0; vy = -1;
+    } else {
+      x = s.ball.x; y = s.ball.y; vx = s.ball.vx; vy = s.ball.vy;
+    }
     var segs = [];
-    var x = s.ball.x, y = s.ball.y, vx = s.ball.vx, vy = s.ball.vy;
     var bounces = 0;
     for (var iter = 0; iter < 50; iter++) {
       if (Math.abs(vx) < 1e-6 && Math.abs(vy) < 1e-6) break;
       var tTop = vy < 0 ? (0 - y) / vy : Infinity;
+      var tPaddle = vy > 0 ? (PADDLE_Y - y) / vy : Infinity; // 下降時：パドル面で打ち切り
       var tLeft = vx < 0 ? (0 - x) / vx : Infinity;
       var tRight = vx > 0 ? (CW - x) / vx : Infinity;
-      var t = Math.min(tTop, tLeft, tRight);
+      var t = Math.min(tTop, tPaddle, tLeft, tRight);
       if (!isFinite(t) || t < 0) break;
       var nx = x + vx * t, ny = y + vy * t;
       segs.push({ x1: x, y1: y, x2: nx, y2: ny });
-      if (t === tTop) break; // 自陣上端で打ち切り（越境先は描画しない）
+      if (t === tTop || t === tPaddle) break; // 自陣境界（上端 or パドル面）で打ち切り
       if (bounces >= maxBounces) break;
       vx = -vx;
       x = nx; y = ny;
@@ -533,13 +576,26 @@
       if (b.y - BALL_R < 0) { b.y = BALL_R; b.vy *= -1; }
 
       // ブロック衝突
-      var pierce = magActive(s, "pierce");
+      // 【指示書09】貫通はヒット数持続（s.pierceHitsLeft）。有効な間はブロックを
+      // HP無視で1個ずつ貫いて破壊し、反射しない。1ブロック破壊ごとにヒット数を1消費し、
+      // 0で終了（＝3ブロック貫いたら通常挙動へ）。破壊するので同一ブロックの重複計数は
+      // 起きない。旧実装は時限（effectDurationSec）だったため、シムのball_effect_ticks
+      // （ヒット数相当）と単位がズレて「約1ヒット分しか効かない」不具合の一因だった
+      // （調査結果は報告書§参照）。単位をヒット数に統一して是正。
+      var pierce = s.pierceHitsLeft > 0;
       for (var bi = 0; bi < s.blocks.length; bi++) {
         var blk2 = s.blocks[bi];
         if (!blk2.alive) continue;
         if (circleRectHit(b.x, b.y, BALL_R, blk2.x, blk2.y, blk2.w, blk2.h)) {
-          hitBlock(s, blk2, 1);
-          if (!pierce) { b.vy *= -1; break; }
+          if (pierce) {
+            destroyBlock(s, blk2, false);        // 貫通：パンチスルー破壊（反射しない）
+            s.pierceHitsLeft = Math.max(0, s.pierceHitsLeft - 1);
+            pierce = s.pierceHitsLeft > 0;
+          } else {
+            hitBlock(s, blk2, 1);
+            b.vy *= -1;
+            break;
+          }
         }
       }
       if (allBlocksCleared(s)) s.blocks = makeBlocks();
@@ -586,11 +642,16 @@
   function draw(s) {
     ctx.clearRect(0, 0, CW, CH);
 
-    // ブロック
+    // ブロック（指示書09：アイテム壁は緑枠で通常ブロックと区別）
     s.blocks.forEach(function (b) {
       if (!b.alive) return;
       ctx.fillStyle = b.hp >= 2 ? "#4a6fa5" : "#3a5580";
       ctx.fillRect(b.x, b.y, b.w, b.h);
+      if (b.itemWall) {
+        ctx.strokeStyle = "#7fffb0";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+      }
     });
 
     // ガイド予測線（案(a)：表示のみ。物理には一切影響しない）
@@ -620,20 +681,25 @@
     ctx.fillStyle = weakenActive(s) ? "#c85aff" : "#d7dae0";
     ctx.fillRect(s.paddle.x - halfW, PADDLE_Y, s.paddle.w, PADDLE_H);
 
-    // ボール
+    // ボール（貫通中＝pierceHitsLeft>0 / explode / accel のいずれかで発光）
     if (s.ball) {
       ctx.beginPath();
-      var glowing = magActive(s, "pierce") || magActive(s, "explode") || magActive(s, "accel");
+      var glowing = s.pierceHitsLeft > 0 || magActive(s, "explode") || magActive(s, "accel");
       ctx.fillStyle = glowing ? "#ffe08a" : "#f0f0f0";
       ctx.arc(s.ball.x, s.ball.y, BALL_R, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // 落下アイテム
+    // 落下アイテム（アイテム壁由来の確定ドロップは白枠で区別）
     s.drops.forEach(function (d) {
       var isRandom = d.type === "random";
       ctx.fillStyle = isRandom ? "#888" : ITEM_COLOR[d.type];
       ctx.fillRect(d.x - 7, d.y - 7, 14, 14);
+      if (d.isWall) {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(d.x - 7, d.y - 7, 14, 14);
+      }
       ctx.fillStyle = "#05060a";
       ctx.font = "8px monospace";
       ctx.textAlign = "center";
@@ -656,7 +722,9 @@
   }
   function fmtBallEffects(s) {
     var parts = [];
-    BALL_SIDE_TYPES.forEach(function (t) {
+    // pierceはヒット数持続（指示書09）。残りヒット数で表示。
+    if (s.pierceHitsLeft > 0) parts.push("PRC:残" + s.pierceHitsLeft + "ヒット");
+    ["explode", "accel"].forEach(function (t) {
       var rem = s.ballEffects[t] || 0;
       if (rem > 0) parts.push(ITEM_CODE[t] + ":" + rem.toFixed(1) + "s");
     });
@@ -673,6 +741,7 @@
       "球側効果残り  : " + fmtBallEffects(s) + "\n" +
       "WKN残り時間   : " + (s.weakenRemainingSec > 0 ? s.weakenRemainingSec.toFixed(1) + "s" : "(なし)") + "\n" +
       "LAS総発射数   : " + s.laserShotsTotal + "（弾由来ダメージ" + s.laserWallDamageTotal.toFixed(0) + "）\n" +
+      "アイテム壁ドロップ: " + s.itemWallDropsTotal + "（確定ドロップ発生数）\n" +
       "B1 落球回数   : " + s.dropEvents.length + "\n" +
       "B2 復帰回数   : " + s.recoveryTimesSec.length + "（直近 " + lastRec + "）\n" +
       "B2 復帰待ち中 : " + pendingCount + "\n" +
@@ -749,6 +818,7 @@
       weaken_active_sec_total: Number(s.weakenActiveSecAccum.toFixed(2)),
       laser_shots_total: s.laserShotsTotal,
       laser_wall_damage_total: s.laserWallDamageTotal,
+      item_wall_drops_total: s.itemWallDropsTotal,
       random_resolved_counts: s.randomResolvedCounts
     };
     jsonOutEl.value = JSON.stringify(out, null, 2);
@@ -766,7 +836,8 @@
   // 内部関数を検証専用に公開する。計測器具の性質上（非公開・非ゲーム）、
   // 本番挙動には影響しない読み取り専用の参照公開であり、UIからは到達しない。
   window.__calibTest = { freshState: freshState, step: step, makeBlocks: makeBlocks,
-                          computeGuideSegments: computeGuideSegments };
+                          computeGuideSegments: computeGuideSegments, onPickup: onPickup,
+                          spawnGuaranteedDrop: spawnGuaranteedDrop, PIERCE_HITS: PIERCE_HITS };
 })();
 </script>
 </body>
