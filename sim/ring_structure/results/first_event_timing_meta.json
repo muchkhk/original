@@ -1,0 +1,53 @@
+{
+  "script": "sim/ring_structure/first_event_timing.py",
+  "requirement": 68700,
+  "fixed_bundle": {
+    "drop_rate": 0.05,
+    "weaken_multiplier": 1.3,
+    "laser_target_frac": 0.05,
+    "laser_dps_per_stage": 0.375,
+    "laser_frac_achieved": 0.06107928551342867,
+    "ball_effect_ticks": 2,
+    "pierce_hits": 3,
+    "item_wall_bricks": 2,
+    "pickup_miss_rate_base": 0.2
+  },
+  "N": 4,
+  "session_ticks": 900,
+  "trials": 500,
+  "measure_seed_base": 40010,
+  "ms_per_tick": 1394.9333333333334,
+  "damage_mean_500trials_REFERENCE_ONLY": 60869.91362500039,
+  "non_interference": {
+    "repro_seed_base": 20010,
+    "repro_natural_trials": 2000,
+    "repro_damage_mean": 60804.17848125038,
+    "report10_damage_mean": 60804.18,
+    "repro_diff_pct": 2.4977717278473346e-06,
+    "repro_within_0.1pct": true,
+    "ab_check_seed": 39010,
+    "ab_check_trials": 200,
+    "ab_elementwise_identical": true,
+    "ab_damage_mean_off": 60825.52381250038,
+    "ab_damage_mean_on": 60825.52381250038
+  },
+  "first_cross_tick_distribution": {
+    "n": 2000,
+    "median_tick": 17,
+    "p90_tick": 30,
+    "max_tick": 65,
+    "median_min": 0.39523111111111114,
+    "p90_min": 0.6974666666666667,
+    "max_min": 1.511177777777778
+  },
+  "first_item_drop_tick_distribution": {
+    "n": 2000,
+    "median_tick": 5,
+    "p90_tick": 16,
+    "max_tick": 92,
+    "median_min": 0.11624444444444444,
+    "p90_min": 0.3719822222222222,
+    "max_min": 2.138897777777778
+  },
+  "generated_at": "2026-07-30T01:51:20.285266+00:00"
+}

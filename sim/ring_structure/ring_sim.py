@@ -182,8 +182,16 @@ def wall_damage_for_level(level, has_looped, slope_kind):
 def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                     f_max=F_MAX, g_max=G_MAX, slope_kind=None, checkpoints=None,
                     paddle_catch_rate=PADDLE_CATCH_RATE, wall_targets=None,
-                    item_system=None, _debug_record_first_pierce=False):
+                    item_system=None, _debug_record_first_pierce=False,
+                    record_first_events=False):
     """1試行を実行し、Q1〜Q3に必要な生データを辞書で返す。
+
+    【指示書11】record_first_events=True の場合のみ、既存の力学・乱数消費順を
+    一切変更しない読み取り専用の計測（体験原則対応・観測量のみ。判定はしない）として、
+    world毎の「最初の越境流入tick」「最初のアイテムドロップtick」を記録する。
+    新規のrng呼び出しは追加しない（既に発生済みのイベントを記録するだけ）ため、
+    record_first_events=False（既定）はもちろん、True時も既存の乱数消費順・
+    力学は一切変化しない。
 
     slope_kind=None の場合、強化壁の集計は一切行わない（指示書01時点の
     挙動・出力とbit-for-bit互換を保つ）。指示書02の解析はslope_kindを
@@ -240,6 +248,11 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
     balls = []
     next_ball_id = 0
     balls_by_world = [[] for _ in range(N)]  # world -> list of ball indices into `balls`
+
+    # 【指示書11】読み取り専用の観測量（体験原則対応）。record_first_events=Falseなら
+    # 未使用のまま（Noneのリストも作らない）で、既存呼び出し元への影響はゼロ。
+    first_cross_tick_per_world = [None] * N if record_first_events else None
+    first_item_drop_tick_per_world = [None] * N if record_first_events else None
 
     loop_completions = []       # tick差分のリスト（Q1：一周1回ごとの所要時間）
     first_loop_tick = None      # この試行で最初の一周が完了した絶対tick（Q1：短時間セッションでの到達率用）
@@ -416,6 +429,8 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                     item_type = ITEM_ALL_TYPES[int(rng.random() * len(ITEM_ALL_TYPES))]
                     ball_for_effect = balls_by_world[w][0] if balls_by_world[w] else None
                     guaranteed_drops_fired_per_world[w] += 1
+                    if record_first_events and first_item_drop_tick_per_world[w] is None:
+                        first_item_drop_tick_per_world[w] = tick
                     resolve_pickup(w, item_type, ball_for_effect, tick)
 
         # --- 各球のラリー処理 ---
@@ -448,6 +463,8 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                 # 【指示書09】抽選→取りこぼし判定→効果適用はresolve_pickup()へ集約した
                 # （アイテム壁の確定ドロップと同一経路。RNG消費順は従来と同一）。
                 if item_on and rng.random() < drop_rate:
+                    if record_first_events and first_item_drop_tick_per_world[w] is None:
+                        first_item_drop_tick_per_world[w] = tick
                     item_type = ITEM_ALL_TYPES[int(rng.random() * len(ITEM_ALL_TYPES))]
                     resolve_pickup(w, item_type, b, tick)
 
@@ -475,6 +492,8 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                     upcross_events_total += 1
                     b["up_streak"] += 1
                     b["world"] = (w + 1) % N
+                    if record_first_events and first_cross_tick_per_world[b["world"]] is None:
+                        first_cross_tick_per_world[b["world"]] = tick
                     if item_on:
                         # 凍結文v2：球が自陣を出た瞬間に球側効果は残らない
                         b["ball_effect"] = None
@@ -525,6 +544,8 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
                         b["level"] = max(-1, prev_level - 1)
                     # decay_on=False（対照条件）：落下跨ぎは起きるが段数は変化しない
                     b["world"] = (w - 1) % N
+                    if record_first_events and first_cross_tick_per_world[b["world"]] is None:
+                        first_cross_tick_per_world[b["world"]] = tick
                     if item_on:
                         # 凍結文v2：球が自陣を出た瞬間に球側効果は残らない（下方跨ぎも同様）
                         b["ball_effect"] = None
@@ -567,6 +588,10 @@ def simulate_trial(rng, N, serve_mode, decay_on, weakest_vanish, ticks,
         "checkpoint_results": checkpoint_results,
         "wall_target_ticks": wall_target_ticks,
     }
+    if record_first_events:
+        # 【指示書11】読み取り専用の観測量。判定はしない（分布の報告のみ）。
+        result["first_cross_tick_per_world"] = first_cross_tick_per_world
+        result["first_item_drop_tick_per_world"] = first_item_drop_tick_per_world
     if item_on:
         result["drop_events_per_world"] = drop_events_per_world              # B1
         result["recovery_times_per_world"] = recovery_times_per_world        # B2（tick差のリスト）
