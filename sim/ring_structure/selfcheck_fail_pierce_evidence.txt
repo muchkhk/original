@@ -26,11 +26,11 @@ PASS: nine_species: 'sticky'も引き続き含まれない（指示書06のkillを維持）
 PASS: nine_species: 全アイテム種の総数は9種（パドル5＋球3＋場1）
 PASS: guide_inert: ITEM_CATCH_RATE_CONTRIBUTORSに'guide'が含まれない（構成チェック）
 PASS: guide_inert: guide段を積み上げても捕球率が動かず、B1（落球回数）が高いまま維持される
-FAIL: random_slot_equivalence: 各アイテムの実効出現率が1/9からの乖離5%以内（10エントリ抽選と9種均等抽選の等価性の検算） (expected=10000.0 max_dev_frac=0.808 counts={'enlarge': 18079, 'speed': 8940, 'guide': 8906, 'magnet': 8977, 'laser': 8921, 'pierce': 9060, 'explode': 9111, 'accel': 9034, 'weaken': 8972})
+PASS: random_slot_equivalence: 各アイテムの実効出現率が1/9からの乖離5%以内（10エントリ抽選と9種均等抽選の等価性の検算）
 PASS: b3_excludes_weaken: weakenのみドロップされる状況で、参考値weaken_active_fracは実際に高稼働している（前提条件）
 PASS: b3_excludes_weaken: B3（球側3種のみ）はweakenのみの状況で0近傍のまま
 PASS: pierce_three_hits: PIERCE_HITS==3（保護数字・掃引で短縮禁止）
-PASS: pierce_three_hits: pierce取得直後のball_effect.ticks_leftが3（ball_effect_ticks=2と分離）
+FAIL: pierce_three_hits: pierce取得直後のball_effect.ticks_leftが3（ball_effect_ticks=2と分離） (observed ticks_left=2（inject時は2に潰れてFAILするはず）)
 PASS: item_wall: item_wall_bricks=2で各worldに2回ずつ確定ドロップが発火する（計2×N）
 PASS: item_wall: 確定ドロップがpickup_miss=0で実際に効果適用まで到達している
 PASS: lifo_drop_penalty: 低catch_rateで落球イベントが実際に発生する
@@ -39,4 +39,4 @@ PASS: b3_evaluation: 帯内の合成データはpassと判定される
 PASS: b3_evaluation: 帯を大きく外れた合成データはpassでないと判定される
 PASS: b1_b2_no_verdict: summarize_bundle()の出力にB1/B2のpass/fail判定キーが無い
 PASS: b1_b2_no_verdict: B1のフィールド名に参考値である旨(REFERENCE_ONLY)が明記されている
-RESULT: FAIL (1 check(s) failed: random_slot_equivalence: 各アイテムの実効出現率が1/9からの乖離5%以内（10エントリ抽選と9種均等抽選の等価性の検算）)
+RESULT: FAIL (1 check(s) failed: pierce_three_hits: pierce取得直後のball_effect.ticks_leftが3（ball_effect_ticks=2と分離）)
