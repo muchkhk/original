@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書14 盤面スケール拡大とペース密度整合</title>
+<title>較正用プロトタイプ（計測器具・非ゲーム）― 指示書15 模擬ペースのB1帯整合と噴出オンセット遅延</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -64,8 +64,13 @@
   中心は開始時「床」（穴なし）で、初落球で割れて穴が開き、以後落球のたびに成長する。<br>
   <strong>指示書14で盤面スケール拡大とペース密度の器具整合。</strong>盤面半径はビューポートへ
   自動フィット（「画面に合わせてフィット」ボタンでも再計算可）。球・パドル弧・壁帯厚さは
-  拡大後の盤面に対して相対的に縮小した帯へ。噴出・マルチボール・外来アイテムの模擬発生間隔は
-  シム実測中央値（`sim/ring_structure/pace_measurement.py`）へ整合させた（器具忠実度原則）。
+  拡大後の盤面に対して相対的に縮小した帯へ。<br>
+  <strong>指示書15でマルチボール模擬をB1帯由来へ・噴出にオンセット遅延を新設。</strong>
+  シムの下降跨ぎ率は器具として不適（チャット25 #3・#10の自己訂正）と判明したため、
+  マルチボール間隔の既定値は落球頻度帯B1（2〜10回/900tickセッション）由来の210秒へ
+  変更した。噴出には既定60秒のオンセット遅延を新設（精密化#9：猶予の対象は無偽装
+  イベント〈噴出・自球突破〉のみ。偽装済みチャネル〈マルチボール・外来アイテム〉には
+  遅延を適用しない）。
 </div>
 
 <div class="layout">
@@ -124,13 +129,17 @@
     </fieldset>
 
     <fieldset>
-      <legend>越境ペース（指示書14 3-2・シム実測中央値を初期値に）</legend>
+      <legend>越境ペース（指示書14/15・器具忠実度由来の初期値）</legend>
       <label class="slider-row">噴出間隔(秒)
         <input type="range" id="eruptionInterval" min="1" max="60" step="0.5" value="8.4">
         <span id="eruptionIntervalVal"></span>
       </label>
-      <label class="slider-row">マルチボール間隔(秒)
-        <input type="range" id="multiballInterval" min="1" max="400" step="1" value="35">
+      <label class="slider-row">噴出オンセット遅延(秒)（新設）
+        <input type="range" id="eruptionOnsetDelay" min="0" max="300" step="5" value="60">
+        <span id="eruptionOnsetDelayVal"></span>
+      </label>
+      <label class="slider-row">マルチボール間隔(秒)（B1帯由来）
+        <input type="range" id="multiballInterval" min="120" max="650" step="1" value="210">
         <span id="multiballIntervalVal"></span>
       </label>
       <label class="slider-row">外来アイテム間隔(秒)
@@ -371,6 +380,7 @@
     sectorCount: document.getElementById("sectorCount"),
     blockHP: document.getElementById("blockHP"),
     eruptionInterval: document.getElementById("eruptionInterval"),
+    eruptionOnsetDelay: document.getElementById("eruptionOnsetDelay"),
     multiballInterval: document.getElementById("multiballInterval"),
     itemArrivalInterval: document.getElementById("itemArrivalInterval"),
     gravityAccel: document.getElementById("gravityAccel"),
@@ -396,6 +406,7 @@
     sectorCount: document.getElementById("sectorCountVal"),
     blockHP: document.getElementById("blockHPVal"),
     eruptionInterval: document.getElementById("eruptionIntervalVal"),
+    eruptionOnsetDelay: document.getElementById("eruptionOnsetDelayVal"),
     multiballInterval: document.getElementById("multiballIntervalVal"),
     itemArrivalInterval: document.getElementById("itemArrivalIntervalVal"),
     gravityAccel: document.getElementById("gravityAccelVal"),
@@ -423,6 +434,7 @@
       sectorCount: parseInt(sliders.sectorCount.value, 10),
       blockHP: parseInt(sliders.blockHP.value, 10),
       eruptionIntervalSec: parseFloat(sliders.eruptionInterval.value),
+      eruptionOnsetDelaySec: parseFloat(sliders.eruptionOnsetDelay.value),
       multiballIntervalSec: parseFloat(sliders.multiballInterval.value),
       itemArrivalIntervalSec: parseFloat(sliders.itemArrivalInterval.value),
       gravityAccel: parseFloat(sliders.gravityAccel.value),
@@ -521,6 +533,7 @@
     sliderVals.sectorCount.textContent = c.sectorCount.toFixed(0);
     sliderVals.blockHP.textContent = c.blockHP.toFixed(0);
     sliderVals.eruptionInterval.textContent = c.eruptionIntervalSec.toFixed(1) + "s";
+    sliderVals.eruptionOnsetDelay.textContent = c.eruptionOnsetDelaySec.toFixed(0) + "s";
     sliderVals.multiballInterval.textContent = c.multiballIntervalSec.toFixed(0) + "s";
     sliderVals.itemArrivalInterval.textContent = c.itemArrivalIntervalSec.toFixed(0) + "s";
     sliderVals.gravityAccel.textContent = c.gravityAccel.toFixed(0);
@@ -958,10 +971,18 @@
       spawnMultiball(s);
       s.multiballSpawnTimer = nextSpawnDelaySec(c.multiballIntervalSec);
     }
-    s.eruptionSpawnTimer -= dt;
-    if (s.eruptionSpawnTimer <= 0) {
-      spawnEruption(s);
-      s.eruptionSpawnTimer = nextSpawnDelaySec(c.eruptionIntervalSec);
+    // 【指示書15 作業2】噴出のみオンセット遅延を適用する（精密化#9：無偽装イベント
+    // 〈噴出・自球突破〉だけが猶予の対象。偽装済みチャネル〈マルチボール・外来
+    // アイテム〉には適用しない＝上下のマルチボール・外来アイテムブロックは変更なし）。
+    // 遅延の起点はセッション開始時刻（s.elapsedSec）。遅延中はタイマー自体を進めない
+    // （遅延明けの瞬間に溜まった分が一斉発火することを避け、遅延終了後に通常の
+    // ジッター付き間隔で1件目が発生する）。
+    if (s.elapsedSec >= c.eruptionOnsetDelaySec) {
+      s.eruptionSpawnTimer -= dt;
+      if (s.eruptionSpawnTimer <= 0) {
+        spawnEruption(s);
+        s.eruptionSpawnTimer = nextSpawnDelaySec(c.eruptionIntervalSec);
+      }
     }
     s.itemArrivalSpawnTimer -= dt;
     if (s.itemArrivalSpawnTimer <= 0) {
