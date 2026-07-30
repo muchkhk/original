@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>縦切り（反転の最小実物）― 指示書18・マッチ専用</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: #14151a; color: #d7dae0;
+    font-family: -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+  }
+  .warn {
+    background: #3a2a10; border: 1px solid #7a5a1a; color: #f0d090;
+    padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; line-height: 1.6;
+  }
+  .wrap { position: relative; width: 480px; }
+  canvas { background: #05060a; border: 1px solid #3a3d46; border-radius: 4px; display: block; cursor: none; }
+  .banner {
+    position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
+    background: #23262f; border: 1px solid #7fd0ff; color: #7fd0ff;
+    padding: 8px 14px; border-radius: 4px; font-size: 13px; opacity: 0; transition: opacity 0.3s;
+    pointer-events: none; white-space: nowrap;
+  }
+  .banner.show { opacity: 1; }
+  .btnrow { margin-top: 10px; display: flex; gap: 8px; }
+  button {
+    background: #23262f; color: #d7dae0; border: 1px solid #3a3d46; border-radius: 4px;
+    padding: 6px 10px; cursor: pointer; font-size: 12px;
+  }
+  button:hover { background: #2c303b; }
+</style>
+</head>
+<body>
+
+<h2 style="font-size:15px;margin:0 0 4px;">縦切り（反転の最小実物）</h2>
+<div class="warn">
+  これは較正用プロトタイプではありません。マッチが自分の設計した反転（隣の球の越境が
+  「フレンドからアイテムが届いた」という偽装で自陣に現れること）を、初めて実物で
+  目撃するための最小実装です（指示書18）。品質・較正・測定は目的外です。
+  <strong>マッチ専用・テスターには見せないこと。</strong>
+</div>
+
+<div class="wrap">
+  <canvas id="game" width="480" height="480"></canvas>
+  <div id="banner" class="banner">フレンドからアイテムが届いた</div>
+</div>
+
+<div class="btnrow">
+  <button id="forceBtn" type="button">強制発火（デバッグ用）</button>
+  <button id="toggleNeighborBtn" type="button">隣盤の状態を表示（デバッグ用）</button>
+</div>
+<div id="neighborInfo" style="font-size:12px;color:#9aa0ad;margin-top:6px;display:none;"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CW = 480, CH = 480, CX = CW/2, CY = CH/2;
+  var BOARD_R = 220;
+  var WALL_INNER = 170, WALL_OUTER = 210;
+  var SECTOR_COUNT = 16;
+  var PADDLE_R = 90;
+  var PADDLE_HALF_ARC = 20 * Math.PI/180;
+  var PADDLE_ANGULAR_SPEED = 6; // rad/s（クランプ用の基準値。較正しない固定値）
+  var GRAVITY = 90;
+  var BALL_SPEED = 200;
+  var BALL_R = 6;
+  var WALL_DAMPING_K = 0.85; // 指示書17の知見を固定値として流用（スライダー化しない）
+  var MIN_SPEED = 30;
+
+  // 【縦切り固有・裁量】隣盤の越境発生タイミング。指示書18「数十秒〜1分程度の目安」に
+  // 沿って45秒固定とした（較正しない・スライダー化しない）。
+  var CROSSING_DELAY_SEC = 45;
+  var BANNER_HOLD_SEC = 2.5; // 偽装表示を先に見せてから実体を出すまでの間
+
+  var canvas = document.getElementById("game");
+  var ctx = canvas.getContext("2d");
+  var bannerEl = document.getElementById("banner");
+  var forceBtn = document.getElementById("forceBtn");
+  var toggleNeighborBtn = document.getElementById("toggleNeighborBtn");
+  var neighborInfoEl = document.getElementById("neighborInfo");
+
+  function norm2(x, y) { return Math.sqrt(x*x + y*y); }
+  function angleDiff(a, b) {
+    var d = (b - a) % (Math.PI*2);
+    if (d > Math.PI) d -= Math.PI*2;
+    if (d < -Math.PI) d += Math.PI*2;
+    return d;
+  }
+
+  function makeBlocks() {
+    var blocks = [];
+    var span = (Math.PI*2 / SECTOR_COUNT) * 0.88;
+    for (var i = 0; i < SECTOR_COUNT; i++) {
+      var aStart = (Math.PI*2 / SECTOR_COUNT) * i;
+      blocks.push({ aStart: aStart, aEnd: aStart + span, hp: 2, alive: true });
+    }
+    return blocks;
+  }
+  function polarInBlock(r, angle, b) {
+    if (!b.alive) return false;
+    if (r < WALL_INNER - BALL_R || r > WALL_OUTER + BALL_R) return false;
+    var rel = angleDiff(b.aStart, angle);
+    if (rel < 0) rel += Math.PI*2;
+    var span = b.aEnd - b.aStart;
+    var pad = BALL_R / Math.max(1, r);
+    return rel >= -pad && rel <= span + pad;
+  }
+
+  // 指示書17の反射式をそのまま固定値k=WALL_DAMPING_Kで流用（スライダー化しない）
+  function reflectOffWall(ball, angle) {
+    var nx = Math.cos(angle), ny = Math.sin(angle);
+    var dot = ball.vx*nx + ball.vy*ny;
+    var radialX = dot*nx, radialY = dot*ny;
+    var tanX = ball.vx - radialX, tanY = ball.vy - radialY;
+    ball.vx = -radialX + WALL_DAMPING_K*tanX;
+    ball.vy = -radialY + WALL_DAMPING_K*tanY;
+    var speed = norm2(ball.vx, ball.vy);
+    if (speed > 0 && speed < MIN_SPEED) {
+      var scale = MIN_SPEED/speed;
+      ball.vx *= scale; ball.vy *= scale;
+    }
+  }
+
+  var state = {
+    paddleAngle: -Math.PI/2,
+    pointerAngle: -Math.PI/2,
+    blocks: makeBlocks(),
+    balls: [],
+    elapsedSec: 0,
+    crossingFired: false,
+    bannerUntilSec: -1,
+    neighborTicks: 0 // 隣盤の代理表現。実体の物理は持たない（裁量。§below参照）
+  };
+
+  function serveBall() {
+    state.balls.push({
+      x: CX, y: CY - PADDLE_R * 0.6, vx: 0, vy: -BALL_SPEED, arriving: false
+    });
+  }
+  serveBall();
+
+  // 【縦切り固有】越境してくる隣の球（実体）。外周のランダムな角度から、
+  // すり抜け降下でやってくる（既存プロトの「マルチボール」演出と同じ考え方の簡略版）。
+  function spawnCrossingBall() {
+    var angle = Math.random() * Math.PI*2;
+    var r = BOARD_R - 2;
+    var speed = BALL_SPEED * 0.8;
+    state.balls.push({
+      x: CX + Math.cos(angle)*r, y: CY + Math.sin(angle)*r,
+      vx: -Math.cos(angle)*speed, vy: -Math.sin(angle)*speed,
+      arriving: true
+    });
+  }
+
+  function triggerCrossing() {
+    if (state.crossingFired) return;
+    state.crossingFired = true;
+    bannerEl.classList.add("show");
+    state.bannerUntilSec = state.elapsedSec + BANNER_HOLD_SEC;
+    // 偽装表示→実体出現の順序を守る（先に見せてから、少し遅れて実体を出す）
+    setTimeout(function () { spawnCrossingBall(); }, BANNER_HOLD_SEC * 1000);
+  }
+
+  var keyLeft = false, keyRight = false;
+  window.addEventListener("keydown", function (ev) {
+    if (ev.code === "ArrowLeft" || ev.code === "KeyA") keyLeft = true;
+    else if (ev.code === "ArrowRight" || ev.code === "KeyD") keyRight = true;
+  });
+  window.addEventListener("keyup", function (ev) {
+    if (ev.code === "ArrowLeft" || ev.code === "KeyA") keyLeft = false;
+    else if (ev.code === "ArrowRight" || ev.code === "KeyD") keyRight = false;
+  });
+  canvas.addEventListener("mousemove", function (ev) {
+    var rect = canvas.getBoundingClientRect();
+    var mx = (ev.clientX - rect.left) * (CW/rect.width);
+    var my = (ev.clientY - rect.top) * (CH/rect.height);
+    state.pointerAngle = Math.atan2(my - CY, mx - CX);
+  });
+
+  forceBtn.addEventListener("click", function () { triggerCrossing(); });
+  toggleNeighborBtn.addEventListener("click", function () {
+    var showing = neighborInfoEl.style.display !== "none";
+    neighborInfoEl.style.display = showing ? "none" : "block";
+  });
+
+  function step(dt) {
+    state.elapsedSec += dt;
+    state.neighborTicks += dt; // 隣盤は物理を持たない代理カウンタ（裁量。報告書参照）
+    neighborInfoEl.textContent = "隣盤（代理表現）: 経過" + state.neighborTicks.toFixed(1)
+      + "秒 / 越境まで残り" + Math.max(0, CROSSING_DELAY_SEC - state.elapsedSec).toFixed(1) + "秒";
+
+    if (!state.crossingFired && state.elapsedSec >= CROSSING_DELAY_SEC) triggerCrossing();
+    if (state.bannerUntilSec >= 0 && state.elapsedSec >= state.bannerUntilSec) {
+      bannerEl.classList.remove("show");
+      state.bannerUntilSec = -1;
+    }
+
+    var kbDir = (keyRight?1:0) - (keyLeft?1:0);
+    if (kbDir !== 0) state.pointerAngle += kbDir * 3.0 * dt; // 固定回転速度（較正しない）
+    var maxStep = PADDLE_ANGULAR_SPEED * dt;
+    var diff = angleDiff(state.paddleAngle, state.pointerAngle);
+    if (Math.abs(diff) > maxStep) diff = maxStep * Math.sign(diff);
+    state.paddleAngle += diff;
+
+    for (var i = state.balls.length - 1; i >= 0; i--) {
+      var b = state.balls[i];
+      var rx = b.x - CX, ry = b.y - CY, r = norm2(rx, ry);
+      if (r > 1) {
+        b.vx += (-rx/r) * GRAVITY * dt;
+        b.vy += (-ry/r) * GRAVITY * dt;
+      }
+      b.x += b.vx*dt; b.y += b.vy*dt;
+      rx = b.x - CX; ry = b.y - CY; r = norm2(rx, ry);
+      var angle = Math.atan2(ry, rx);
+
+      if (b.arriving && r < WALL_INNER) b.arriving = false; // 壁帯を抜けたら着地＝通常球化
+
+      if (r > BOARD_R) { state.balls.splice(i, 1); continue; } // 外周へ抜けたら消滅（簡略化）
+
+      if (!b.arriving) {
+        for (var j = 0; j < state.blocks.length; j++) {
+          var blk = state.blocks[j];
+          if (!polarInBlock(r, angle, blk)) continue;
+          blk.hp -= 1;
+          if (blk.hp <= 0) blk.alive = false;
+          reflectOffWall(b, angle);
+          break;
+        }
+      }
+
+      var movingInward = (b.vx*rx + b.vy*ry) < 0;
+      if (movingInward && r <= PADDLE_R + BALL_R && r >= PADDLE_R - BALL_R) {
+        if (Math.abs(angleDiff(state.paddleAngle, angle)) <= PADDLE_HALF_ARC) {
+          var nx = rx/Math.max(1,r), ny = ry/Math.max(1,r);
+          var dot = b.vx*nx + b.vy*ny;
+          b.vx -= 2*dot*nx; b.vy -= 2*dot*ny;
+          b.arriving = false;
+        }
+      }
+      if (r < 10) { state.balls.splice(i, 1); serveBall(); } // 穴へ落ちたら簡略再サーブ
+    }
+
+    if (state.blocks.every(function (blk) { return !blk.alive; })) state.blocks = makeBlocks();
+  }
+
+  function draw() {
+    ctx.fillStyle = "#05060a"; ctx.fillRect(0, 0, CW, CH);
+    ctx.strokeStyle = "#3a3d46"; ctx.beginPath(); ctx.arc(CX, CY, BOARD_R, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = "#5a5f6d"; ctx.beginPath(); ctx.arc(CX, CY, 10, 0, Math.PI*2); ctx.fill();
+
+    state.blocks.forEach(function (blk) {
+      if (!blk.alive) return;
+      ctx.fillStyle = blk.hp > 1 ? "#4a6fa5" : "#3a5580";
+      ctx.beginPath();
+      ctx.arc(CX, CY, WALL_OUTER, blk.aStart, blk.aEnd);
+      ctx.arc(CX, CY, WALL_INNER, blk.aEnd, blk.aStart, true);
+      ctx.closePath(); ctx.fill();
+    });
+
+    ctx.strokeStyle = "#e0e4ea"; ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(CX, CY, PADDLE_R, state.paddleAngle - PADDLE_HALF_ARC, state.paddleAngle + PADDLE_HALF_ARC);
+    ctx.stroke(); ctx.lineWidth = 1;
+
+    state.balls.forEach(function (b) {
+      ctx.fillStyle = b.arriving ? "#7fd0ff" : "#f0f0f0";
+      ctx.beginPath(); ctx.arc(b.x, b.y, BALL_R, 0, Math.PI*2); ctx.fill();
+    });
+  }
+
+  var lastT = null;
+  function loop(ts) {
+    if (lastT == null) lastT = ts;
+    var dt = Math.min(0.05, (ts - lastT)/1000);
+    lastT = ts;
+    step(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // 検品用（本番挙動には影響しない読み取り専用の参照公開）
+  window.__vsTest = {
+    state: state, step: step, triggerCrossing: triggerCrossing,
+    CROSSING_DELAY_SEC: CROSSING_DELAY_SEC, BANNER_HOLD_SEC: BANNER_HOLD_SEC
+  };
+})();
+</script>
+</body>
+</html>
