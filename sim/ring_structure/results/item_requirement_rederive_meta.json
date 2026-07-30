@@ -1,0 +1,27 @@
+{
+  "script": "sim/ring_structure/item_requirement_rederive_sweep.py",
+  "mode": "sweep",
+  "requirement_points": [
+    67300,
+    68700,
+    71000,
+    73100
+  ],
+  "fixed_bundle": {
+    "drop_rate": 0.05,
+    "weaken_multiplier": 1.3,
+    "laser_target_frac": 0.05,
+    "laser_dps_per_stage": 0.375,
+    "ball_effect_ticks": 2,
+    "pierce_hits": 3,
+    "item_wall_bricks": 2,
+    "pickup_miss_rate_base": 0.2
+  },
+  "natural_trials": 2000,
+  "relay_trials": 200,
+  "b3_trials": 800,
+  "stop_rule_1_all_natural_over_0.3pct": false,
+  "stop_rule_2_monotonic_broken": false,
+  "stop_rule_3_damage_mean_spread_pct": 0.07385043842712695,
+  "generated_at": "2026-07-30T00:35:01.815766+00:00"
+}

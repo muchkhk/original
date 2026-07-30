@@ -1,0 +1,19 @@
+{
+  "script": "sim/ring_structure/item_requirement_rederive_sweep.py",
+  "mode": "robustness",
+  "requirement_points": [
+    67300,
+    68700,
+    71000,
+    73100
+  ],
+  "miss_rates": [
+    0.1,
+    0.2,
+    0.3
+  ],
+  "natural_trials": 1000,
+  "relay_trials": 100,
+  "b3_trials": 800,
+  "generated_at": "2026-07-30T00:52:18.242588+00:00"
+}
